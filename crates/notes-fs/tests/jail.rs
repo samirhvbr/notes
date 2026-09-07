@@ -19,7 +19,12 @@ fn workspace() -> (tempfile::TempDir, LocalFs) {
 
 #[test]
 fn relative_escapes_never_parse() {
-    for bad in ["../secret.md", "sub/../../secret.md", "/etc/passwd", "C:/secret.md"] {
+    for bad in [
+        "../secret.md",
+        "sub/../../secret.md",
+        "/etc/passwd",
+        "C:/secret.md",
+    ] {
         assert!(RelPath::parse(bad).is_err(), "{bad} must not parse");
     }
 }
@@ -31,15 +36,27 @@ fn a_symlink_out_of_the_root_is_refused_not_followed() {
     std::fs::write(outside.path().join("secret.md"), b"# secret\n").unwrap();
 
     #[cfg(unix)]
-    std::os::unix::fs::symlink(outside.path().join("secret.md"), dir.path().join("link.md")).unwrap();
+    std::os::unix::fs::symlink(outside.path().join("secret.md"), dir.path().join("link.md"))
+        .unwrap();
     #[cfg(windows)]
-    if std::os::windows::fs::symlink_file(outside.path().join("secret.md"), dir.path().join("link.md")).is_err() {
+    if std::os::windows::fs::symlink_file(
+        outside.path().join("secret.md"),
+        dir.path().join("link.md"),
+    )
+    .is_err()
+    {
         return; // unprivileged Windows cannot create symlinks; nothing to assert
     }
 
     let p = RelPath::parse("link.md").unwrap();
-    assert!(matches!(fs.read(&p), Err(CoreError::SymlinkNotFollowed { .. })));
-    assert!(matches!(fs.stat(&p), Err(CoreError::SymlinkNotFollowed { .. })));
+    assert!(matches!(
+        fs.read(&p),
+        Err(CoreError::SymlinkNotFollowed { .. })
+    ));
+    assert!(matches!(
+        fs.stat(&p),
+        Err(CoreError::SymlinkNotFollowed { .. })
+    ));
     assert!(matches!(
         fs.write_atomic(&p, b"overwritten", None),
         Err(CoreError::SymlinkNotFollowed { .. })
@@ -65,15 +82,24 @@ fn a_symlinked_directory_is_refused_mid_path() {
     #[cfg(unix)]
     {
         let p = RelPath::parse("escape/secret.md").unwrap();
-        assert!(matches!(fs.read(&p), Err(CoreError::SymlinkNotFollowed { .. })));
+        assert!(matches!(
+            fs.read(&p),
+            Err(CoreError::SymlinkNotFollowed { .. })
+        ));
     }
 }
 
 #[test]
 fn paths_inside_the_root_work() {
     let (_dir, fs) = workspace();
-    assert_eq!(fs.read(&RelPath::parse("inside.md").unwrap()).unwrap(), b"# inside\n");
-    assert_eq!(fs.read(&RelPath::parse("sub/deep.md").unwrap()).unwrap(), b"# deep\n");
+    assert_eq!(
+        fs.read(&RelPath::parse("inside.md").unwrap()).unwrap(),
+        b"# inside\n"
+    );
+    assert_eq!(
+        fs.read(&RelPath::parse("sub/deep.md").unwrap()).unwrap(),
+        b"# deep\n"
+    );
 }
 
 #[test]
@@ -81,11 +107,18 @@ fn a_symlink_appears_in_the_listing_but_is_not_a_note() {
     let (dir, fs) = workspace();
     #[cfg(unix)]
     {
-        std::os::unix::fs::symlink(dir.path().join("inside.md"), dir.path().join("alias.md")).unwrap();
+        std::os::unix::fs::symlink(dir.path().join("inside.md"), dir.path().join("alias.md"))
+            .unwrap();
         let entries = fs.list(&RelPath::root()).unwrap();
-        let alias = entries.iter().find(|e| e.name == "alias.md").expect("symlink is listed");
+        let alias = entries
+            .iter()
+            .find(|e| e.name == "alias.md")
+            .expect("symlink is listed");
         assert_eq!(alias.kind, notes_model::EntryKind::Symlink);
-        assert!(!alias.is_note, "a symlink is shown as such and does not open");
+        assert!(
+            !alias.is_note,
+            "a symlink is shown as such and does not open"
+        );
     }
     #[cfg(not(unix))]
     let _ = (dir, fs);

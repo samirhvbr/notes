@@ -18,7 +18,9 @@ pub fn data_dir() -> Result<PathBuf, CoreError> {
     }
     dirs::data_dir()
         .map(|d| d.join("notes"))
-        .ok_or_else(|| CoreError::Internal { message: "no data directory on this platform".into() })
+        .ok_or_else(|| CoreError::Internal {
+            message: "no data directory on this platform".into(),
+        })
 }
 
 pub fn workspaces_index(data: &std::path::Path) -> PathBuf {

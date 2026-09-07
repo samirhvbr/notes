@@ -197,6 +197,50 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.6.1 - the Tauri shell, the typed IPC boundary, and the 0.1a interface
+
+Nineteen commands, one per operation, each of them parse → call the core →
+return. `src-tauri` holds no policy: a single `dispatch` command was rejected in
+`ARCHITECTURE.md` §18.8 because Tauri's capabilities are per command, so
+permitting `dispatch` would permit everything.
+
+**The generated TypeScript found a real defect.** `mtime_ns` is around
+1.7 × 10¹⁸ and `Number.MAX_SAFE_INTEGER` is 9.0 × 10¹⁵, so a nanosecond
+timestamp sent as a JSON number is rounded by JavaScript — and it does not
+merely display wrong. `BaseRev` travels back to the core on every save, so a
+rounded timestamp would make the cheap check disagree with the disk on every
+write and quietly send each one down the hashing path. It now crosses as a
+string, with a test that asserts the exact round-trip above the safe integer.
+No test that stayed inside Rust could have caught it.
+
+The capability file grants `core:default`, `dialog:allow-open`, clipboard read
+and write, and `shell:allow-open` restricted to `http(s)`. **No `fs:` permission
+exists in it**, and CI greps for one — the check `ARCHITECTURE.md` §12 asked for
+in as many words. A second job deletes `ipc/generated`, regenerates it and fails
+on any diff, because Rust and TypeScript disagreeing about the wire while both
+compile is the failure the generator exists to prevent. A third fails when the
+two i18n catalogues do not carry the same keys, since a missing key is a blank
+label in exactly one language.
+
+The interface is the 0.1a list and nothing beyond it: welcome with recents,
+lazy tree, CodeMirror 6, autosave with the base-rev guard, `Ctrl+S` as a flush
+rather than the only path to disk, a draft banner, a conflict banner, and the
+status bar carrying the seven states of scope §9 — each with a word and a glyph
+as well as a colour, and `saved` set only from a `SaveResult`.
+
+The store holds the stale-save guard: a save paints the tab clean only when the
+`buffer_version` it returns still equals the current one, so an old save landing
+after new keystrokes cannot mark the buffer saved. While a note is in conflict
+the debounce writes to the **draft** instead of the note, which is the rule §5
+states and which needs the command D-11 added.
+
+The 1000-round crash loop passed here: no truncated or empty note, and temporary
+files never exceeded one.
+
+`cargo fmt --check`, `cargo clippy --all-targets -D warnings`, `cargo test
+--workspace` and `npm run build` are all clean, and the CI matrix now runs them
+on Ubuntu, macOS, Windows and an Arch container against rolling `webkit2gtk-4.1`.
+
 ## 0.6.0 - notes-core: the write protocol, drafts, the registry and the lock
 
 117 tests, none of which needs Tauri or a window. Four of the eight 0.1a

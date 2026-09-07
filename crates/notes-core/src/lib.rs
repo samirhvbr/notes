@@ -43,6 +43,9 @@ pub struct WorkspaceInfo {
     /// True when this workspace's state was written by a newer build. Nothing
     /// is overwritten in that case; the user is told rather than losing it.
     pub read_only: bool,
+    /// The schema that newer build wrote, when there is one. Carried so the
+    /// message can say *how far* ahead the state is instead of only that it is.
+    pub state_schema_ahead: Option<u32>,
     pub restored: bool,
 }
 
@@ -62,11 +65,24 @@ pub struct OpenedNote {
 #[serde(tag = "result", rename_all = "snake_case")]
 #[ts(export)]
 pub enum SaveResult {
-    Saved { base_rev: BaseRev, buffer_version: u64, unchanged: bool },
+    Saved {
+        base_rev: BaseRev,
+        #[ts(type = "number")]
+        buffer_version: u64,
+        unchanged: bool,
+    },
     /// The disk moved under the buffer. Autosave is suspended for this note, a
     /// draft holds the buffer, and nothing was written.
-    Conflict { disk_rev: BaseRev, buffer_version: u64 },
-    WriteFailed { kind: notes_model::IoKind, buffer_version: u64 },
+    Conflict {
+        disk_rev: BaseRev,
+        #[ts(type = "number")]
+        buffer_version: u64,
+    },
+    WriteFailed {
+        kind: notes_model::IoKind,
+        #[ts(type = "number")]
+        buffer_version: u64,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -108,11 +124,21 @@ impl WorkspaceService {
             // and `webkit_dmabuf_workaround` degrading to `auto` is the point.
             Loaded::Fresh | Loaded::TooNew { .. } => Settings::default(),
         };
-        Ok(Self { data_dir, open: None, settings })
+        Ok(Self {
+            data_dir,
+            open: None,
+            settings,
+        })
     }
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    /// The open workspace's id, for callers that need to address its app-data
+    /// directory — `notes-mcp` from 0.3, and the tests today.
+    pub fn workspace_id(&self) -> Option<WorkspaceId> {
+        self.open.as_ref().map(|o| o.id)
     }
 
     // ---- workspace ------------------------------------------------------
@@ -135,7 +161,9 @@ impl WorkspaceService {
         match std::fs::create_dir(&dir) {
             Ok(()) => {}
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                return Err(CoreError::AlreadyExists { path: dir.display().to_string() })
+                return Err(CoreError::AlreadyExists {
+                    path: dir.display().to_string(),
+                })
             }
             Err(e) => return Err(CoreError::io("create_dir", dir.display(), &e)),
         }
@@ -150,8 +178,12 @@ impl WorkspaceService {
     /// apart.
     pub fn restore_last_workspace(&mut self) -> Result<Option<WorkspaceInfo>> {
         let index = self.index()?;
-        let Some(id) = index.last_workspace else { return Ok(None) };
-        let Some(entry) = index.workspaces.iter().find(|w| w.id == id) else { return Ok(None) };
+        let Some(id) = index.last_workspace else {
+            return Ok(None);
+        };
+        let Some(entry) = index.workspaces.iter().find(|w| w.id == id) else {
+            return Ok(None);
+        };
         let root = PathBuf::from(&entry.root);
         if !root.is_dir() {
             return Err(CoreError::Unavailable {
@@ -175,7 +207,10 @@ impl WorkspaceService {
     /// them so the UI can offer to flush rather than just say no.
     pub fn close_workspace(&mut self, dirty: &[NoteId]) -> Result<()> {
         if !dirty.is_empty() {
-            return Err(CoreError::DirtyBuffers { note_ids: dirty.to_vec(), count: dirty.len() });
+            return Err(CoreError::DirtyBuffers {
+                note_ids: dirty.to_vec(),
+                count: dirty.len(),
+            });
         }
         if let Some(open) = self.open.take() {
             state::store(&paths::registry_file(&open.dir), &open.registry)?;
@@ -193,30 +228,40 @@ impl WorkspaceService {
             .unwrap_or_else(|| canonical.clone());
 
         let mut index = self.index()?;
-        let id = index.by_root(&canonical).map(|w| w.id).unwrap_or_else(WorkspaceId::new);
+        let id = index
+            .by_root(&canonical)
+            .map(|w| w.id)
+            .unwrap_or_else(WorkspaceId::new);
         let dir = paths::workspace_dir(&self.data_dir, id);
 
         // Read-only probe, before anything else touches the tree: writing a
         // temporary file here would break scope §2.3 (D-01).
         let entries = fs.list(&RelPath::root())?;
-        let case_insensitive = notes_fs::probe_case_insensitive(fs.root(), &entries).unwrap_or(true);
+        let case_insensitive =
+            notes_fs::probe_case_insensitive(fs.root(), &entries).unwrap_or(true);
 
-        let (registry, read_only) = match state::load::<Registry>(&paths::registry_file(&dir))? {
+        let (registry, ahead) = match state::load::<Registry>(&paths::registry_file(&dir))? {
             Loaded::Ok(mut r) => {
                 // The probe is authoritative and corrects in both directions.
                 r.case_insensitive = case_insensitive;
                 r.root = canonical.clone();
-                (r, false)
+                (r, None)
             }
             Loaded::Fresh => (
-                Registry::new(id, &canonical, case_insensitive, fs.stat(&RelPath::root()).ok().and_then(|s| s.native_id)),
-                false,
+                Registry::new(
+                    id,
+                    &canonical,
+                    case_insensitive,
+                    fs.stat(&RelPath::root()).ok().and_then(|s| s.native_id),
+                ),
+                None,
             ),
-            Loaded::TooNew { .. } => (
+            Loaded::TooNew { found } => (
                 Registry::new(id, &canonical, case_insensitive, None),
-                true,
+                Some(found),
             ),
         };
+        let read_only = ahead.is_some();
 
         index.touch(id, &canonical, &display_name);
         state::store(&paths::workspaces_index(&self.data_dir), &index)?;
@@ -243,15 +288,18 @@ impl WorkspaceService {
             caps,
             case_insensitive,
             read_only,
+            state_schema_ahead: ahead,
             restored,
         })
     }
 
     fn index(&self) -> Result<WorkspacesIndex> {
-        Ok(match state::load::<WorkspacesIndex>(&paths::workspaces_index(&self.data_dir))? {
-            Loaded::Ok(i) => i,
-            Loaded::Fresh | Loaded::TooNew { .. } => WorkspacesIndex::default(),
-        })
+        Ok(
+            match state::load::<WorkspacesIndex>(&paths::workspaces_index(&self.data_dir))? {
+                Loaded::Ok(i) => i,
+                Loaded::Fresh | Loaded::TooNew { .. } => WorkspacesIndex::default(),
+            },
+        )
     }
 
     fn open(&self) -> Result<&Open> {
@@ -305,7 +353,11 @@ impl WorkspaceService {
             path: path.clone(),
             text: text.unwrap_or_default(),
             profile,
-            base_rev: BaseRev { size: stat.size, mtime_ns: stat.mtime_ns, hash },
+            base_rev: BaseRev {
+                size: stat.size,
+                mtime_ns: stat.mtime_ns,
+                hash,
+            },
             read_only,
             draft,
         })
@@ -323,12 +375,17 @@ impl WorkspaceService {
         let (dir, path, profile_bytes) = {
             let open = self.open()?;
             if open.read_only {
-                return Err(CoreError::ReadOnly { note_id, reason: ReadOnlyReason::Workspace });
+                return Err(CoreError::ReadOnly {
+                    note_id,
+                    reason: ReadOnlyReason::Workspace,
+                });
             }
             let rec = open
                 .registry
                 .record(note_id)
-                .ok_or_else(|| CoreError::NotFound { path: note_id.to_string() })?;
+                .ok_or_else(|| CoreError::NotFound {
+                    path: note_id.to_string(),
+                })?;
             let path = rec.path.clone();
             // Re-detect the profile from disk rather than trusting the caller:
             // the bytes decide what the file's shape is, and the caller only
@@ -368,13 +425,27 @@ impl WorkspaceService {
                 let disk_hash = notes_fs::hash(&current);
                 if disk_hash == new_hash {
                     // Convergence: the disk already holds exactly this buffer.
-                    let rev = BaseRev { size: disk.size, mtime_ns: disk.mtime_ns, hash: disk_hash };
-                    return Ok(SaveResult::Saved { base_rev: rev, buffer_version, unchanged: true });
+                    let rev = BaseRev {
+                        size: disk.size,
+                        mtime_ns: disk.mtime_ns,
+                        hash: disk_hash,
+                    };
+                    return Ok(SaveResult::Saved {
+                        base_rev: rev,
+                        buffer_version,
+                        unchanged: true,
+                    });
                 }
                 if disk_hash != base_rev.hash {
-                    let disk_rev =
-                        BaseRev { size: disk.size, mtime_ns: disk.mtime_ns, hash: disk_hash };
-                    return Ok(SaveResult::Conflict { disk_rev, buffer_version });
+                    let disk_rev = BaseRev {
+                        size: disk.size,
+                        mtime_ns: disk.mtime_ns,
+                        hash: disk_hash,
+                    };
+                    return Ok(SaveResult::Conflict {
+                        disk_rev,
+                        buffer_version,
+                    });
                 }
                 // Touch-only change: mtime moved, content did not.
             }
@@ -386,13 +457,20 @@ impl WorkspaceService {
             let written = match open.fs.write_atomic(&path, &profile_bytes, Some(base_rev)) {
                 Ok(w) => w,
                 Err(CoreError::Io { kind, .. }) => {
-                    return Ok(SaveResult::WriteFailed { kind, buffer_version })
+                    return Ok(SaveResult::WriteFailed {
+                        kind,
+                        buffer_version,
+                    })
                 }
                 Err(e) => return Err(e),
             };
             match written {
                 WriteOutcome::Written(stat) => Ok(SaveResult::Saved {
-                    base_rev: BaseRev { size: stat.size, mtime_ns: stat.mtime_ns, hash: new_hash },
+                    base_rev: BaseRev {
+                        size: stat.size,
+                        mtime_ns: stat.mtime_ns,
+                        hash: new_hash,
+                    },
                     buffer_version,
                     unchanged: false,
                 }),
@@ -410,7 +488,15 @@ impl WorkspaceService {
             }
         })??;
 
-        self.settle(note_id, &path, text, buffer_version, base_rev, outcome, &dir)
+        self.settle(
+            note_id,
+            &path,
+            text,
+            buffer_version,
+            base_rev,
+            outcome,
+            &dir,
+        )
     }
 
     /// Apply the consequences of a save: registry, draft, suspension.
@@ -426,7 +512,11 @@ impl WorkspaceService {
         dir: &Path,
     ) -> Result<SaveResult> {
         match &outcome {
-            SaveResult::Saved { base_rev: new_base, unchanged, .. } => {
+            SaveResult::Saved {
+                base_rev: new_base,
+                unchanged,
+                ..
+            } => {
                 let open = self.open_mut()?;
                 open.suspended.remove(&note_id);
                 if let Some(rec) = open.registry.notes.get_mut(&note_id) {
@@ -444,11 +534,27 @@ impl WorkspaceService {
                 drafts::discard(&paths::drafts_dir(dir), note_id)?;
             }
             SaveResult::Conflict { .. } => {
-                self.write_draft_inner(note_id, path, text, buffer_version, base_rev, DraftReason::Conflict, dir)?;
+                self.write_draft_inner(
+                    note_id,
+                    path,
+                    text,
+                    buffer_version,
+                    base_rev,
+                    DraftReason::Conflict,
+                    dir,
+                )?;
                 self.open_mut()?.suspended.insert(note_id);
             }
             SaveResult::WriteFailed { .. } => {
-                self.write_draft_inner(note_id, path, text, buffer_version, base_rev, DraftReason::WriteFailed, dir)?;
+                self.write_draft_inner(
+                    note_id,
+                    path,
+                    text,
+                    buffer_version,
+                    base_rev,
+                    DraftReason::WriteFailed,
+                    dir,
+                )?;
             }
         }
         Ok(outcome)
@@ -474,7 +580,9 @@ impl WorkspaceService {
             let rec = open
                 .registry
                 .record(note_id)
-                .ok_or_else(|| CoreError::NotFound { path: note_id.to_string() })?;
+                .ok_or_else(|| CoreError::NotFound {
+                    path: note_id.to_string(),
+                })?;
             (open.dir.clone(), rec.path.clone())
         };
         self.write_draft_inner(note_id, &path, text, buffer_version, base_rev, reason, &dir)
@@ -502,7 +610,10 @@ impl WorkspaceService {
         };
         drafts::write(
             &paths::drafts_dir(dir),
-            &drafts::Draft { info: info.clone(), bytes: text.as_bytes().to_vec() },
+            &drafts::Draft {
+                info: info.clone(),
+                bytes: text.as_bytes().to_vec(),
+            },
         )?;
         Ok(info)
     }
@@ -520,7 +631,9 @@ impl WorkspaceService {
             .open()?
             .registry
             .record(note_id)
-            .ok_or_else(|| CoreError::NotFound { path: note_id.to_string() })?
+            .ok_or_else(|| CoreError::NotFound {
+                path: note_id.to_string(),
+            })?
             .path
             .clone();
         let mut opened = self.open_note(&path)?;
@@ -540,7 +653,9 @@ impl WorkspaceService {
     }
 
     pub fn is_suspended(&self, note_id: NoteId) -> bool {
-        self.open.as_ref().is_some_and(|o| o.suspended.contains(&note_id))
+        self.open
+            .as_ref()
+            .is_some_and(|o| o.suspended.contains(&note_id))
     }
 
     pub fn create_note(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
@@ -583,7 +698,9 @@ impl WorkspaceService {
         let key = notes_model::CompareKey::new(path, open.registry.case_insensitive);
         for e in open.fs.list(&parent)? {
             if notes_model::CompareKey::new(&e.path, open.registry.case_insensitive) == key {
-                return Err(CoreError::AlreadyExists { path: path.to_string() });
+                return Err(CoreError::AlreadyExists {
+                    path: path.to_string(),
+                });
             }
         }
         Ok(())
@@ -592,10 +709,12 @@ impl WorkspaceService {
     // ---- session and settings -------------------------------------------
 
     pub fn session(&self) -> Result<Session> {
-        Ok(match state::load::<Session>(&paths::session_file(&self.open()?.dir))? {
-            Loaded::Ok(s) => s,
-            Loaded::Fresh | Loaded::TooNew { .. } => Session::default(),
-        })
+        Ok(
+            match state::load::<Session>(&paths::session_file(&self.open()?.dir))? {
+                Loaded::Ok(s) => s,
+                Loaded::Fresh | Loaded::TooNew { .. } => Session::default(),
+            },
+        )
     }
 
     pub fn save_session(&self, s: &Session) -> Result<()> {
@@ -617,11 +736,19 @@ impl WorkspaceService {
 /// Extends `IGNORE_DEFAULT`, never replaces it.
 fn read_portable_ignore(root: &Path) -> Vec<String> {
     let p = root.join(".notes/config.json");
-    let Ok(bytes) = std::fs::read(&p) else { return Vec::new() };
-    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else { return Vec::new() };
+    let Ok(bytes) = std::fs::read(&p) else {
+        return Vec::new();
+    };
+    let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
+        return Vec::new();
+    };
     v.get("ignore")
         .and_then(|i| i.as_array())
-        .map(|a| a.iter().filter_map(|x| x.as_str().map(str::to_string)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|x| x.as_str().map(str::to_string))
+                .collect()
+        })
         .unwrap_or_default()
 }
 
@@ -641,7 +768,20 @@ pub(crate) fn now() -> String {
         days -= len;
         y += 1;
     }
-    let months = [31, if is_leap(y) { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let months = [
+        31,
+        if is_leap(y) { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ];
     let mut m = 0;
     while days >= months[m] {
         days -= months[m];

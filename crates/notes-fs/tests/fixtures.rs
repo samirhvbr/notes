@@ -11,7 +11,7 @@
 //! `docs/ACCEPTANCE-0.1a.md`.
 
 use notes_fs::{FileSystem, LocalFs};
-use notes_model::{Eol, Encoding, RelPath, TextProfile};
+use notes_model::{Encoding, Eol, RelPath, TextProfile};
 use std::path::{Path, PathBuf};
 
 fn fixtures() -> PathBuf {
@@ -36,7 +36,11 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<RelPath>) {
         if e.file_type().unwrap().is_dir() {
             walk(root, &p, out);
         } else {
-            let rel = p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/");
+            let rel = p
+                .strip_prefix(root)
+                .unwrap()
+                .to_string_lossy()
+                .replace('\\', "/");
             if let Ok(r) = RelPath::parse(&rel) {
                 out.push(r);
             }
@@ -47,7 +51,10 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<RelPath>) {
 /// Open every file, save it back unedited, and require the bytes to be identical.
 fn round_trip_corpus(name: &str) {
     let src = fixtures().join(name);
-    assert!(src.is_dir(), "missing corpus {name} — run tools/gen-fixtures.py");
+    assert!(
+        src.is_dir(),
+        "missing corpus {name} — run tools/gen-fixtures.py"
+    );
     let tmp = tempfile::tempdir().unwrap();
     let work = tmp.path().join(name);
     copy_tree(&src, &work);
@@ -75,7 +82,11 @@ fn round_trip_corpus(name: &str) {
             "{rel}: encode(detect(x)) != x — profile {profile:?}"
         );
         fs.write_atomic(rel, &bytes, None).unwrap();
-        assert_eq!(fs.read(rel).unwrap(), original, "{rel}: save-unchanged altered the file");
+        assert_eq!(
+            fs.read(rel).unwrap(),
+            original,
+            "{rel}: save-unchanged altered the file"
+        );
         saved += 1;
     }
     assert!(saved > 0, "{name}: nothing was saved back");
@@ -99,7 +110,10 @@ fn the_edge_cases_that_must_open_read_only_do() {
         ("mixed-eol.md", notes_model::ReadOnlyReason::MixedEol),
         ("cr-only.md", notes_model::ReadOnlyReason::MixedEol),
         ("invalid-utf8.md", notes_model::ReadOnlyReason::NotUtf8),
-        ("lone-surrogate-ish.md", notes_model::ReadOnlyReason::NotUtf8),
+        (
+            "lone-surrogate-ish.md",
+            notes_model::ReadOnlyReason::NotUtf8,
+        ),
     ] {
         let rel = RelPath::parse(name).unwrap();
         let (p, _) = TextProfile::detect(&fs.read(&rel).unwrap());
@@ -111,8 +125,15 @@ fn the_edge_cases_that_must_open_read_only_do() {
 fn the_edge_cases_that_must_stay_editable_do() {
     let fs = LocalFs::open(fixtures().join("edge-cases")).unwrap();
     for name in [
-        "lf.md", "crlf.md", "no-final-newline.md", "bom-lf.md", "bom-crlf.md",
-        "empty.md", "only-newline.md", "front-matter.md", "front-matter-invalid.md",
+        "lf.md",
+        "crlf.md",
+        "no-final-newline.md",
+        "bom-lf.md",
+        "bom-crlf.md",
+        "empty.md",
+        "only-newline.md",
+        "front-matter.md",
+        "front-matter-invalid.md",
         "large-5mb.md",
     ] {
         let rel = RelPath::parse(name).unwrap();
@@ -150,7 +171,9 @@ fn listing_is_one_level_and_reads_no_content() {
     assert!(entries.iter().any(|e| e.name == "README.txt" && !e.is_note));
     assert!(entries.iter().any(|e| e.name == "imagem.png" && !e.is_note));
     assert!(
-        entries.iter().any(|e| e.name == "trabalho" && e.kind == notes_model::EntryKind::Dir),
+        entries
+            .iter()
+            .any(|e| e.name == "trabalho" && e.kind == notes_model::EntryKind::Dir),
         "directories are listed"
     );
     assert!(
@@ -169,7 +192,10 @@ fn the_case_probe_reaches_a_verdict_on_this_machine() {
     let entries = fs.list(&RelPath::root()).unwrap();
     let verdict = notes_fs::probe_case_insensitive(fs.root(), &entries);
     // The corpus has cased names, so the probe must not be inconclusive here.
-    assert!(verdict.is_some(), "probe was inconclusive on a corpus full of cased names");
+    assert!(
+        verdict.is_some(),
+        "probe was inconclusive on a corpus full of cased names"
+    );
     #[cfg(target_os = "linux")]
     assert_eq!(verdict, Some(false), "ext4 on Linux distinguishes case");
 }

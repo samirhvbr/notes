@@ -54,8 +54,12 @@ pub trait FileSystem: Send + Sync {
     /// When `expect` is `Some`, the file is re-`stat`ed immediately before the
     /// rename and a mismatch returns [`WriteOutcome::Diverged`] with nothing
     /// written — the narrow window between the core's own check and this one.
-    fn write_atomic(&self, path: &RelPath, bytes: &[u8], expect: Option<&BaseRev>)
-        -> Result<WriteOutcome>;
+    fn write_atomic(
+        &self,
+        path: &RelPath,
+        bytes: &[u8],
+        expect: Option<&BaseRev>,
+    ) -> Result<WriteOutcome>;
 
     /// Create a new file, failing if anything is already there. Never
     /// overwrites (scope §7.1).
@@ -70,7 +74,9 @@ pub trait FileSystem: Send + Sync {
     /// so that `notes-core` is written against a filesystem that may not have
     /// one — which is the mobile case, not a hypothetical.
     fn watch(&self) -> Result<()> {
-        Err(CoreError::Unsupported { cap: "watch".into() })
+        Err(CoreError::Unsupported {
+            cap: "watch".into(),
+        })
     }
 }
 

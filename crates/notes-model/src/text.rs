@@ -47,7 +47,12 @@ impl TextProfile {
 
         let Ok(text) = std::str::from_utf8(body) else {
             return (
-                TextProfile { encoding: Encoding::Unknown, bom, eol: Eol::Lf, final_newline: false },
+                TextProfile {
+                    encoding: Encoding::Unknown,
+                    bom,
+                    eol: Eol::Lf,
+                    final_newline: false,
+                },
                 None,
             );
         };
@@ -65,10 +70,19 @@ impl TextProfile {
         };
 
         let final_newline = text.ends_with('\n');
-        let normalised = if eol == Eol::CrLf { text.replace("\r\n", "\n") } else { text.to_string() };
+        let normalised = if eol == Eol::CrLf {
+            text.replace("\r\n", "\n")
+        } else {
+            text.to_string()
+        };
 
         (
-            TextProfile { encoding: Encoding::Utf8, bom, eol, final_newline },
+            TextProfile {
+                encoding: Encoding::Utf8,
+                bom,
+                eol,
+                final_newline,
+            },
             Some(normalised),
         )
     }
@@ -79,12 +93,24 @@ impl TextProfile {
     /// one still ends without one after an unchanged save, which is what makes
     /// `git status` clean.
     pub fn encode(&self, text: &str) -> Vec<u8> {
-        let mut s = if self.eol == Eol::CrLf { text.replace('\n', "\r\n") } else { text.to_string() };
-        let ends = if self.eol == Eol::CrLf { s.ends_with("\r\n") } else { s.ends_with('\n') };
+        let mut s = if self.eol == Eol::CrLf {
+            text.replace('\n', "\r\n")
+        } else {
+            text.to_string()
+        };
+        let ends = if self.eol == Eol::CrLf {
+            s.ends_with("\r\n")
+        } else {
+            s.ends_with('\n')
+        };
         if self.final_newline && !ends && !s.is_empty() {
             s.push_str(if self.eol == Eol::CrLf { "\r\n" } else { "\n" });
         } else if !self.final_newline && ends {
-            if self.eol == Eol::CrLf { s.truncate(s.len() - 2) } else { s.truncate(s.len() - 1) }
+            if self.eol == Eol::CrLf {
+                s.truncate(s.len() - 2)
+            } else {
+                s.truncate(s.len() - 1)
+            }
         }
         let mut out = Vec::with_capacity(s.len() + 3);
         if self.bom {
@@ -114,7 +140,11 @@ mod tests {
     fn round_trips(bytes: &[u8]) {
         let (profile, text) = TextProfile::detect(bytes);
         let text = text.expect("valid utf-8 for this case");
-        assert_eq!(profile.encode(&text), bytes, "profile {profile:?} lost bytes");
+        assert_eq!(
+            profile.encode(&text),
+            bytes,
+            "profile {profile:?} lost bytes"
+        );
     }
 
     #[test]
@@ -139,7 +169,11 @@ mod tests {
     fn bom_is_hidden_from_the_editor_and_restored_on_save() {
         let (p, text) = TextProfile::detect(b"\xef\xbb\xbf# t\n");
         assert!(p.bom);
-        assert_eq!(text.as_deref(), Some("# t\n"), "the editor never sees a BOM");
+        assert_eq!(
+            text.as_deref(),
+            Some("# t\n"),
+            "the editor never sees a BOM"
+        );
         assert_eq!(p.encode("# t\n"), b"\xef\xbb\xbf# t\n");
     }
 
@@ -158,14 +192,21 @@ mod tests {
         assert_eq!(p.read_only_reason(), Some(crate::ReadOnlyReason::MixedEol));
 
         let (p, _) = TextProfile::detect(b"a\rb\rc\r");
-        assert_eq!(p.eol, Eol::Mixed, "a lone CR is not a line ending we round-trip");
+        assert_eq!(
+            p.eol,
+            Eol::Mixed,
+            "a lone CR is not a line ending we round-trip"
+        );
     }
 
     #[test]
     fn invalid_utf8_is_read_only_and_yields_no_text() {
         let (p, text) = TextProfile::detect(b"# x\n\n\xff\xfe\n");
         assert_eq!(p.encoding, Encoding::Unknown);
-        assert!(text.is_none(), "no lossy decode; the bytes are not shown as text");
+        assert!(
+            text.is_none(),
+            "no lossy decode; the bytes are not shown as text"
+        );
         assert_eq!(p.read_only_reason(), Some(crate::ReadOnlyReason::NotUtf8));
     }
 

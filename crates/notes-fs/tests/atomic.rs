@@ -49,7 +49,12 @@ fn read_of_write_atomic_is_the_identity() {
     let p = RelPath::parse("n.md").unwrap();
     for payload in payloads() {
         fs.write_atomic(&p, &payload, None).unwrap();
-        assert_eq!(fs.read(&p).unwrap(), payload, "lost bytes at len {}", payload.len());
+        assert_eq!(
+            fs.read(&p).unwrap(),
+            payload,
+            "lost bytes at len {}",
+            payload.len()
+        );
     }
 }
 
@@ -66,7 +71,10 @@ fn a_write_leaves_no_temporary_behind() {
         .map(|e| e.file_name().to_string_lossy().to_string())
         .filter(|n| n.ends_with(".tmp"))
         .collect();
-    assert!(leftovers.is_empty(), "temp files left behind: {leftovers:?}");
+    assert!(
+        leftovers.is_empty(),
+        "temp files left behind: {leftovers:?}"
+    );
 }
 
 #[test]
@@ -75,8 +83,15 @@ fn expect_matching_lets_the_write_through() {
     let p = RelPath::parse("n.md").unwrap();
     fs.write_atomic(&p, b"one", None).unwrap();
     let s = fs.stat(&p).unwrap();
-    let base = BaseRev { size: s.size, mtime_ns: s.mtime_ns, hash: notes_fs::hash(b"one") };
-    assert!(matches!(fs.write_atomic(&p, b"two", Some(&base)), Ok(WriteOutcome::Written(_))));
+    let base = BaseRev {
+        size: s.size,
+        mtime_ns: s.mtime_ns,
+        hash: notes_fs::hash(b"one"),
+    };
+    assert!(matches!(
+        fs.write_atomic(&p, b"two", Some(&base)),
+        Ok(WriteOutcome::Written(_))
+    ));
     assert_eq!(fs.read(&p).unwrap(), b"two");
 }
 
@@ -86,7 +101,11 @@ fn expect_mismatching_writes_nothing_and_reports_divergence() {
     let p = RelPath::parse("n.md").unwrap();
     fs.write_atomic(&p, b"one", None).unwrap();
     let s = fs.stat(&p).unwrap();
-    let base = BaseRev { size: s.size, mtime_ns: s.mtime_ns, hash: notes_fs::hash(b"one") };
+    let base = BaseRev {
+        size: s.size,
+        mtime_ns: s.mtime_ns,
+        hash: notes_fs::hash(b"one"),
+    };
 
     // Somebody else writes. mtime resolution can be coarse, so change the size
     // too — the cheap check is size+mtime and the test is about divergence, not
@@ -109,14 +128,21 @@ fn a_touch_only_change_is_not_a_divergence() {
     let p = RelPath::parse("n.md").unwrap();
     fs.write_atomic(&p, b"same", None).unwrap();
     let s = fs.stat(&p).unwrap();
-    let base = BaseRev { size: s.size, mtime_ns: s.mtime_ns, hash: notes_fs::hash(b"same") };
+    let base = BaseRev {
+        size: s.size,
+        mtime_ns: s.mtime_ns,
+        hash: notes_fs::hash(b"same"),
+    };
 
     // Rewritten with identical content: mtime moves, the hash does not.
     std::thread::sleep(std::time::Duration::from_millis(10));
     std::fs::write(fs.root().join("n.md"), b"same").unwrap();
 
     let out = fs.write_atomic(&p, b"mine", Some(&base)).unwrap();
-    assert!(matches!(out, WriteOutcome::Written(_)), "hash decides, not mtime: {out:?}");
+    assert!(
+        matches!(out, WriteOutcome::Written(_)),
+        "hash decides, not mtime: {out:?}"
+    );
 }
 
 #[test]
@@ -136,7 +162,10 @@ fn rename_refuses_to_clobber_an_existing_name() {
     let b = RelPath::parse("b.md").unwrap();
     fs.create_new(&a, b"A").unwrap();
     fs.create_new(&b, b"B").unwrap();
-    assert!(matches!(fs.rename(&a, &b), Err(notes_model::CoreError::AlreadyExists { .. })));
+    assert!(matches!(
+        fs.rename(&a, &b),
+        Err(notes_model::CoreError::AlreadyExists { .. })
+    ));
     assert_eq!(fs.read(&b).unwrap(), b"B");
 }
 
@@ -145,5 +174,8 @@ fn writing_into_a_missing_directory_is_an_io_error_not_a_panic() {
     let (_d, fs) = ws();
     let p = RelPath::parse("nope/n.md").unwrap();
     let err = fs.write_atomic(&p, b"x", None).unwrap_err();
-    assert!(matches!(err, notes_model::CoreError::Io { .. }), "got {err:?}");
+    assert!(
+        matches!(err, notes_model::CoreError::Io { .. }),
+        "got {err:?}"
+    );
 }

@@ -1,0 +1,129 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # The two checks that catch a whole class of mistake without building the app.
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+
+      # docs/ARCHITECTURE.md §12: "No `fs:*` permission exists in the file. A PR
+      # that adds one is rejected by a CI grep." The frontend has no filesystem
+      # capability; every read and write goes through a command that validates
+      # the resolved path against the root itself.
+      - name: the webview has no filesystem capability
+        run: |
+          if grep -rnE '"fs:[a-z-]+"' apps/notes-app/src-tauri/capabilities/; then
+            echo "::error::a capability file grants an fs permission — see docs/ARCHITECTURE.md §12"
+            exit 1
+          fi
+          echo "no fs capability granted"
+
+      # docs/ARCHITECTURE.md §7: the frontend never hand-writes an IPC type.
+      # Regenerating must be a no-op; if it is not, Rust and TypeScript disagree
+      # about the wire and one of them is wrong.
+      - name: the generated TypeScript matches the Rust types
+        run: |
+          rm -rf apps/notes-app/src/ipc/generated
+          cargo test --workspace --quiet >/dev/null
+          if ! git diff --quiet --exit-code -- apps/notes-app/src/ipc/generated; then
+            echo "::error::ipc/generated is stale — run cargo test and commit the result"
+            git --no-pager diff --stat -- apps/notes-app/src/ipc/generated
+            exit 1
+          fi
+          test -n "$(ls -A apps/notes-app/src/ipc/generated)" || { echo "::error::nothing was generated"; exit 1; }
+          echo "generated types are in step with the Rust"
+
+      # Every user-visible string is a key, and a key missing from either
+      # catalogue is a blank label in one language (scope §9).
+      - name: the i18n catalogues have the same keys
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          en = json.load(open("apps/notes-app/src/i18n/en.json"))
+          pt = json.load(open("apps/notes-app/src/i18n/pt-BR.json"))
+          missing_pt = sorted(set(en) - set(pt))
+          missing_en = sorted(set(pt) - set(en))
+          for k in missing_pt: print(f"::error::missing from pt-BR.json: {k}")
+          for k in missing_en: print(f"::error::missing from en.json: {k}")
+          sys.exit(1 if missing_pt or missing_en else 0)
+          PY
+
+  rust:
+    name: rust (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+
+      - name: system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
+
+  # Arch is rolling: WebKitGTK moves without warning, and breakage shows here
+  # before it reaches a user (docs/ARCHITECTURE.md §3).
+  arch:
+    name: rust (arch, rolling webkit2gtk)
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: system dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel rustup webkit2gtk-4.1 gtk3 nodejs npm git
+          rustup default stable
+      - run: cargo test --workspace
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/notes-app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/notes-app/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+
+  # The acceptance criterion that needs a thousand kills. Not on every push:
+  # it takes minutes, and a check that slows every PR becomes a check people
+  # learn to skip.
+  crash:
+    name: crash-save-loop
+    if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-crash-loop')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: tools/crash-save-loop.sh

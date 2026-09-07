@@ -148,7 +148,11 @@ pub struct CompareKey(String);
 impl CompareKey {
     pub fn new(path: &RelPath, case_insensitive: bool) -> Self {
         let nfc = nfc(path.as_str());
-        Self(if case_insensitive { case_fold(&nfc) } else { nfc })
+        Self(if case_insensitive {
+            case_fold(&nfc)
+        } else {
+            nfc
+        })
     }
     pub fn as_str(&self) -> &str {
         &self.0
@@ -193,19 +197,33 @@ fn nfc(s: &str) -> String {
 /// Portuguese, Spanish, French or German filename needs.
 fn compose(base: char, mark: char) -> Option<char> {
     let table: &[(char, char, char)] = &[
-        ('a', '\u{300}', 'à'), ('a', '\u{301}', 'á'), ('a', '\u{302}', 'â'),
-        ('a', '\u{303}', 'ã'), ('a', '\u{308}', 'ä'), ('a', '\u{30a}', 'å'),
+        ('a', '\u{300}', 'à'),
+        ('a', '\u{301}', 'á'),
+        ('a', '\u{302}', 'â'),
+        ('a', '\u{303}', 'ã'),
+        ('a', '\u{308}', 'ä'),
+        ('a', '\u{30a}', 'å'),
         ('c', '\u{327}', 'ç'),
-        ('e', '\u{300}', 'è'), ('e', '\u{301}', 'é'), ('e', '\u{302}', 'ê'),
+        ('e', '\u{300}', 'è'),
+        ('e', '\u{301}', 'é'),
+        ('e', '\u{302}', 'ê'),
         ('e', '\u{308}', 'ë'),
-        ('i', '\u{300}', 'ì'), ('i', '\u{301}', 'í'), ('i', '\u{302}', 'î'),
+        ('i', '\u{300}', 'ì'),
+        ('i', '\u{301}', 'í'),
+        ('i', '\u{302}', 'î'),
         ('i', '\u{308}', 'ï'),
         ('n', '\u{303}', 'ñ'),
-        ('o', '\u{300}', 'ò'), ('o', '\u{301}', 'ó'), ('o', '\u{302}', 'ô'),
-        ('o', '\u{303}', 'õ'), ('o', '\u{308}', 'ö'),
-        ('u', '\u{300}', 'ù'), ('u', '\u{301}', 'ú'), ('u', '\u{302}', 'û'),
+        ('o', '\u{300}', 'ò'),
+        ('o', '\u{301}', 'ó'),
+        ('o', '\u{302}', 'ô'),
+        ('o', '\u{303}', 'õ'),
+        ('o', '\u{308}', 'ö'),
+        ('u', '\u{300}', 'ù'),
+        ('u', '\u{301}', 'ú'),
+        ('u', '\u{302}', 'û'),
         ('u', '\u{308}', 'ü'),
-        ('y', '\u{301}', 'ý'), ('y', '\u{308}', 'ÿ'),
+        ('y', '\u{301}', 'ý'),
+        ('y', '\u{308}', 'ÿ'),
     ];
     let lower = base.to_lowercase().next()?;
     let (_, _, composed) = table.iter().find(|(b, m, _)| *b == lower && *m == mark)?;
@@ -222,16 +240,33 @@ mod tests {
 
     #[test]
     fn rejects_every_escape_shape() {
-        for bad in ["", "/etc/passwd", "../x.md", "a/../../x.md", "./x.md",
-                    "a\\b.md", "a//b.md", "dir/", "C:/x.md", "a\u{0}b.md"] {
+        for bad in [
+            "",
+            "/etc/passwd",
+            "../x.md",
+            "a/../../x.md",
+            "./x.md",
+            "a\\b.md",
+            "a//b.md",
+            "dir/",
+            "C:/x.md",
+            "a\u{0}b.md",
+        ] {
             assert!(RelPath::parse(bad).is_err(), "should reject {bad:?}");
         }
     }
 
     #[test]
     fn accepts_names_the_user_actually_has() {
-        for good in ["a.md", "dir/a.md", "com espaço.md", "acentuação.md",
-                     "a.b/c.d.md", ".oculto.md", "dir/sub/deep.md"] {
+        for good in [
+            "a.md",
+            "dir/a.md",
+            "com espaço.md",
+            "acentuação.md",
+            "a.b/c.d.md",
+            ".oculto.md",
+            "dir/sub/deep.md",
+        ] {
             assert!(RelPath::parse(good).is_ok(), "should accept {good:?}");
         }
     }
@@ -250,7 +285,10 @@ mod tests {
         assert!(RelPath::parse("a.markdown").unwrap().is_note());
         assert!(!RelPath::parse("a.txt").unwrap().is_note());
         assert!(!RelPath::parse("a").unwrap().is_note());
-        assert!(!RelPath::parse(".md").unwrap().is_note(), "a dot-file is not an extension");
+        assert!(
+            !RelPath::parse(".md").unwrap().is_note(),
+            "a dot-file is not an extension"
+        );
     }
 
     #[test]

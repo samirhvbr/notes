@@ -48,8 +48,14 @@ mod tests {
     #[test]
     fn the_default_list_applies_without_any_config() {
         for n in [".notes", ".git", ".obsidian", ".trash"] {
-            assert!(is_hidden(&entry(n), false, &[]), "{n} must be hidden by default");
-            assert!(is_hidden(&entry(n), true, &[]), "{n} stays hidden even with show_hidden");
+            assert!(
+                is_hidden(&entry(n), false, &[]),
+                "{n} must be hidden by default"
+            );
+            assert!(
+                is_hidden(&entry(n), true, &[]),
+                "{n} stays hidden even with show_hidden"
+            );
         }
     }
 
@@ -63,7 +69,10 @@ mod tests {
     fn extra_entries_extend_and_never_replace() {
         let extra = vec!["build".to_string()];
         assert!(is_hidden(&entry("build"), true, &extra));
-        assert!(is_hidden(&entry(".git"), true, &extra), "config cannot unhide .git");
+        assert!(
+            is_hidden(&entry(".git"), true, &extra),
+            "config cannot unhide .git"
+        );
     }
 
     #[test]

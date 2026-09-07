@@ -34,9 +34,9 @@ impl IoKind {
     pub fn classify(e: &std::io::Error) -> Self {
         if let Some(code) = e.raw_os_error() {
             match code {
-                28 => return IoKind::DiskFull,                       // ENOSPC
-                122 | 69 => return IoKind::DiskFull,                 // EDQUOT
-                112 | 39 => return IoKind::DiskFull,                 // Windows ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL
+                28 => return IoKind::DiskFull,       // ENOSPC
+                122 | 69 => return IoKind::DiskFull, // EDQUOT
+                112 | 39 => return IoKind::DiskFull, // Windows ERROR_DISK_FULL / ERROR_HANDLE_DISK_FULL
                 _ => {}
             }
         }
@@ -101,9 +101,15 @@ pub enum CoreError {
     #[error("{note_id} changed on disk since it was opened")]
     Conflict { note_id: NoteId, disk_rev: BaseRev },
     #[error("{note_id} is read-only")]
-    ReadOnly { note_id: NoteId, reason: ReadOnlyReason },
+    ReadOnly {
+        note_id: NoteId,
+        reason: ReadOnlyReason,
+    },
     #[error("workspace {root} is unavailable")]
-    Unavailable { root: String, reason: UnavailableReason },
+    Unavailable {
+        root: String,
+        reason: UnavailableReason,
+    },
     #[error("no workspace is open")]
     NoWorkspace,
     #[error("timed out waiting for the workspace write lock")]
@@ -111,14 +117,22 @@ pub enum CoreError {
     #[error("this storage does not support {cap}")]
     Unsupported { cap: String },
     #[error("{op} failed on {path}")]
-    Io { op: String, path: String, kind: IoKind },
+    Io {
+        op: String,
+        path: String,
+        kind: IoKind,
+    },
     #[error("internal error: {message}")]
     Internal { message: String },
 }
 
 impl CoreError {
     pub fn io(op: &str, path: impl std::fmt::Display, e: &std::io::Error) -> Self {
-        CoreError::Io { op: op.to_string(), path: path.to_string(), kind: IoKind::classify(e) }
+        CoreError::Io {
+            op: op.to_string(),
+            path: path.to_string(),
+            kind: IoKind::classify(e),
+        }
     }
     /// The stable code a frontend switches on, matching the serde tag.
     pub fn code(&self) -> &'static str {
@@ -143,7 +157,10 @@ impl CoreError {
 
 impl From<crate::PathError> for CoreError {
     fn from(e: crate::PathError) -> Self {
-        CoreError::InvalidPath { path: String::new(), reason: e.to_string() }
+        CoreError::InvalidPath {
+            path: String::new(),
+            reason: e.to_string(),
+        }
     }
 }
 
@@ -162,7 +179,10 @@ mod tests {
 
     #[test]
     fn quota_reads_as_disk_full() {
-        assert_eq!(IoKind::classify(&std::io::Error::from_raw_os_error(122)), IoKind::DiskFull);
+        assert_eq!(
+            IoKind::classify(&std::io::Error::from_raw_os_error(122)),
+            IoKind::DiskFull
+        );
     }
 
     #[test]
@@ -175,7 +195,8 @@ mod tests {
     #[test]
     fn the_serde_tag_matches_the_code_accessor() {
         let e = CoreError::LockTimeout;
-        let v: serde_json::Value = serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
+        let v: serde_json::Value =
+            serde_json::from_str(&serde_json::to_string(&e).unwrap()).unwrap();
         assert_eq!(v["code"], e.code());
     }
 }

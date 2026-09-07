@@ -1,206 +1,119 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { open } from "@tauri-apps/plugin-dialog";
-import { Editor } from "./Editor";
-import {
-  openWorkspace,
-  readNote,
-  restoreWorkspace,
-  spikeEnv,
-  writeNote,
-  type NoteEntry,
-  type SpikeEnv,
-  type WorkspaceInfo,
-} from "./api";
+import { useCallback, useEffect, useState } from "react";
+import { Editor } from "./editor/Editor";
+import { Tree } from "./explorer/Tree";
+import { StatusBar, errorText } from "./app/StatusBar";
+import { Welcome } from "./app/Welcome";
+import { t } from "./i18n";
+import * as ipc from "./ipc";
+import { useEditor } from "./stores/editor";
+import { useWorkspace } from "./stores/workspace";
 
-type SaveState = "idle" | "dirty" | "writing" | "saved" | "error";
-
-/**
- * Spike 0.0 shell.
- *
- * This is not the 0.1a application and does not pretend to be: there is no
- * BaseRev, no conflict detection, no watcher, no draft recovery. Its only job is
- * to make the four 0.0 acceptance criteria observable on a real device, which is
- * why the diagnostics panel is as prominent as the editor.
- */
 export default function App() {
-  const [env, setEnv] = useState<SpikeEnv | null>(null);
-  const [ws, setWs] = useState<WorkspaceInfo | null>(null);
-  const [restoreError, setRestoreError] = useState<string | null>(null);
-  const [active, setActive] = useState<NoteEntry | null>(null);
-  const [doc, setDoc] = useState("");
-  const [save, setSave] = useState<SaveState>("idle");
-  const [error, setError] = useState<string | null>(null);
-  const buffer = useRef("");
+  const info = useWorkspace((s) => s.info);
+  const restore = useWorkspace((s) => s.restore);
+  const refresh = useWorkspace((s) => s.refresh);
+  const fail = useWorkspace((s) => s.fail);
+  const doc = useEditor((s) => s.doc);
+  const save = useEditor((s) => s.save);
+  const keepDraft = useEditor((s) => s.keepDraft);
+  const resolveDraft = useEditor((s) => s.resolveDraft);
+  const setAutosave = useEditor((s) => s.setAutosave);
+  const [env, setEnv] = useState<ipc.EnvReport | null>(null);
 
   useEffect(() => {
-    spikeEnv().then(setEnv).catch((e) => setError(String(e)));
-    // Acceptance criterion 3 is exactly this call succeeding after the process
-    // was killed, so a failure is reported rather than treated as "no workspace".
-    restoreWorkspace()
-      .then((w) => w && setWs(w))
-      .catch((e) => setRestoreError(String(e)));
-  }, []);
+    void restore();
+    ipc.settingsGet().then((s) => setAutosave(s.files.autosave_ms)).catch(() => {});
+    ipc.envReport().then(setEnv).catch(() => {});
+  }, [restore, setAutosave]);
 
-  const pick = useCallback(async () => {
-    setError(null);
-    const picked = await open({ directory: true, multiple: false });
-    if (typeof picked !== "string") return;
-    try {
-      setWs(await openWorkspace(picked));
-      setActive(null);
-      setDoc("");
-      setRestoreError(null);
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
-
-  const openNote = useCallback(async (entry: NoteEntry) => {
-    setError(null);
-    try {
-      const text = await readNote(entry.relPath);
-      buffer.current = text;
-      setDoc(text);
-      setActive(entry);
-      setSave("idle");
-    } catch (e) {
-      setError(String(e));
-    }
-  }, []);
-
-  const persist = useCallback(async () => {
-    if (!active) return;
-    setSave("writing");
-    try {
-      await writeNote(active.relPath, buffer.current);
-      setSave("saved");
-    } catch (e) {
-      setSave("error");
-      setError(String(e));
-    }
-  }, [active]);
-
+  // Ctrl/Cmd+S forces a flush; the app never depends on it to save.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        void persist();
+        void save(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [persist]);
+  }, [save]);
+
+  // Closing with a dirty buffer keeps it: the draft is written on the way out.
+  useEffect(() => {
+    const onLeave = () => {
+      const d = useEditor.getState().doc;
+      if (d && d.bufferVersion !== d.savedVersion) void keepDraft("exit");
+    };
+    window.addEventListener("beforeunload", onLeave);
+    return () => window.removeEventListener("beforeunload", onLeave);
+  }, [keepDraft]);
+
+  const newNote = useCallback(async () => {
+    const name = window.prompt(t("tree.newNote"));
+    if (!name) return;
+    try {
+      const e = await ipc.noteCreate(ipc.ROOT, name);
+      await refresh(ipc.ROOT);
+      await useEditor.getState().open(e.path);
+    } catch (err) {
+      fail(err);
+    }
+  }, [refresh, fail]);
+
+  const newFolder = useCallback(async () => {
+    const name = window.prompt(t("tree.newFolder"));
+    if (!name) return;
+    try {
+      await ipc.dirCreate(ipc.ROOT, name);
+      await refresh(ipc.ROOT);
+    } catch (err) {
+      fail(err);
+    }
+  }, [refresh, fail]);
+
+  if (!info) return <Welcome />;
 
   return (
     <div className="app">
-      <header className="bar">
+      <header className="toolbar">
         <strong>notes</strong>
-        <span className="tag">spike 0.0 — not the product</span>
-        <button onClick={pick}>Open Folder…</button>
-        {active && (
-          <>
-            <button onClick={persist} disabled={save === "writing"}>
-              Save (Ctrl+S)
-            </button>
-            <span className={`state state-${save}`}>{save}</span>
-          </>
+        <button onClick={newNote}>{t("tree.newNote")}</button>
+        <button onClick={newFolder}>{t("tree.newFolder")}</button>
+        <span className="spacer" />
+        {env && (
+          <span className="muted diag" title={env.dmabufExplanation}>
+            {env.os}/{env.session}
+            {env.dmabufApplied ? " · dmabuf off" : ""}
+          </span>
         )}
       </header>
 
       <div className="body">
         <aside className="side">
-          <Diagnostics env={env} ws={ws} restoreError={restoreError} />
-          <h2>Notes</h2>
-          {!ws && <p className="muted">No workspace open.</p>}
-          {ws && ws.entries.length === 0 && (
-            <p className="muted">No .md files at the root of this folder.</p>
-          )}
-          <ul className="files">
-            {ws?.entries.map((e) => (
-              <li key={e.relPath}>
-                <button
-                  className={active?.relPath === e.relPath ? "on" : ""}
-                  onClick={() => openNote(e)}
-                >
-                  {e.name}
-                </button>
-              </li>
-            ))}
-          </ul>
+          <Tree />
         </aside>
-
         <main className="main">
-          {active ? (
-            <Editor
-              docKey={active.relPath}
-              value={doc}
-              onChange={(next) => {
-                buffer.current = next;
-                setSave("dirty");
-              }}
-            />
-          ) : (
-            <div className="empty">
-              <p>Pick a folder, then open a note.</p>
-              <p className="muted">
-                Type <code>ação</code>, a dead-key <code>ç</code> and an emoji.
-                Select, paste, undo. That is acceptance criterion 2.
-              </p>
+          {doc?.draft && (
+            <div className="banner">
+              <span>{t("draft.found", { name: doc.path })}</span>
+              <button onClick={() => resolveDraft(true)}>{t("draft.restore")}</button>
+              <button onClick={() => resolveDraft(false)}>{t("draft.discard")}</button>
             </div>
           )}
+          {doc?.conflict && (
+            <div className="banner warn">
+              <strong>{t("conflict.title", { name: doc.path })}</strong>
+              <span>{t("conflict.body")}</span>
+            </div>
+          )}
+          {useWorkspace.getState().error && (
+            <div className="banner warn">{errorText(useWorkspace.getState().error!)}</div>
+          )}
+          <Editor />
         </main>
       </div>
 
-      {error && <div className="err">{error}</div>}
+      <StatusBar />
     </div>
-  );
-}
-
-function Diagnostics({
-  env,
-  ws,
-  restoreError,
-}: {
-  env: SpikeEnv | null;
-  ws: WorkspaceInfo | null;
-  restoreError: string | null;
-}) {
-  if (!env) return <section className="diag muted">reading environment…</section>;
-  return (
-    <section className="diag">
-      <h2>Diagnostics</h2>
-      <dl>
-        <dt>platform</dt>
-        <dd>
-          {env.os}/{env.arch} · tauri {env.tauriVersion}
-        </dd>
-        <dt>session</dt>
-        <dd>
-          {env.session}
-          {env.nvidia ? " · nvidia" : ""}
-        </dd>
-        <dt>dmabuf</dt>
-        <dd>
-          <strong>{env.dmabufApplied ? "APPLIED" : "not applied"}</strong> —{" "}
-          {env.dmabufWorkaround}
-        </dd>
-        <dt>app data</dt>
-        <dd className="wrap">{env.appDataDir}</dd>
-        <dt>workspace</dt>
-        <dd className="wrap">
-          {ws ? (
-            <>
-              {ws.root}
-              <br />
-              <em>{ws.restored ? "restored from disk" : "picked this run"}</em>
-            </>
-          ) : restoreError ? (
-            <span className="bad">restore failed: {restoreError}</span>
-          ) : (
-            "none"
-          )}
-        </dd>
-      </dl>
-    </section>
   );
 }

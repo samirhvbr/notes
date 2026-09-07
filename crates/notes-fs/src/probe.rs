@@ -24,7 +24,9 @@ pub fn probe_case_insensitive(root: &Path, entries: &[Entry]) -> Option<bool> {
         let original = root.join(&e.name);
         let other = root.join(&flipped);
 
-        let Ok(a) = std::fs::symlink_metadata(&original) else { continue };
+        let Ok(a) = std::fs::symlink_metadata(&original) else {
+            continue;
+        };
         match std::fs::symlink_metadata(&other) {
             // The flipped name resolves. It is the same file if the filesystem
             // folds case; a genuinely distinct file that differs only by case
@@ -42,7 +44,9 @@ pub fn probe_case_insensitive(root: &Path, entries: &[Entry]) -> Option<bool> {
 /// some scripts and not others, and avoids a name whose length changes under
 /// case mapping (ß → SS), which would test the wrong thing.
 fn flip_case(name: &str) -> Option<String> {
-    let idx = name.char_indices().find(|(_, c)| c.is_alphabetic() && (c.is_lowercase() || c.is_uppercase()))?;
+    let idx = name
+        .char_indices()
+        .find(|(_, c)| c.is_alphabetic() && (c.is_lowercase() || c.is_uppercase()))?;
     let (i, c) = idx;
     let flipped: String = if c.is_lowercase() {
         c.to_uppercase().collect()

@@ -314,3 +314,78 @@ the states in the model is what lets a test assert on them.
 
 **Alternative if you disagree.** Leave it to the frontend and accept that the
 status vocabulary lives in a component.
+
+---
+
+## D-16 — `mtime_ns` crosses the IPC as a string
+
+**Decided.** `BaseRev.mtime_ns` and `Stat.mtime_ns` serialise as decimal
+strings; deserialising still accepts a number, so state written before this rule
+loads.
+
+**Gap closed.** A defect the ts-rs wiring exposed, not a listed gap.
+
+**Why.** A nanosecond timestamp is around 1.7 × 10¹⁸ and
+`Number.MAX_SAFE_INTEGER` is 9.0 × 10¹⁵. Sent as a JSON number it is **rounded
+by JavaScript**, and it does not merely display wrong: `BaseRev` travels back to
+the core on every save, so a rounded `mtime_ns` would make the cheap check
+disagree with the disk on every write and send each one down the hashing path.
+Silent, slow, and invisible in any test that stays inside Rust. A test now
+asserts the exact round-trip for a value above the safe integer.
+
+`u64` fields that are counters or file sizes stay numbers — neither approaches
+2⁵³.
+
+**Alternative if you disagree.** Send milliseconds, which fits in a double and
+throws away the resolution that makes the cheap check worth having on a
+filesystem with nanosecond timestamps.
+
+---
+
+## D-17 — Generated TypeScript is committed, and CI fails when it drifts
+
+**Decided.** `TS_RS_EXPORT_DIR` in `.cargo/config.toml` points `#[ts(export)]`
+at `apps/notes-app/src/ipc/generated`, which is committed. A CI job deletes the
+directory, runs `cargo test`, and fails on any diff.
+
+**Gap closed.** G15.
+
+**Why.** `ARCHITECTURE.md` §7 says the frontend never hand-writes an IPC type
+but did not say what runs the generator or what happens when someone forgets.
+Committing the output keeps the frontend building without a Rust toolchain;
+regenerating in CI is what stops the two sides drifting apart about the wire
+while both compile.
+
+**Alternative if you disagree.** Generate at build time and gitignore the
+output, which makes `npm run build` depend on a Rust toolchain.
+
+---
+
+## D-18 — CI checks the two invariants that a compiler cannot
+
+**Decided.** A grep rejects any `fs:*` permission appearing in a capability
+file, and a script fails when `en.json` and `pt-BR.json` do not carry the same
+keys.
+
+**Gap closed.** `ARCHITECTURE.md` §12 asks for the first in as many words; the
+second follows from §13.
+
+**Why.** Both failures compile, run, and look right. An `fs:` permission added
+to a capability file silently undoes the reason every path check exists; a key
+missing from one catalogue is a blank label for whoever reads in that language.
+
+**Alternative if you disagree.** Trust review for both.
+
+---
+
+## D-19 — The crash loop does not run on every pull request
+
+**Decided.** `tools/crash-save-loop.sh` runs on pushes to `master` and on a
+pull request labelled `run-crash-loop`.
+
+**Why.** A thousand spawn-and-kill rounds take minutes. A check that slows every
+pull request is a check people learn to skip, and this is the one that already
+found a real defect.
+
+**Alternative if you disagree.** Run it on every PR with `ROUNDS=100`, trading
+detection probability for latency.

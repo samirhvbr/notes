@@ -1,0 +1,6 @@
+# Where `#[ts(export)]` writes the TypeScript for every type that crosses the
+# IPC boundary. The frontend never hand-writes an IPC type
+# (`docs/ARCHITECTURE.md` §7); `cargo test` regenerates this directory, and CI
+# fails when the committed files differ from a fresh generation.
+[env]
+TS_RS_EXPORT_DIR = { value = "apps/notes-app/src/ipc/generated", relative = true }

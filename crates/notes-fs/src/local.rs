@@ -1,7 +1,5 @@
 use crate::{hash, DeleteOutcome, FileSystem, Result, WriteOutcome};
-use notes_model::{
-    BaseRev, Caps, CoreError, Entry, EntryKind, NativeId, RelPath, Stat,
-};
+use notes_model::{BaseRev, Caps, CoreError, Entry, EntryKind, NativeId, RelPath, Stat};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -30,7 +28,10 @@ impl LocalFs {
                 reason: notes_model::UnavailableReason::NotADirectory,
             });
         }
-        Ok(Self { root: canonical, caps: Caps::LOCAL })
+        Ok(Self {
+            root: canonical,
+            caps: Caps::LOCAL,
+        })
     }
 
     pub fn with_caps(mut self, caps: Caps) -> Self {
@@ -59,7 +60,9 @@ impl LocalFs {
             p.push(seg);
             if let Ok(meta) = fs::symlink_metadata(&p) {
                 if meta.file_type().is_symlink() {
-                    return Err(CoreError::SymlinkNotFollowed { path: rel.to_string() });
+                    return Err(CoreError::SymlinkNotFollowed {
+                        path: rel.to_string(),
+                    });
                 }
             }
         }
@@ -67,14 +70,16 @@ impl LocalFs {
         // is a bug in RelPath rather than a hostile input — but the cost of the
         // check is a string comparison.
         if !p.starts_with(&self.root) {
-            return Err(CoreError::OutsideRoot { path: rel.to_string() });
+            return Err(CoreError::OutsideRoot {
+                path: rel.to_string(),
+            });
         }
         Ok(p)
     }
 
     fn stat_at(path: &Path) -> Result<Stat> {
-        let meta = fs::symlink_metadata(path)
-            .map_err(|e| CoreError::io("stat", path.display(), &e))?;
+        let meta =
+            fs::symlink_metadata(path).map_err(|e| CoreError::io("stat", path.display(), &e))?;
         Ok(Self::stat_from(&meta))
     }
 
@@ -101,9 +106,13 @@ impl LocalFs {
         let dir = target.parent().ok_or_else(|| CoreError::Internal {
             message: "target has no parent directory".into(),
         })?;
-        let name = target.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
-            CoreError::Internal { message: "target has no file name".into() }
-        })?;
+        let name =
+            target
+                .file_name()
+                .and_then(|n| n.to_str())
+                .ok_or_else(|| CoreError::Internal {
+                    message: "target has no file name".into(),
+                })?;
         // Same directory, therefore the same volume, therefore the rename is
         // atomic and `same_volume_move` holds.
         //
@@ -139,7 +148,10 @@ impl FileSystem for LocalFs {
             };
             let name = entry.file_name().to_string_lossy().to_string();
             let Ok(path) = dir.join(&name) else { continue };
-            let Ok(meta) = entry.metadata().or_else(|_| fs::symlink_metadata(entry.path())) else {
+            let Ok(meta) = entry
+                .metadata()
+                .or_else(|_| fs::symlink_metadata(entry.path()))
+            else {
                 continue;
             };
             let stat = Self::stat_from(&meta);
@@ -156,7 +168,8 @@ impl FileSystem for LocalFs {
         out.sort_by(|a, b| {
             let da = a.kind != EntryKind::Dir;
             let db = b.kind != EntryKind::Dir;
-            da.cmp(&db).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+            da.cmp(&db)
+                .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
         Ok(out)
     }
@@ -198,14 +211,19 @@ impl FileSystem for LocalFs {
             match Self::stat_at(&abs) {
                 Ok(current) => {
                     if !base.cheap_match(&current) {
-                        let same = fs::read(&abs).map(|b| hash(&b) == base.hash).unwrap_or(false);
+                        let same = fs::read(&abs)
+                            .map(|b| hash(&b) == base.hash)
+                            .unwrap_or(false);
                         if !same {
                             let _ = fs::remove_file(&tmp);
                             return Ok(WriteOutcome::Diverged(current));
                         }
                     }
                 }
-                Err(CoreError::Io { kind: notes_model::IoKind::NotFound, .. }) => {
+                Err(CoreError::Io {
+                    kind: notes_model::IoKind::NotFound,
+                    ..
+                }) => {
                     // Removed externally while we were writing. Not our call to
                     // recreate it silently — the core decides (scope §12).
                     let _ = fs::remove_file(&tmp);
@@ -236,11 +254,14 @@ impl FileSystem for LocalFs {
         let mut f = match fs::File::create_new(&abs) {
             Ok(f) => f,
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                return Err(CoreError::AlreadyExists { path: path.to_string() })
+                return Err(CoreError::AlreadyExists {
+                    path: path.to_string(),
+                })
             }
             Err(e) => return Err(CoreError::io("create_new", path, &e)),
         };
-        f.write_all(bytes).map_err(|e| CoreError::io("write", path, &e))?;
+        f.write_all(bytes)
+            .map_err(|e| CoreError::io("write", path, &e))?;
         f.sync_all().map_err(|e| CoreError::io("fsync", path, &e))?;
         drop(f);
         sync_dir(&abs);
@@ -252,7 +273,9 @@ impl FileSystem for LocalFs {
         match fs::create_dir(&abs) {
             Ok(()) => Ok(()),
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                Err(CoreError::AlreadyExists { path: path.to_string() })
+                Err(CoreError::AlreadyExists {
+                    path: path.to_string(),
+                })
             }
             Err(e) => Err(CoreError::io("create_dir", path, &e)),
         }
@@ -262,7 +285,9 @@ impl FileSystem for LocalFs {
         let a = self.resolve(from)?;
         let b = self.resolve(to)?;
         if b.exists() {
-            return Err(CoreError::AlreadyExists { path: to.to_string() });
+            return Err(CoreError::AlreadyExists {
+                path: to.to_string(),
+            });
         }
         fs::rename(&a, &b).map_err(|e| CoreError::io("rename", from, &e))
     }
@@ -273,7 +298,11 @@ impl FileSystem for LocalFs {
         // `Permanent` is the honest answer for what this does, and scope §7.7
         // forbids a silent fallback — the caller must show which one happened.
         let meta = fs::symlink_metadata(&abs).map_err(|e| CoreError::io("stat", path, &e))?;
-        let r = if meta.is_dir() { fs::remove_dir(&abs) } else { fs::remove_file(&abs) };
+        let r = if meta.is_dir() {
+            fs::remove_dir(&abs)
+        } else {
+            fs::remove_file(&abs)
+        };
         r.map_err(|e| CoreError::io("delete", path, &e))?;
         Ok(DeleteOutcome::Permanent)
     }
@@ -298,14 +327,20 @@ fn mtime_ns(meta: &fs::Metadata) -> i128 {
 #[cfg(unix)]
 fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
     use std::os::unix::fs::MetadataExt;
-    Some(NativeId::Unix { dev: meta.dev(), ino: meta.ino() })
+    Some(NativeId::Unix {
+        dev: meta.dev(),
+        ino: meta.ino(),
+    })
 }
 
 #[cfg(windows)]
 fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
     use std::os::windows::fs::MetadataExt;
     match (meta.volume_serial_number(), meta.file_index()) {
-        (Some(v), Some(i)) => Some(NativeId::Windows { volume: v as u64, index: i }),
+        (Some(v), Some(i)) => Some(NativeId::Windows {
+            volume: v as u64,
+            index: i,
+        }),
         _ => None,
     }
 }

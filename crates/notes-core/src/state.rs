@@ -73,8 +73,22 @@ pub fn store<T: Schemad>(path: &Path, value: &T) -> Result<(), CoreError> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).map_err(|e| CoreError::io("mkdir", dir.display(), &e))?;
     }
-    let bytes = serde_json::to_vec_pretty(value)
-        .map_err(|e| CoreError::Internal { message: format!("serialising {}: {e}", T::NAME) })?;
+    // A state file whose `schema` field disagrees with the constant it was
+    // written against is the failure this whole module exists to prevent, and
+    // it is cheap to refuse at the only place a write happens.
+    if value.schema() != T::CURRENT {
+        return Err(CoreError::Internal {
+            message: format!(
+                "{} carries schema {} but the build writes {}",
+                T::NAME,
+                value.schema(),
+                T::CURRENT
+            ),
+        });
+    }
+    let bytes = serde_json::to_vec_pretty(value).map_err(|e| CoreError::Internal {
+        message: format!("serialising {}: {e}", T::NAME),
+    })?;
     write_atomic(path, &bytes)
 }
 
@@ -86,7 +100,8 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("state");
     let tmp = dir.join(format!(".{name}.tmp-{}", std::process::id()));
 
-    let mut f = std::fs::File::create(&tmp).map_err(|e| CoreError::io("create_temp", tmp.display(), &e))?;
+    let mut f =
+        std::fs::File::create(&tmp).map_err(|e| CoreError::io("create_temp", tmp.display(), &e))?;
     let r = (|| -> std::io::Result<()> {
         f.write_all(bytes)?;
         f.sync_all()

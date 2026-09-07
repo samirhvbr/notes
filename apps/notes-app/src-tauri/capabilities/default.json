@@ -1,10 +1,16 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "SCOPE §4: window, dialog (folder picker), clipboard and shell-open. NO filesystem. Every read and write goes through a command in this crate, which validates the resolved path against the workspace root itself — a capability is not that validation.",
+  "description": "docs/ARCHITECTURE.md §12: window, dialog (directories only), clipboard and shell-open restricted to http(s). NO fs permission exists in this file, and a CI grep rejects a change that adds one — every read and write goes through a command in this crate, which validates the resolved path against the workspace root itself. A capability is not that validation.",
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "shell:allow-open",
+      "allow": [{ "url": "https://**" }, { "url": "http://**" }]
+    }
   ]
 }

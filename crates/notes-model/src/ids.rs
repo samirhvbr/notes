@@ -6,7 +6,9 @@ use uuid::Uuid;
 macro_rules! uuid_newtype {
     ($name:ident, $doc:literal) => {
         #[doc = $doc]
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
+        #[derive(
+            Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS,
+        )]
         #[serde(transparent)]
         #[ts(export, type = "string")]
         pub struct $name(Uuid);
@@ -44,7 +46,10 @@ macro_rules! uuid_newtype {
     };
 }
 
-uuid_newtype!(WorkspaceId, "Assigned when a root is registered. Lives only in app data.");
+uuid_newtype!(
+    WorkspaceId,
+    "Assigned when a root is registered. Lives only in app data."
+);
 uuid_newtype!(
     NoteId,
     "Assigned the first time a note is **opened**, and never written into the \
@@ -106,14 +111,20 @@ pub enum HashParseError {
 impl std::str::FromStr for ContentHash {
     type Err = HashParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let hex = s.strip_prefix("b3:").ok_or(HashParseError::UnknownAlgorithm)?;
+        let hex = s
+            .strip_prefix("b3:")
+            .ok_or(HashParseError::UnknownAlgorithm)?;
         if hex.len() != 64 {
             return Err(HashParseError::BadLength);
         }
         let mut out = [0u8; 32];
         for (i, chunk) in hex.as_bytes().chunks(2).enumerate() {
-            let hi = (chunk[0] as char).to_digit(16).ok_or(HashParseError::NotHex)?;
-            let lo = (chunk[1] as char).to_digit(16).ok_or(HashParseError::NotHex)?;
+            let hi = (chunk[0] as char)
+                .to_digit(16)
+                .ok_or(HashParseError::NotHex)?;
+            let lo = (chunk[1] as char)
+                .to_digit(16)
+                .ok_or(HashParseError::NotHex)?;
             out[i] = (hi * 16 + lo) as u8;
         }
         Ok(Self(out))
@@ -157,7 +168,10 @@ mod tests {
 
     #[test]
     fn hash_rejects_wrong_length_and_non_hex() {
-        assert_eq!("b3:abc".parse::<ContentHash>(), Err(HashParseError::BadLength));
+        assert_eq!(
+            "b3:abc".parse::<ContentHash>(),
+            Err(HashParseError::BadLength)
+        );
         let bad = format!("b3:{}", "z".repeat(64));
         assert_eq!(bad.parse::<ContentHash>(), Err(HashParseError::NotHex));
     }

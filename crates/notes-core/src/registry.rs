@@ -22,7 +22,11 @@ pub struct NoteRecord {
 
 impl NoteRecord {
     pub fn base_rev(&self) -> BaseRev {
-        BaseRev { size: self.size, mtime_ns: self.mtime_ns, hash: self.hash.clone() }
+        BaseRev {
+            size: self.size,
+            mtime_ns: self.mtime_ns,
+            hash: self.hash.clone(),
+        }
     }
 }
 
@@ -63,7 +67,12 @@ impl Schemad for Registry {
 }
 
 impl Registry {
-    pub fn new(workspace_id: WorkspaceId, root: &str, case_insensitive: bool, root_native_id: Option<NativeId>) -> Self {
+    pub fn new(
+        workspace_id: WorkspaceId,
+        root: &str,
+        case_insensitive: bool,
+        root_native_id: Option<NativeId>,
+    ) -> Self {
         Self {
             schema: Self::CURRENT,
             workspace_id,
@@ -78,7 +87,10 @@ impl Registry {
     }
 
     pub fn find_by_path(&self, path: &RelPath) -> Option<(NoteId, &NoteRecord)> {
-        self.notes.iter().find(|(_, r)| &r.path == path).map(|(id, r)| (*id, r))
+        self.notes
+            .iter()
+            .find(|(_, r)| &r.path == path)
+            .map(|(id, r)| (*id, r))
     }
 
     /// Assign or refresh the identity of a note that has just been opened.
@@ -137,7 +149,8 @@ pub struct WorkspacesIndex {
     pub workspaces: Vec<WorkspaceEntry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct WorkspaceEntry {
     pub id: WorkspaceId,
     /// The canonical root at the time of registration. A moved folder is not
@@ -158,7 +171,11 @@ impl Schemad for WorkspacesIndex {
 
 impl Default for WorkspacesIndex {
     fn default() -> Self {
-        Self { schema: Self::CURRENT, last_workspace: None, workspaces: Vec::new() }
+        Self {
+            schema: Self::CURRENT,
+            last_workspace: None,
+            workspaces: Vec::new(),
+        }
     }
 }
 

@@ -24,7 +24,11 @@ fn setup() -> Fixture {
 
     let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
     svc.open_workspace(work.path()).unwrap();
-    Fixture { _data: data, work, svc }
+    Fixture {
+        _data: data,
+        work,
+        svc,
+    }
 }
 
 fn rel(s: &str) -> RelPath {
@@ -52,7 +56,10 @@ fn opening_a_folder_creates_nothing_inside_it() {
     svc.open_note(&rel("nota.md")).unwrap();
     let after = snapshot(work.path());
 
-    assert_eq!(before, after, "the workspace folder was modified by opening it");
+    assert_eq!(
+        before, after,
+        "the workspace folder was modified by opening it"
+    );
     assert!(!info.read_only);
     // The case probe is part of open, and it must not have written either.
     assert!(!work.path().join(".notes").exists());
@@ -129,7 +136,10 @@ fn an_external_append_suspends_autosave_and_writes_a_draft_without_overwriting()
     std::fs::write(f.work.path().join("nota.md"), b"# nota\n\ncorpo\nx\n").unwrap();
 
     let result = f.svc.save_note(id, &dirty, 7, &base).unwrap();
-    assert!(matches!(result, SaveResult::Conflict { .. }), "got {result:?}");
+    assert!(
+        matches!(result, SaveResult::Conflict { .. }),
+        "got {result:?}"
+    );
 
     // Nothing overwritten.
     assert_eq!(
@@ -148,7 +158,10 @@ fn an_external_append_suspends_autosave_and_writes_a_draft_without_overwriting()
     assert_eq!(drafts[0].reason, DraftReason::Conflict);
 
     let restored = f.svc.resolve_draft(id, DraftChoice::Restore).unwrap();
-    assert_eq!(restored.text, dirty, "the draft holds exactly what was typed");
+    assert_eq!(
+        restored.text, dirty,
+        "the draft holds exactly what was typed"
+    );
 }
 
 #[test]
@@ -164,8 +177,13 @@ fn a_suspended_note_keeps_its_edits_going_to_the_draft() {
     assert!(f.svc.is_suspended(id));
 
     // More typing while suspended: the draft moves, the note does not.
-    f.svc.write_draft(id, "meu texto continuado", 2, &base, DraftReason::Conflict).unwrap();
-    assert_eq!(std::fs::read(f.work.path().join("nota.md")).unwrap(), b"# externo\n");
+    f.svc
+        .write_draft(id, "meu texto continuado", 2, &base, DraftReason::Conflict)
+        .unwrap();
+    assert_eq!(
+        std::fs::read(f.work.path().join("nota.md")).unwrap(),
+        b"# externo\n"
+    );
     let restored = f.svc.resolve_draft(id, DraftChoice::Restore).unwrap();
     assert_eq!(restored.text, "meu texto continuado");
 }
@@ -205,7 +223,11 @@ fn a_denied_write_is_reported_and_leaves_the_buffer_recoverable() {
 
     // Recoverable after a restart: a fresh service over the same data directory.
     let path = drafts_dir(&f.svc, ws_id).join(format!("{id}.draft"));
-    assert!(path.exists(), "a failed write must leave a draft at {}", path.display());
+    assert!(
+        path.exists(),
+        "a failed write must leave a draft at {}",
+        path.display()
+    );
     let raw = std::fs::read(&path).unwrap();
     assert!(
         String::from_utf8_lossy(&raw).contains("texto que não cabe"),
@@ -224,12 +246,31 @@ fn saving_unchanged_content_writes_nothing_and_does_not_move_mtime() {
     let before = std::fs::metadata(f.work.path().join("nota.md")).unwrap();
 
     std::thread::sleep(std::time::Duration::from_millis(10));
-    let r = f.svc.save_note(opened.note_id, &opened.text, 1, &opened.base_rev).unwrap();
-    assert!(matches!(r, SaveResult::Saved { unchanged: true, .. }), "got {r:?}");
+    let r = f
+        .svc
+        .save_note(opened.note_id, &opened.text, 1, &opened.base_rev)
+        .unwrap();
+    assert!(
+        matches!(
+            r,
+            SaveResult::Saved {
+                unchanged: true,
+                ..
+            }
+        ),
+        "got {r:?}"
+    );
 
     let after = std::fs::metadata(f.work.path().join("nota.md")).unwrap();
-    assert_eq!(before.modified().unwrap(), after.modified().unwrap(), "mtime moved");
-    assert_eq!(std::fs::read(f.work.path().join("nota.md")).unwrap(), b"# nota\n\ncorpo\n");
+    assert_eq!(
+        before.modified().unwrap(),
+        after.modified().unwrap(),
+        "mtime moved"
+    );
+    assert_eq!(
+        std::fs::read(f.work.path().join("nota.md")).unwrap(),
+        b"# nota\n\ncorpo\n"
+    );
 }
 
 #[test]
@@ -238,19 +279,34 @@ fn an_ordinary_save_writes_and_clears_the_draft() {
     let opened = f.svc.open_note(&rel("nota.md")).unwrap();
     let id = opened.note_id;
 
-    f.svc.write_draft(id, "rascunho", 1, &opened.base_rev, DraftReason::Stale).unwrap();
+    f.svc
+        .write_draft(id, "rascunho", 1, &opened.base_rev, DraftReason::Stale)
+        .unwrap();
     assert_eq!(f.svc.list_drafts().unwrap().len(), 1);
 
-    let r = f.svc.save_note(id, "# nova\n\nversão\n", 2, &opened.base_rev).unwrap();
+    let r = f
+        .svc
+        .save_note(id, "# nova\n\nversão\n", 2, &opened.base_rev)
+        .unwrap();
     match r {
-        SaveResult::Saved { unchanged, buffer_version, .. } => {
+        SaveResult::Saved {
+            unchanged,
+            buffer_version,
+            ..
+        } => {
             assert!(!unchanged);
             assert_eq!(buffer_version, 2);
         }
         other => panic!("expected Saved, got {other:?}"),
     }
-    assert_eq!(std::fs::read(f.work.path().join("nota.md")).unwrap(), "# nova\n\nversão\n".as_bytes());
-    assert!(f.svc.list_drafts().unwrap().is_empty(), "a confirmed write clears the draft");
+    assert_eq!(
+        std::fs::read(f.work.path().join("nota.md")).unwrap(),
+        "# nova\n\nversão\n".as_bytes()
+    );
+    assert!(
+        f.svc.list_drafts().unwrap().is_empty(),
+        "a confirmed write clears the draft"
+    );
 }
 
 #[test]
@@ -262,8 +318,20 @@ fn convergence_is_not_a_conflict() {
     std::thread::sleep(std::time::Duration::from_millis(10));
     std::fs::write(f.work.path().join("nota.md"), b"# convergiu\n").unwrap();
 
-    let r = f.svc.save_note(opened.note_id, "# convergiu\n", 5, &opened.base_rev).unwrap();
-    assert!(matches!(r, SaveResult::Saved { unchanged: true, .. }), "got {r:?}");
+    let r = f
+        .svc
+        .save_note(opened.note_id, "# convergiu\n", 5, &opened.base_rev)
+        .unwrap();
+    assert!(
+        matches!(
+            r,
+            SaveResult::Saved {
+                unchanged: true,
+                ..
+            }
+        ),
+        "got {r:?}"
+    );
     assert!(!f.svc.is_suspended(opened.note_id));
 }
 
@@ -271,7 +339,10 @@ fn convergence_is_not_a_conflict() {
 fn a_stale_save_reports_the_version_it_was_given() {
     let mut f = setup();
     let opened = f.svc.open_note(&rel("nota.md")).unwrap();
-    let r = f.svc.save_note(opened.note_id, "novo", 41, &opened.base_rev).unwrap();
+    let r = f
+        .svc
+        .save_note(opened.note_id, "novo", 41, &opened.base_rev)
+        .unwrap();
     // The frontend paints a tab clean only when this equals its current
     // version, which is what stops an old save clearing a newer buffer.
     match r {
@@ -291,9 +362,13 @@ fn the_byte_profile_survives_a_round_trip_through_the_service() {
     svc.open_workspace(work.path()).unwrap();
     let opened = svc.open_note(&rel("n.md")).unwrap();
     assert!(opened.profile.bom);
-    assert_eq!(opened.text, "# crlf com bom\n\ncorpo\n", "the editor sees only \\n");
+    assert_eq!(
+        opened.text, "# crlf com bom\n\ncorpo\n",
+        "the editor sees only \\n"
+    );
 
-    svc.save_note(opened.note_id, &opened.text, 1, &opened.base_rev).unwrap();
+    svc.save_note(opened.note_id, &opened.text, 1, &opened.base_rev)
+        .unwrap();
     assert_eq!(std::fs::read(work.path().join("n.md")).unwrap(), original);
 }
 
@@ -306,10 +381,18 @@ fn a_read_only_note_refuses_to_be_saved() {
     svc.open_workspace(work.path()).unwrap();
 
     let opened = svc.open_note(&rel("misto.md")).unwrap();
-    assert_eq!(opened.read_only, Some(notes_model::ReadOnlyReason::MixedEol));
-    let err = svc.save_note(opened.note_id, "qualquer coisa", 1, &opened.base_rev).unwrap_err();
+    assert_eq!(
+        opened.read_only,
+        Some(notes_model::ReadOnlyReason::MixedEol)
+    );
+    let err = svc
+        .save_note(opened.note_id, "qualquer coisa", 1, &opened.base_rev)
+        .unwrap_err();
     assert!(matches!(err, CoreError::ReadOnly { .. }), "got {err:?}");
-    assert_eq!(std::fs::read(work.path().join("misto.md")).unwrap(), b"a\nb\r\nc\n");
+    assert_eq!(
+        std::fs::read(work.path().join("misto.md")).unwrap(),
+        b"a\nb\r\nc\n"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -336,10 +419,19 @@ fn the_tree_hides_the_default_ignore_list_and_shows_notes() {
     std::fs::write(f.work.path().join(".git/HEAD"), b"ref: x\n").unwrap();
     std::fs::create_dir(f.work.path().join(".obsidian")).unwrap();
 
-    let names: Vec<_> = f.svc.list_dir(&RelPath::root()).unwrap().into_iter().map(|e| e.name).collect();
+    let names: Vec<_> = f
+        .svc
+        .list_dir(&RelPath::root())
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
     assert!(names.contains(&"nota.md".to_string()));
     assert!(names.contains(&"sub".to_string()));
-    assert!(!names.contains(&".git".to_string()), "IGNORE_DEFAULT applies with no config");
+    assert!(
+        !names.contains(&".git".to_string()),
+        "IGNORE_DEFAULT applies with no config"
+    );
     assert!(!names.contains(&".obsidian".to_string()));
 }
 
@@ -347,12 +439,21 @@ fn the_tree_hides_the_default_ignore_list_and_shows_notes() {
 fn creating_a_note_refuses_a_collision_and_never_overwrites() {
     let mut f = setup();
     let err = f.svc.create_note(&RelPath::root(), "nota").unwrap_err();
-    assert!(matches!(err, CoreError::AlreadyExists { .. }), "got {err:?}");
-    assert_eq!(std::fs::read(f.work.path().join("nota.md")).unwrap(), b"# nota\n\ncorpo\n");
+    assert!(
+        matches!(err, CoreError::AlreadyExists { .. }),
+        "got {err:?}"
+    );
+    assert_eq!(
+        std::fs::read(f.work.path().join("nota.md")).unwrap(),
+        b"# nota\n\ncorpo\n"
+    );
 
     let e = f.svc.create_note(&RelPath::root(), "terceira").unwrap();
     assert_eq!(e.name, "terceira.md");
-    assert_eq!(std::fs::read(f.work.path().join("terceira.md")).unwrap(), b"");
+    assert_eq!(
+        std::fs::read(f.work.path().join("terceira.md")).unwrap(),
+        b""
+    );
 }
 
 #[test]
@@ -368,8 +469,14 @@ fn the_last_workspace_comes_back_after_a_restart() {
 
     // A different service over the same data directory: a restart.
     let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
-    let restored = svc.restore_last_workspace().unwrap().expect("a workspace was open");
-    assert_eq!(restored.id, id, "the same workspace, with the same identity");
+    let restored = svc
+        .restore_last_workspace()
+        .unwrap()
+        .expect("a workspace was open");
+    assert_eq!(
+        restored.id, id,
+        "the same workspace, with the same identity"
+    );
     assert!(restored.restored);
 }
 
@@ -413,13 +520,23 @@ fn state_written_by_a_newer_build_is_never_overwritten() {
         let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
         svc.open_workspace(work.path()).unwrap().id
     };
-    let reg = notes_core::paths::registry_file(&notes_core::paths::workspace_dir(data.path(), ws_id));
+    let reg =
+        notes_core::paths::registry_file(&notes_core::paths::workspace_dir(data.path(), ws_id));
     let from_the_future = br#"{"schema":999,"a_field_we_do_not_know":true}"#;
     std::fs::write(&reg, from_the_future).unwrap();
 
     let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
     let info = svc.open_workspace(work.path()).unwrap();
-    assert!(info.read_only, "a workspace with future state opens read-only");
+    assert!(
+        info.read_only,
+        "a workspace with future state opens read-only"
+    );
+    assert_eq!(
+        info.state_schema_ahead,
+        Some(999),
+        "the message can say how far ahead"
+    );
+    assert_eq!(svc.workspace_id(), Some(ws_id));
     assert_eq!(
         std::fs::read(&reg).unwrap(),
         from_the_future,

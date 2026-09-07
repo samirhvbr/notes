@@ -44,7 +44,9 @@ pub fn acquire(path: &Path) -> Result<WriteLock, CoreError> {
     // for exactly the length of the critical section — a lock held from
     // `acquire` to drop would serialise a whole command instead of the
     // stat → compare → replace sequence it exists to guard.
-    Ok(WriteLock { file: fd_lock::RwLock::new(file) })
+    Ok(WriteLock {
+        file: fd_lock::RwLock::new(file),
+    })
 }
 
 impl WriteLock {

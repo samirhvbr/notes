@@ -25,6 +25,7 @@ pub struct DraftInfo {
     pub schema: u32,
     pub note_id: NoteId,
     pub path: RelPath,
+    #[ts(type = "number")]
     pub buffer_version: u64,
     pub base_rev: BaseRev,
     pub reason: DraftReason,
@@ -47,8 +48,9 @@ pub fn path_for(dir: &Path, id: NoteId) -> PathBuf {
 
 pub fn write(dir: &Path, draft: &Draft) -> Result<(), CoreError> {
     std::fs::create_dir_all(dir).map_err(|e| CoreError::io("mkdir", dir.display(), &e))?;
-    let mut header = serde_json::to_vec(&draft.info)
-        .map_err(|e| CoreError::Internal { message: format!("draft header: {e}") })?;
+    let mut header = serde_json::to_vec(&draft.info).map_err(|e| CoreError::Internal {
+        message: format!("draft header: {e}"),
+    })?;
     header.push(b'\n');
     header.extend_from_slice(&draft.bytes);
     crate::state::write_atomic(&path_for(dir, draft.info.note_id), &header)
@@ -61,9 +63,16 @@ pub fn read(dir: &Path, id: NoteId) -> Result<Option<Draft>, CoreError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(e) => return Err(CoreError::io("read_draft", p.display(), &e)),
     };
-    let Some(nl) = raw.iter().position(|b| *b == b'\n') else { return Ok(None) };
-    let Ok(info) = serde_json::from_slice::<DraftInfo>(&raw[..nl]) else { return Ok(None) };
-    Ok(Some(Draft { info, bytes: raw[nl + 1..].to_vec() }))
+    let Some(nl) = raw.iter().position(|b| *b == b'\n') else {
+        return Ok(None);
+    };
+    let Ok(info) = serde_json::from_slice::<DraftInfo>(&raw[..nl]) else {
+        return Ok(None);
+    };
+    Ok(Some(Draft {
+        info,
+        bytes: raw[nl + 1..].to_vec(),
+    }))
 }
 
 /// Remove a draft — **only** once a write of at least its `buffer_version` has
@@ -73,12 +82,18 @@ pub fn discard(dir: &Path, id: NoteId) -> Result<(), CoreError> {
     match std::fs::remove_file(path_for(dir, id)) {
         Ok(()) => Ok(()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(CoreError::io("remove_draft", path_for(dir, id).display(), &e)),
+        Err(e) => Err(CoreError::io(
+            "remove_draft",
+            path_for(dir, id).display(),
+            &e,
+        )),
     }
 }
 
 pub fn list(dir: &Path) -> Vec<DraftInfo> {
-    let Ok(rd) = std::fs::read_dir(dir) else { return Vec::new() };
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
     rd.flatten()
         .filter_map(|e| {
             let name = e.file_name().to_string_lossy().to_string();

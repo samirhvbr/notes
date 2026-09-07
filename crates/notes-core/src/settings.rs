@@ -15,6 +15,7 @@ pub struct EditorSettings {
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct FileSettings {
+    #[ts(type = "number")]
     pub autosave_ms: u64,
     pub show_hidden: bool,
 }
@@ -61,15 +62,28 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             schema: 1,
-            editor: EditorSettings { font_size: 14, line_numbers: true, word_wrap: true, tab_size: 2 },
-            files: FileSettings { autosave_ms: 750, show_hidden: false },
+            editor: EditorSettings {
+                font_size: 14,
+                line_numbers: true,
+                word_wrap: true,
+                tab_size: 2,
+            },
+            files: FileSettings {
+                autosave_ms: 750,
+                show_hidden: false,
+            },
             markdown: MarkdownSettings {
                 default_view: "source".into(),
                 raw_html: false,
                 remote_images: false,
             },
-            ui: UiSettings { locale: "auto".into(), theme: "dark".into() },
-            linux: LinuxSettings { webkit_dmabuf_workaround: "auto".into() },
+            ui: UiSettings {
+                locale: "auto".into(),
+                theme: "dark".into(),
+            },
+            linux: LinuxSettings {
+                webkit_dmabuf_workaround: "auto".into(),
+            },
         }
     }
 }
