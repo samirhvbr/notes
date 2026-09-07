@@ -197,6 +197,26 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.8 - write the ADR the .gitignore was already pointing at
+
+`0.3.3` added `target/`, `node_modules/`, `dist/` and `.vite/` to `.gitignore`
+with a comment saying the exception is recorded as ADR-011. **ADR-011 did not
+exist.** The rule in that file is that any exception beyond secrets needs an ADR
+rather than a silent line, and a line that cites an ADR nobody wrote is a silent
+line with a citation on it — worse than an uncommented one, because it reads as
+settled.
+
+ADR-011 states the test for admitting anything to that list: it is produced by a
+command in this repository, from inputs in this repository, and reproducing it is
+running that command. `src-tauri/gen/schemas/` passes and joins the list — it is
+rewritten by `tauri-build` on every build and read only by an editor resolving a
+`$schema` reference; `0.3.7` committed it by accident. `icon-source.png` fails
+the test and stays versioned: it is what `tauri icon` consumes, and without it
+the icons cannot be regenerated.
+
+The ADR is numbered 011 and lands after 012, which was written first. The number
+is an identifier, not a timeline, and `.gitignore` had already named this one.
+
 ## 0.3.7 - complete the 0.0 spike so it builds, tests and lints clean
 
 The Rust half the previous commit said was missing: the Tauri crate, the

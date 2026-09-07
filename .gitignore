@@ -29,6 +29,7 @@ target/
 node_modules/
 dist/
 .vite/
+apps/notes-app/src-tauri/gen/schemas/
 
 # OS noise
 .DS_Store

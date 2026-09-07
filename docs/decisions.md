@@ -333,6 +333,38 @@ built.
 
 ---
 
+## ADR-011 — Build output is the one `.gitignore` exception beyond secrets
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** `.gitignore` in this repository carries a rule with teeth: everything
+is versioned, the only exception is a secret, and **any further exception needs
+an ADR rather than a silent line**. The rule exists because ignoring a directory
+that holds an open question or a verdict has already cost this fleet real work,
+and because a line added quietly is a line nobody can argue with later. The first
+commit of application code needs `target/`, `node_modules/`, `dist/` and
+`.vite/`, and the Tauri build generates `src-tauri/gen/schemas/` on every build.
+
+**Decision.** Build output is ignored, and it is the only category admitted
+besides secrets. The test for admitting anything here: it is produced by a
+command in this repository, from inputs in this repository, and reproducing it is
+running that command. `src-tauri/gen/schemas/` qualifies — `tauri-build` writes it
+on every build, and the only thing that reads it is an editor resolving a
+`$schema` reference. `icon-source.png` does **not** qualify and stays versioned:
+it is the input `tauri icon` consumes, and losing it means the icons cannot be
+regenerated.
+
+**Consequences.** A fresh clone does not build without `npm install` and
+`cargo build`, which is ordinary and is written in the app's README. The rule
+that protects the queue keeps its force, because this exception is argued rather
+than assumed — the `.gitignore` line names this ADR, so the next person adding
+one can see what the bar was. The risk this accepts is the familiar one: a
+generated directory that quietly starts holding something hand-edited stops being
+build output while still being ignored. The mitigation is the test above, applied
+when the line is added and not after.
+
+---
+
 ## ADR-012 — `index.db` lives in app data, not in the workspace
 
 **Status:** `ACCEPTED` · 07/09/2026 · amends
