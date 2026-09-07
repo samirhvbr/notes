@@ -197,6 +197,40 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.1 - the CI matrix ran for the first time and found four real problems
+
+Three were the test harness. **One made the repository unclonable on Windows.**
+
+`actions/checkout` did not fail a test — it aborted:
+`error: invalid path 'fixtures/edge-cases/trailing-dot.md.'`. A file whose name
+ends in a dot cannot exist on NTFS, so git refuses the entire checkout. Every
+Windows contributor's first command would have failed, and **no test could have
+caught it, because no test ran.** The file is gone from the committed corpus; the
+rule it covered is a unit test, and the "an existing odd name is listed, never
+renamed" half is created at runtime by a test that skips on Windows.
+
+That defect exposed a gap: scope §7.6 requires a **new** name to follow a
+portable rule and nothing implemented it. `portable_name` now refuses
+`\ / : * ? " < > |`, control characters, a trailing dot or space, and the Windows
+device names — checked against what the user typed **before** `.md` is appended,
+because otherwise `trailing-dot.` becomes `trailing-dot..md`: legal, and not what
+they asked for. A name already on disk is still never touched.
+
+The other three, each recorded with its alternative:
+
+- **Arch** runs its container as root, and root ignores permission bits, so the
+  denial the write-failure test needs could not be arranged and it observed a
+  successful write. It now skips as root and says so. Asserting anyway would have
+  made it pass for the wrong reason everywhere else and mean nothing there.
+- **macOS** resolves `/var` to `/private/var`, so a temp directory has two names
+  and the registry stores the resolved one; the test was comparing the name it
+  handed in.
+- **contracts** ran `cargo test --workspace`, which builds the Tauri application
+  and needs GTK, WebKit and glib — on a job whose entire point is that it needs
+  none of them. It now builds only the two crates that export types.
+
+Ubuntu, the frontend and the 1000-round crash loop were green on the first run.
+
 ## 0.7.0 - milestone 0.1a ships: ARCHITECTURE.md is ACTIVE and its decisions are ADRs
 
 A workspace is a folder, its `.md` files are notes, and editing one is safe

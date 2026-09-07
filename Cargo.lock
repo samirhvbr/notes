@@ -2165,6 +2165,7 @@ version = "0.0.0"
 dependencies = [
  "dirs",
  "fd-lock",
+ "libc",
  "notes-fs",
  "notes-model",
  "serde",

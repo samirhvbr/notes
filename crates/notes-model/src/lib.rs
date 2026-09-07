@@ -12,7 +12,7 @@ mod text;
 
 pub use error::{CoreError, IoKind, ReadOnlyReason, UnavailableReason};
 pub use ids::{ContentHash, NoteId, WorkspaceId};
-pub use path::{CompareKey, PathError, RelPath};
+pub use path::{portable_name, CompareKey, NameRule, PathError, RelPath};
 pub use text::{Encoding, Eol, TextProfile};
 
 use serde::{Deserialize, Serialize};

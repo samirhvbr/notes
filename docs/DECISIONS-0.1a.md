@@ -389,3 +389,78 @@ found a real defect.
 
 **Alternative if you disagree.** Run it on every PR with `ROUNDS=100`, trading
 detection probability for latency.
+
+---
+
+## D-20 — A new name must be legal on every platform, and the corpus must be checkout-able on all of them
+
+**Decided.** `notes_model::portable_name` refuses a new name containing
+`\ / : * ? " < > |` or a control character, ending in a dot or a space, or whose
+stem is a Windows device name (`CON`, `NUL`, `COM1`…). It is checked against the
+name the user typed **before** the `.md` extension is appended, and against the
+final name. `fixtures/edge-cases/trailing-dot.md.` is removed from the committed
+corpus and the rule it covered is a unit test; the "an existing odd name is
+listed, never renamed" half is created at runtime by a test that skips on
+Windows.
+
+**Gap closed.** Scope §7.6's portable-name rule, which nothing implemented, and
+a defect the Windows CI job found on its first run.
+
+**Why.** The Windows job did not fail a test — **`actions/checkout` aborted**:
+`error: invalid path 'fixtures/edge-cases/trailing-dot.md.'`. A file whose name
+ends in a dot cannot exist on NTFS, so git refuses the whole checkout and the
+repository is unclonable on Windows. Committing that file made every Windows
+contributor's first command fail, and no test could have caught it because no
+test ran.
+
+The rule generalises the lesson: a workspace is meant to be carried between
+machines, put in Dropbox and cloned from Git, so a *new* name follows the
+strictest platform rather than the current one. Validating before the extension
+is appended matters for the same reason it was found: `trailing-dot.` would
+otherwise become `trailing-dot..md`, legal but not what the user typed — the app
+accepting a name it had just been asked to refuse.
+
+A name **already on disk** is untouched: scope §7.6 says an odd one is flagged,
+never renamed.
+
+**Alternative if you disagree.** Apply the current platform's rules, and accept
+that a workspace created on Linux can contain names that make it unusable on
+Windows and unsyncable through several cloud clients.
+
+---
+
+## D-21 — Two tests skip rather than assert the wrong thing
+
+**Decided.** `a_denied_write_is_reported_and_leaves_the_buffer_recoverable`
+returns early when the effective uid is 0. `a_workspace_that_moved_...` compares
+against the **canonical** path.
+
+**Gap closed.** Two CI failures that were the harness, not the product.
+
+**Why.** The Arch job runs in a container as root, and root ignores the
+permission bits — the denial the test needs cannot be arranged, so it observed a
+successful write. Skipping says so; asserting anyway would have made the test
+pass for the wrong reason on every machine that runs it as a normal user and
+mean nothing on the one that does not. On macOS `/var` is a symlink to
+`/private/var`, so a temp directory has two names and the registry stores the
+resolved one — the test was comparing the name it handed in.
+
+**Alternative if you disagree.** Run the Arch container as a non-root user,
+which is the better fix and a change to the CI image rather than to the test.
+
+---
+
+## D-22 — The contracts job builds only the crates that export types
+
+**Decided.** `cargo test -p notes-model -p notes-core`, not `--workspace`.
+
+**Gap closed.** A CI failure.
+
+**Why.** `--workspace` builds the Tauri application, which needs GTK, WebKit and
+glib on a job whose entire point is that it needs none of them — it greps a JSON
+file and diffs generated TypeScript. Neither crate that exports a type depends on
+Tauri (ADR-003), so the narrower command generates exactly the same output in a
+fraction of the time.
+
+**Alternative if you disagree.** Install the system libraries on the contracts
+job too, and pay a GTK build for a grep.

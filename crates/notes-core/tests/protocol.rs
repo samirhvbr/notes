@@ -196,6 +196,13 @@ fn a_suspended_note_keeps_its_edits_going_to_the_draft() {
 #[test]
 fn a_denied_write_is_reported_and_leaves_the_buffer_recoverable() {
     use std::os::unix::fs::PermissionsExt;
+    // Root ignores the permission bits, so the denial this test needs cannot be
+    // arranged — as it is in the Arch CI container. Skipping is honest;
+    // asserting anyway would make the test pass for the wrong reason.
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("skipped: running as root, which cannot be denied write access");
+        return;
+    }
     let mut f = setup();
     let opened = f.svc.open_note(&rel("nota.md")).unwrap();
     let id = opened.note_id;
@@ -489,7 +496,10 @@ fn a_workspace_that_moved_is_reported_rather_than_treated_as_absent() {
         let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
         svc.open_workspace(work.path()).unwrap();
     }
-    let path = work.path().to_path_buf();
+    // The canonical path, not the one handed to `open_workspace`: on macOS
+    // `/var` is a symlink to `/private/var`, so a temp directory has two names
+    // and the registry stores the resolved one.
+    let path = work.path().canonicalize().unwrap();
     drop(work); // the folder disappears
 
     let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
@@ -542,4 +552,49 @@ fn state_written_by_a_newer_build_is_never_overwritten() {
         from_the_future,
         "state we cannot interpret must not be destroyed"
     );
+}
+
+#[test]
+fn creating_a_name_that_breaks_another_platform_is_refused() {
+    let mut f = setup();
+    for bad in ["trailing-dot.", "a:b", "CON", "nul", "a?b"] {
+        let err = f.svc.create_note(&RelPath::root(), bad).unwrap_err();
+        assert!(
+            matches!(err, CoreError::InvalidPath { .. }),
+            "{bad} should be refused, got {err:?}"
+        );
+    }
+    // The rule applies to new names only. Nothing on disk was created.
+    let names: Vec<_> = f
+        .svc
+        .list_dir(&RelPath::root())
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert!(!names.iter().any(|n| n.ends_with('.')));
+}
+
+/// An odd name that is *already on disk* is listed, never renamed (scope §7.6).
+/// Created at runtime because a trailing dot cannot be committed: git aborts a
+/// Windows checkout with `invalid path` before any test runs.
+#[cfg(unix)]
+#[test]
+fn an_existing_name_with_a_trailing_dot_is_listed_and_left_alone() {
+    let f = setup();
+    let odd = f.work.path().join("legado.md.");
+    std::fs::write(&odd, b"# legado\n").unwrap();
+
+    let names: Vec<_> = f
+        .svc
+        .list_dir(&RelPath::root())
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert!(
+        names.contains(&"legado.md.".to_string()),
+        "an existing odd name is shown: {names:?}"
+    );
+    assert!(odd.exists(), "and never renamed");
 }

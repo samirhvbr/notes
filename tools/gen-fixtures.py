@@ -105,7 +105,6 @@ def gen_edge() -> list[str]:
         "front-matter-not-first.md": b"\n---\ntitle: nao conta\n---\n\n# corpo\n",
         "tabs.md":               b"# tabs\n\n\tindentado com tab\n\t\tmais fundo\n",
         "com espaco.md":         b"# nome com espaco\n\nok\n",
-        "trailing-dot.md.":      b"# nome terminando em ponto\n\nilegal no Windows\n",
         "Duplicate.md":          b"# maiuscula\n\nA\n",
         "duplicate.md":          b"# minuscula\n\nb\n",
         "CASE.md":               b"# caixa alta\n\nok\n",
@@ -116,12 +115,18 @@ def gen_edge() -> list[str]:
     files[unicodedata.normalize("NFD", "café-nfd.md")] = b"# nfd\n\nok\n"
     files["acentuacao-ção.md"] = b"# acentuacao no nome\n\nok\n"
 
+    # Deliberately NOT here: a name ending in a dot. Git cannot check such a
+    # file out on Windows — `error: invalid path` aborts the clone before any
+    # test runs — so committing one makes the whole repository unusable there.
+    # The rule it was meant to exercise (a new name may not end in a dot) is a
+    # unit test on `portable_name`, and the "an existing odd name is flagged,
+    # never renamed" half is created at runtime by a test that skips on Windows.
     written = []
     for name, data in files.items():
         try:
             (base / name).write_bytes(data)
             written.append(name)
-        except OSError as e:            # e.g. trailing dot on Windows
+        except OSError as e:
             print(f"  skipped {name!r}: {e}", file=sys.stderr)
 
     # 5 MB, deterministic, and not compressible into nothing.

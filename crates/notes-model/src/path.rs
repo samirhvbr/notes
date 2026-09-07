@@ -136,6 +136,60 @@ impl From<RelPath> for String {
     }
 }
 
+/// Why a *new* name was refused.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum NameRule {
+    #[error("the name is empty")]
+    Empty,
+    #[error("the name contains a character that is illegal on some systems")]
+    IllegalCharacter,
+    #[error("the name is reserved by Windows")]
+    ReservedOnWindows,
+    #[error("the name ends with a dot or a space")]
+    TrailingDotOrSpace,
+    #[error("the name contains a path separator")]
+    Separator,
+}
+
+/// Windows refuses these regardless of extension, and has since DOS.
+const RESERVED: &[&str] = &[
+    "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8",
+    "COM9", "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+];
+
+/// Check a name the **user is creating**. Scope §7.6.
+///
+/// A name already on disk is never touched — an odd one is flagged, not
+/// renamed. This applies only to a new name, and it is deliberately the
+/// strictest of the platforms rather than the current one: a workspace is meant
+/// to be carried between machines, put in Dropbox and cloned from Git, and a
+/// name that is legal here and illegal there turns into a folder the user cannot
+/// sync or check out. `fixtures/edge-cases` shipped a file ending in a dot for
+/// one commit, and it made the repository impossible to clone on Windows —
+/// git aborts with `invalid path` before any test runs.
+pub fn portable_name(name: &str) -> Result<(), NameRule> {
+    if name.is_empty() {
+        return Err(NameRule::Empty);
+    }
+    if name.contains('/') || name.contains('\\') {
+        return Err(NameRule::Separator);
+    }
+    if name
+        .chars()
+        .any(|c| matches!(c, ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control())
+    {
+        return Err(NameRule::IllegalCharacter);
+    }
+    if name.ends_with('.') || name.ends_with(' ') {
+        return Err(NameRule::TrailingDotOrSpace);
+    }
+    let stem = name.split('.').next().unwrap_or(name);
+    if RESERVED.iter().any(|r| r.eq_ignore_ascii_case(stem)) {
+        return Err(NameRule::ReservedOnWindows);
+    }
+    Ok(())
+}
+
 /// A key for *comparing* paths — never for opening one, never shown, never
 /// written to disk.
 ///
@@ -302,6 +356,48 @@ mod tests {
             "a/b.md"
         );
         assert!(RelPath::parse("a").unwrap().join("../b.md").is_err());
+    }
+
+    #[test]
+    fn a_new_name_may_not_be_one_that_breaks_another_platform() {
+        // The case that already cost this repository a Windows clone.
+        assert_eq!(
+            portable_name("trailing-dot.md."),
+            Err(NameRule::TrailingDotOrSpace)
+        );
+        assert_eq!(
+            portable_name("trailing space.md "),
+            Err(NameRule::TrailingDotOrSpace)
+        );
+        for bad in [
+            "a:b.md", "a?b.md", "a*b.md", "a\"b.md", "a<b.md", "a>b.md", "a|b.md",
+        ] {
+            assert_eq!(portable_name(bad), Err(NameRule::IllegalCharacter), "{bad}");
+        }
+        for bad in ["CON", "con.md", "NUL.markdown", "com1.md", "LPT9.md"] {
+            assert_eq!(
+                portable_name(bad),
+                Err(NameRule::ReservedOnWindows),
+                "{bad}"
+            );
+        }
+        assert_eq!(portable_name("a/b.md"), Err(NameRule::Separator));
+        assert_eq!(portable_name(""), Err(NameRule::Empty));
+    }
+
+    #[test]
+    fn a_new_name_the_user_would_actually_type_is_accepted() {
+        for good in [
+            "nota.md",
+            "Reunião 2026-09-07.md",
+            "a.b.c.md",
+            ".oculto.md",
+            "console.md",
+            "computador.md",
+            "com10.md",
+        ] {
+            assert_eq!(portable_name(good), Ok(()), "{good}");
+        }
     }
 
     #[test]

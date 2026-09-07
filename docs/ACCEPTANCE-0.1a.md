@@ -213,10 +213,16 @@ Everything listed under 0.1a in `.continue/SCOPE_final.md` §17:
 - **The window has never been launched.** The interface compiles, typechecks and
   bundles; no human has driven it. Every result above is from the core and the
   corpus. To run it: `cd apps/notes-app && npm run tauri dev`.
-- **Only Linux/X11/ext4.** macOS, Windows and Arch are in the CI matrix and have
-  not run yet; no run exists on APFS, NTFS, SMB, exFAT or a case-insensitive
-  root, so the capability matrix of `ARCHITECTURE.md` §11 is a specification and
-  not an observation.
+- **Only Linux/X11/ext4 is green end to end.** The CI matrix ran for the first
+  time at `0.7.0` and found four real problems, all fixed at `0.7.1`; the most
+  serious was that **`actions/checkout` aborted on Windows** —
+  `invalid path 'fixtures/edge-cases/trailing-dot.md.'` — which made the
+  repository unclonable there before any test could run. No run exists yet on
+  APFS, NTFS, SMB, exFAT or a case-insensitive root, so the capability matrix of
+  `ARCHITECTURE.md` §11 is still a specification rather than an observation.
+- **The permission-denied criterion does not run as root**, and the Arch CI
+  container is root — it skips there rather than passing for the wrong reason
+  ([DECISIONS-0.1a.md](DECISIONS-0.1a.md) D-21).
 - **The full-disk path**, as §5 states.
 - **Milestone 0.0 remains open**, on hardware this machine does not have —
   [SPIKE-0.0.md](SPIKE-0.0.md). It is orthogonal to this milestone and blocks

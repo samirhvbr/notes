@@ -659,15 +659,22 @@ impl WorkspaceService {
     }
 
     pub fn create_note(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
+        // Validate what the user typed **before** the extension is appended.
+        // Otherwise `trailing-dot.` becomes `trailing-dot..md`, which is legal
+        // — so the app would silently accept a name it had just been asked to
+        // refuse, and produce a file the user did not name.
+        notes_model::portable_name(name).map_err(|rule| CoreError::InvalidPath {
+            path: name.to_string(),
+            reason: rule.to_string(),
+        })?;
         let name = if RelPath::parse(name).map(|p| p.is_note()).unwrap_or(false) {
             name.to_string()
         } else {
             format!("{name}.md")
         };
         let path = dir.join(&name)?;
-        let open = self.open()?;
-        self.check_collision(&path)?;
-        open.fs.create_new(&path, b"")?;
+        self.check_name(&name, &path)?;
+        self.open()?.fs.create_new(&path, b"")?;
         Ok(Entry {
             name,
             is_note: path.is_note(),
@@ -679,7 +686,7 @@ impl WorkspaceService {
 
     pub fn create_dir(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
         let path = dir.join(name)?;
-        self.check_collision(&path)?;
+        self.check_name(name, &path)?;
         self.open()?.fs.create_dir(&path)?;
         Ok(Entry {
             name: name.to_string(),
@@ -690,8 +697,17 @@ impl WorkspaceService {
         })
     }
 
-    /// Refuse a name that collides under the root's own case and normalisation
-    /// rules — not just one that is byte-identical (scope §7.6).
+    /// Refuse a new name that is illegal on a platform the workspace might be
+    /// carried to, and one that collides under the root's own case and
+    /// normalisation rules — not just one that is byte-identical (scope §7.6).
+    fn check_name(&self, name: &str, path: &RelPath) -> Result<()> {
+        notes_model::portable_name(name).map_err(|rule| CoreError::InvalidPath {
+            path: name.to_string(),
+            reason: rule.to_string(),
+        })?;
+        self.check_collision(path)
+    }
+
     fn check_collision(&self, path: &RelPath) -> Result<()> {
         let open = self.open()?;
         let parent = path.parent().unwrap_or_else(RelPath::root);
