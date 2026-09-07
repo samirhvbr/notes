@@ -1,6 +1,13 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `ACTIVE` · What is built when, and what each stage must be able to
+> **Status:** `PROPOSED` · **Nothing described here has been built yet.** This
+> document is the worked-out form of a specification that still lives in the
+> queue, [`../.continue/`](../.continue/README.md), and **the queue is the
+> authority on intent while both exist** — intent changes there, and this page is
+> updated when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+> A section becomes `ACTIVE` when its code exists and works.
+>
+> What is built when, and what each stage must be able to
 > do before the next one starts. What the product *is* lives in
 > [product.md](product.md); how it is put together, in
 > [architecture.md](architecture.md).

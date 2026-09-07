@@ -1,6 +1,13 @@
 # Product — what notes is
 
-> **Status:** `ACTIVE` · The product definition. What the application is, what it
+> **Status:** `PROPOSED` · **Nothing described here has been built yet.** This
+> document is the worked-out form of a specification that still lives in the
+> queue, [`../.continue/`](../.continue/README.md), and **the queue is the
+> authority on intent while both exist** — intent changes there, and this page is
+> updated when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+> A section becomes `ACTIVE` when its code exists and works.
+>
+> The product definition. What the application is, what it
 > does, and what it deliberately does not do. The order in which it gets built is
 > in [roadmap.md](roadmap.md); how it is built is in
 > [architecture.md](architecture.md); why each irreversible choice was made is in

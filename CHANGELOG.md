@@ -162,6 +162,31 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.0 - mark the unbuilt specifications as PROPOSED
+
+`product.md`, `architecture.md` and `roadmap.md` were written at `0.2.0` and
+marked `ACTIVE`, which claimed they described something that exists. They
+describe an application with no code. They are now `PROPOSED`, each carrying the
+same header: nothing here has been built, the specification still lives in
+`.continue/`, **the queue is the authority on intent while both exist**, and a
+section becomes `ACTIVE` when its code exists and works.
+
+That resolves the duplication ADR-009 creates rather than pretending it is not
+there. The same subject is in the queue in Portuguese and in `docs/` in English,
+and the pair only stays honest if the direction of authority is written on the
+face of the document — otherwise the next reader picks whichever they opened
+first. `.continue/README.md` states the same rule from its side: an `ACTIVE`
+document in `docs/` wins a contradiction, a `PROPOSED` one does not.
+
+`decisions.md` stays `ACTIVE`, deliberately. A decision exists the moment it is
+taken — the ADRs are the artefact, not a description of a future one — and it is
+the record that stops a settled direction being re-litigated during exactly the
+long stretch of a project where nothing has been built and everything is still
+arguable.
+
+Golden rule 4 already said an undeclared status is read as `ACTIVE` and that
+this is "exactly the failure mode". Three documents were sitting in it.
+
 ## 0.2.1 - restore the scope drafts to the queue
 
 `0.2.0` deleted `.continue/scope.md` and
