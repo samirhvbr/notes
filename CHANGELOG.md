@@ -197,6 +197,52 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.5 - propose ARCHITECTURE.md, closing the SCOPE §20 items 0.1a needs
+
+`.continue/ARCHITECTURE.md`, v0.1, a proposal awaiting review. It closes the
+three items SCOPE §20 delegates to it that milestone 0.1a cannot start without:
+the persistent-state schemas (§20.1), the Tauri command contract and the core
+error model (§20.2), and the `Caps` mapping per backend (§20.6). The other four
+are left alone because they do not block 0.1a.
+
+It goes in the queue, in Portuguese, because it describes something that does not
+exist — the `QUEUE-RULE` block, not a judgement call.
+
+Three things it settles that the SCOPE could not have known it left open:
+
+**A global file is missing from the §6.1 layout.** Keying a `WorkspaceId` by the
+canonical root path and persisting the last workspace are both data that cannot
+live inside `workspaces/<WorkspaceId>/` — you need the index before you have the
+id. `workspaces.json` is proposed alongside it.
+
+**`registry.json` is needed at 0.1a, and not for the reason it looks like.**
+Nothing consumes `NoteId` until 0.1b, so the registry looks deferrable. It is
+not, because a suspended draft has to know which note it belongs to: keyed by
+path, an external rename while the draft is suspended orphans it — and an
+external rename during suspension is precisely the situation that produces
+drafts. The 0.1a acceptance criterion "buffer recoverable on reopen" would fail
+in the case that matters most.
+
+**Capability detection cannot probe.** The reliable way to know whether `rename`
+is atomic on a given root is to write a temp file and try. SCOPE §2.3 forbids
+that — opening a folder must not modify it — and 0.1a has the literal acceptance
+criterion "opening a folder creates no file in it". So caps are derived read-only
+from the filesystem type, with an unknown type falling back to the conservative
+profile. A FUSE mount that does support atomic rename will be treated as though
+it does not; that is the cheaper mistake.
+
+The document also argues one thing against the instruction that asked for it:
+`notes-markdown` has no consumer at 0.1a. Front matter is preserved byte for byte
+there, which is the `notes-fs` byte policy rather than parsing, and CodeMirror's
+highlighting is explicitly not the semantic authority. Its first real consumer is
+the 0.1b preview.
+
+Four questions are held open at its §5 — the bundle identifier above all, since
+it fixes the app-data path on three operating systems and changing it later
+strands the state of everyone who already installed. No ADR is written yet:
+writing `ACCEPTED` decisions for a proposal nobody has reviewed would be the
+paperwork imitating the decision.
+
 ## 0.3.4 - stop restating the queue rule now that a block carries it
 
 `0.3.2` took the queue rule to repodocs and it came back as the regenerated

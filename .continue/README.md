@@ -40,7 +40,9 @@ here would be a second source of truth.
 
 | Item | State | Who unblocks it |
 |---|---|---|
-| [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the full product spec | **Written, not built.** Nothing in it exists as code yet, so it stays here | — |
+| [`SCOPE_final.md`](SCOPE_final.md) — **the specification to build**, v2.0 | Written, not built. Supersedes the two v1 drafts below | — |
+| [`ARCHITECTURE.md`](ARCHITECTURE.md) — closes SCOPE §20.1, §20.2 and §20.6 | **v0.1 proposal, awaiting review.** Four points at its §5 need Samir's answer before 0.1a can start | Samir |
+| [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the v1 drafts | Superseded by `SCOPE_final.md`; kept until the work they describe exists | — |
 | Scaffold milestone 0.1 — the Cargo workspace, `apps/notes-app/`, the first crates | Not started | — |
 | Cut the concrete boundaries between `notes-core`, `notes-fs` and `notes-index` | Deferred to the first code that needs them, on purpose — see [ADR-003](../docs/decisions.md) | — |
 | Dependabot PR #1 (`actions/checkout` 5 → 7) | Open on GitHub | Samir |
