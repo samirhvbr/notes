@@ -27,6 +27,12 @@ here would be a second source of truth.
 - **Nothing leaves before it has been committed.** A wrong call then costs a
   `git revert` instead of a reconstruction from memory — which is the cost that
   was actually paid at `0.2.0`.
+- **The items in this folder are written in Portuguese**
+  ([ADR-010](../docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english)).
+  Translation to English happens **on the way out**, when the thing has been built
+  and its document lands in `../docs/`. This README is the exception: it is the
+  folder's index rather than queue material, and stays in English like the rest of
+  the repository.
 - **Nothing here is source of truth about what exists.** What already exists is
   described in [`../docs/`](../docs/); the permanent record of *when* is
   [`../CHANGELOG.md`](../CHANGELOG.md).

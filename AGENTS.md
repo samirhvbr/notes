@@ -186,6 +186,31 @@ are English wherever you are.
 
 ---
 
+## Language — the local exception: the queue is Portuguese
+
+> **This section is deliberately OUTSIDE the `LANGUAGE-RULE` block above.** That
+> block is a marked echo, regenerated from repodocs; an exception written inside
+> the markers is erased by the next fleet pass with nobody noticing. The
+> precedent is `BLUE3-INTRANET`, whose language exception sits outside the block
+> for exactly this reason.
+
+**`.continue/` is written in Portuguese**
+([ADR-010](docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english)).
+The queue is where the owner thinks before anything is built, and it is his
+language. `.continue/README.md` is the one exception inside it — the folder's
+index, not queue material, and English like the rest.
+
+**Translation happens on the way out.** When the thing has been built and its
+document lands in `docs/`, it is written in English (US). Writing it in English
+is part of checking that it was actually built
+([ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+
+Everything in the block above otherwise stands unchanged: `docs/`, commit
+messages, pull request titles and bodies, issues, code comments, changelog
+entries and release notes are English (US).
+
+---
+
 ## Branch
 
 **`master`, never `main`.** The default branch of every repository in this fleet

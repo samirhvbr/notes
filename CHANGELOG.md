@@ -137,6 +137,31 @@ That trigger did not exist before this commit and is added by it — a repositor
 quietly diverging from the fleet is exactly the change that has to be visible in
 the version history, and `Z` would have buried it.
 
+## 0.3.0 - write the queue in Portuguese and translate on the way out
+
+[ADR-010](docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english):
+`.continue/` is written in Portuguese, and translation to English happens at the
+moment the material leaves the queue — which, per ADR-009, is the moment the
+thing has been built. Everything else is unchanged and stays English (US):
+`docs/`, commit messages, pull requests, issues, code comments, changelog
+entries, release notes.
+
+The queue is where the owner thinks before anything exists, and a second language
+is a tax on precisely the part of the work least able to carry one. It was also
+part of the `0.2.0` argument for emptying the queue — "it is in Portuguese" read
+as a defect to fix rather than as the queue working correctly.
+
+**The exception is written outside the `LANGUAGE-RULE` markers, and that placement
+is the point of the commit.** That block is a marked echo regenerated from
+repodocs; an exception written between the markers is erased by the next fleet
+pass with nobody noticing, leaving a repository whose stated rule contradicts its
+practice. The precedent is `BLUE3-INTRANET`, whose language exception sits
+outside the block for the same reason. The new section says so in its own first
+line, so that a later reader tidying the file does not move it inside.
+
+`.continue/README.md` stays in English and now says why: it is the folder's
+index, not queue material.
+
 ## 0.2.1 - restore the scope drafts to the queue
 
 `0.2.0` deleted `.continue/scope.md` and

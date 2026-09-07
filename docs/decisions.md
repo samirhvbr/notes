@@ -285,3 +285,38 @@ once, in two languages, and they can drift. The mitigation is direction — inte
 changes in the queue, and `docs/` is updated when the thing is built. If this
 rule is right for the whole fleet rather than only here, it belongs in repodocs
 `conventions.md`, and this ADR is the argument to take there.
+
+---
+
+## ADR-010 — `.continue/` is written in Portuguese; everything else is English
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** The language rule — repodocs `conventions.md` §8, stamped into
+`CLAUDE.md` and `AGENTS.md` as the `LANGUAGE-RULE` echo — puts everything in the
+repository in English (US), with two carve-outs: end-user-facing strings, and
+the Blue3 internal repositories. `.continue/` is in the repository, so it falls
+under English. But the queue is where the owner thinks out loud before anything
+exists, and a second language is a tax on precisely the part of the work with
+the least tolerance for one. It also contributed to the `0.2.0` mistake:
+"it is in Portuguese" was part of the case for emptying the queue.
+
+**Decision.** `.continue/` is written in Portuguese. Translation to English (US)
+happens **on the way out** — when the thing has been built and its document
+lands in `docs/`, per
+[ADR-009](#adr-009--an-item-leaves-continue-only-when-it-has-been-built).
+Everything else is unchanged and stays English (US): `docs/`, commit messages,
+pull request titles and bodies, issues, code comments, changelog entries,
+release notes.
+
+**Consequences.** The exception must be written **outside** the `LANGUAGE-RULE`
+markers in `CLAUDE.md` and `AGENTS.md`. That block is a marked echo regenerated
+from repodocs, so an exception written inside it is erased by the next fleet
+pass with nobody noticing — the precedent is `BLUE3-INTRANET`, whose language
+exception sits outside the block for exactly this reason. A contributor who does
+not read Portuguese cannot read the queue; that is acceptable while the queue is
+the owner's own, and it is the trigger to revisit this ADR rather than a cost to
+absorb quietly. Translation work concentrates at the moment of production
+instead of being spread thin, which is also the moment the material is best
+understood — writing it in English is part of checking that it was actually
+built.
