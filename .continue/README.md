@@ -33,7 +33,8 @@ here would be a second source of truth.
 
 | Item | State | Who unblocks it |
 |---|---|---|
-| Scaffold milestone 0.1 — the Cargo workspace, `apps/notes-app/`, the first crates | Not started; the spec it implements is [../docs/roadmap.md](../docs/roadmap.md) | — |
+| [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the full product spec | **Written, not built.** Nothing in it exists as code yet, so it stays here | — |
+| Scaffold milestone 0.1 — the Cargo workspace, `apps/notes-app/`, the first crates | Not started | — |
 | Cut the concrete boundaries between `notes-core`, `notes-fs` and `notes-index` | Deferred to the first code that needs them, on purpose — see [ADR-003](../docs/decisions.md) | — |
 | Dependabot PR #1 (`actions/checkout` 5 → 7) | Open on GitHub | Samir |
 | Report the `CHANGELOG.md` header defect back to the repodocs skeleton | Found while bootstrapping this repo: the skeleton describes the commit format in Portuguese while repodocs' own root file says English. Fixed here at `0.1.0`; still ships to every new repository | Samir |
@@ -46,7 +47,7 @@ here would be a second source of truth.
 
 | It was here | It is now at |
 |---|---|
-| `scope.md` · `scope.md — Aplicativo Markdown Local-First.md` — the 1 338-line product draft, in Portuguese | Split and translated into [../docs/product.md](../docs/product.md) (what it is), [../docs/architecture.md](../docs/architecture.md) (how it is built), [../docs/roadmap.md](../docs/roadmap.md) (in what order) and [../docs/decisions.md](../docs/decisions.md) (ADR-001 … ADR-008). Landed at `0.2.0`; the originals were deleted, not kept in parallel |
+| _(nothing yet — nothing here has been built)_ | |
 
 ## 3. Pending decisions
 

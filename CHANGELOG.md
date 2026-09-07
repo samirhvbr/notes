@@ -97,6 +97,25 @@ Also fixes a section reference in `roadmap.md` that pointed at
 `architecture.md#3` when the filesystem abstraction is §4 — stale in the same
 pass that created it.
 
+## 0.2.1 - restore the scope drafts to the queue
+
+`0.2.0` deleted `.continue/scope.md` and
+`.continue/scope.md — Aplicativo Markdown Local-First.md` on the reading that
+writing them up in `docs/` had finished them. That reading is wrong for this
+repository: an item leaves the queue when it has been **built**, not when it has
+been documented. Nothing in those two files exists as code, so they belong in the
+queue, and they are back in it.
+
+They had never been committed, so they were not recoverable from the history —
+they are reconstructed here from the session that deleted them, and are content-
+complete rather than byte-identical to the originals.
+
+The queue's "where things went" table is corrected too: it claimed the drafts had
+migrated to `docs/`, which was the same mistake stated as fact.
+
+The rule this violated is not yet written down anywhere — that is the next
+commit, and it is why this one only repairs.
+
 ## 0.2.0 - adopt the scope in the agent instructions and empty the queue
 
 The last block of the conversion: making the documents the repository actually
