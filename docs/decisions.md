@@ -104,7 +104,10 @@ keeps the domain model testable without a running app.
 
 ## ADR-004 — `.notes/` holds only data that can be rebuilt, and must be deletable
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · **amended** by
+[ADR-012](#adr-012--indexdb-lives-in-app-data-not-in-the-workspace) on where
+`index.db` is kept. The rule below stands as written; only the location of that
+one file changes
 
 **Context.** The app needs somewhere to keep the index, workspace settings and
 caches, and the obvious place is a reserved directory inside the workspace. The
@@ -327,3 +330,43 @@ absorb quietly. Translation work concentrates at the moment of production
 instead of being spread thin, which is also the moment the material is best
 understood — writing it in English is part of checking that it was actually
 built.
+
+---
+
+## ADR-012 — `index.db` lives in app data, not in the workspace
+
+**Status:** `ACCEPTED` · 07/09/2026 · amends
+[ADR-004](#adr-004--notes-holds-only-data-that-can-be-rebuilt-and-must-be-deletable)
+
+**Context.** ADR-004 established that `.notes/` inside the workspace holds only
+data that can be rebuilt and must be safe to delete, and it listed `index.db`
+among the files living there. The rule is right. The example is not, for a reason
+that has nothing to do with whether the file is rebuildable.
+
+A workspace is a folder the user chose, and users put those folders inside
+Dropbox, iCloud Drive, OneDrive, Nextcloud and Syncthing. Those tools copy files
+whenever they change, with no knowledge of transactions. **An active SQLite
+database copied mid-transaction does not produce a stale database — it produces a
+corrupt one**, and on the sync provider's side that corruption becomes the
+version other devices download. The database being rebuildable is exactly why
+nobody would notice: the app would reindex, the provider would copy again, and
+the loop would repeat with no error the user could act on. A `-wal` file copied
+without its main database, or after it, is the same failure with a different
+name.
+
+**Decision.** `index.db` and every other derived cache live in app data, per
+workspace, outside the folder the user chose. `.notes/` inside the workspace
+remains what ADR-004 made it: optional, deletable, and holding nothing whose loss
+costs the user a note — portable configuration the user switches on, never the
+index.
+
+**Consequences.** The index no longer travels with the folder: copying a
+workspace to another machine copies the notes and leaves the index behind, and
+the second machine reindexes. That is the correct outcome and cheaper than
+shipping a database written by a different build. Deleting `.notes/` no longer
+removes the index, so "delete `.notes/` to force a reindex" is not the recovery
+path — a reindex command is, and it has to exist and be reachable. The app now
+keeps per-workspace state the user cannot see from their file manager, so where
+it lives has to be discoverable rather than folklore. ADR-004's test is untouched
+and still applies to everything proposed for `.notes/`: delete it, and if the
+user loses something they wrote, it never belonged there.

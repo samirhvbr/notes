@@ -197,6 +197,27 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.6 - amend ADR-004: index.db lives in app data, not in the workspace
+
+ADR-012, written as an **amendment** rather than a reversal, because ADR-004's
+rule was right and only its example was wrong. `.notes/` stays what ADR-004 made
+it — optional, deletable, holding nothing whose loss costs a note — and its test
+is untouched. One file moves out.
+
+The reason is not that the index is rebuildable; it is that users keep their
+folders inside Dropbox, iCloud Drive, OneDrive, Nextcloud and Syncthing, and
+those tools copy files whenever they change with no knowledge of transactions.
+**An active SQLite database copied mid-transaction is not stale, it is corrupt**,
+and on the provider's side that corruption is what other devices download. Being
+rebuildable is exactly why nobody would notice: the app reindexes, the provider
+copies again, and the loop repeats with no error anyone can act on. A `-wal` file
+copied apart from its database is the same failure wearing another name.
+
+Recorded with its cost: "delete `.notes/` to force a reindex" stops being the
+recovery path, so an explicit reindex command has to exist; and the app now keeps
+per-workspace state the user cannot see from their file manager, which has to be
+discoverable rather than folklore.
+
 ## 0.3.5 - propose ARCHITECTURE.md, closing the SCOPE §20 items 0.1a needs
 
 `.continue/ARCHITECTURE.md`, v0.1, a proposal awaiting review. It closes the
