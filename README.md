@@ -2,23 +2,46 @@
 
 > **Status:** `ACTIVE`
 
-A desktop app for writing Markdown — standalone, and optionally linked to a public Git repository.
+A local-first Markdown note-taking app for Linux, macOS, Windows, iOS and
+Android. You pick a folder; that folder is your workspace; the `.md` files
+inside it are your notes.
 
-<!-- Replace everything below with the real thing. What survives from the
-     skeleton is the SHAPE: what the project is, how to run it, where the docs
-     are, and the language rule. -->
+> **The files belong to the user, not to the application.**
+
+There is no proprietary storage format and no account. A note is a Markdown file
+on your filesystem, and it stays usable from a terminal, VS Code, `git`, `rsync`,
+a backup tool or any other editor. Working offline is not a mode — it is the
+normal case. Remote storage, multi-device sync and an API for AI agents come
+later, are opt-in, and are **self-hosted by you**; there is no cloud service run
+by us.
+
+## Status
+
+**Documentation only — there is no application code in this repository yet.**
+What exists is the product definition, the architecture and the decisions behind
+them. [docs/roadmap.md](docs/roadmap.md) says what gets built and in what order;
+milestone 0.1 is a usable desktop Markdown editor.
+
+Planned stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite.
 
 ## Getting started
 
 ```bash
-# clone, install, run — fill this in
+# nothing to run yet — see docs/roadmap.md, milestone 0.1
+git clone git@github.com:samirhvbr/notes.git
+cd notes
+git config core.hooksPath tools/git-hooks
 ```
 
 ## Documentation
 
 | Path | What it is |
 |---|---|
-| [docs/](docs/README.md) | **The record** — architecture, decisions, security, runbooks |
+| [docs/product.md](docs/product.md) | **What notes is** — the local-first constraint, the workspace model, the editor, and what the first version deliberately does not do |
+| [docs/architecture.md](docs/architecture.md) | **How it is put together** — the layering rule, the stack, the repository layout, the filesystem abstraction, the index, the sync model |
+| [docs/roadmap.md](docs/roadmap.md) | **The order it gets built in** — seven milestones, from a desktop editor to an MCP server |
+| [docs/decisions.md](docs/decisions.md) | **The ADRs** — what was decided, why, and what it cost |
+| [docs/](docs/README.md) | **The record** — the full index, plus security, versioning and runbooks |
 | [.continue/](.continue/README.md) | **The queue** — what is still open, and whose call it is |
 | [.claude/](.claude/README.md) | Model profile and permission posture for agents |
 | [CHANGELOG.md](CHANGELOG.md) | **The history** — newest first; each heading is a commit subject |

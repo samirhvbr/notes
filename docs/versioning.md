@@ -44,16 +44,16 @@ disagreeing about one number is how a wrong deploy gets signed off.
 Bump `version.md` **in the same commit as the change it describes.** Never in a
 commit of its own.
 
-<!-- The three slots and the discipline are the fleet convention. WHAT COUNTS AS
-     A Z IS PER-PROJECT — replace the examples with this project's real
-     triggers, concretely enough that two people would classify the same change
-     the same way. -->
-
 | Part | When it moves | Who moves it |
 |---|---|---|
-| **Z** | _e.g. a new screen, a new database table, a layout change, a renamed button, a wording fix_ | Every change. The normal case. |
-| **Y** | _e.g. a new main service, an API redesign, a compatibility break, a completed phase_ | When it lands |
+| **Z** | A command, a keyboard shortcut, an editor or sidebar behaviour, a settings field, a Markdown parsing or preview fix, a documentation page, a bug fix | Every change. The normal case. |
+| **Y** | A completed milestone from [roadmap.md](roadmap.md); a new crate under `crates/`; a change to the `FileSystemAdapter` surface; an index-schema change that forces a reindex; an ADR that reverses an earlier one | When it lands |
 | **X** | Reserved — a stable release | Manual, owner's call |
+
+**Milestone numbers in [roadmap.md](roadmap.md) are not versions here.** `0.3`
+there is a product stage; `0.3.0` here is whatever `../version.md` says. A
+milestone completing is a `Y` **trigger**, not a `Y` **value** — the numbers are
+not kept in step and are not meant to be.
 
 ## Who commits, and when
 

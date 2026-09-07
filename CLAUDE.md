@@ -60,14 +60,41 @@ rename it to `NOTES_NO_HOOK`.
 
 ## What this project is
 
-**notes** — a desktop app for writing Markdown, standalone and optionally linked to a public Git repository
+**notes** — a local-first Markdown note-taking app for Linux, macOS, Windows,
+iOS and Android. The user picks a folder; that folder is the workspace; the
+`.md` files inside it are the notes.
 
-<!-- Replace the block below with what an agent actually needs: the stack, where
-     the entry points are, what runs locally, and what must never be touched. -->
+**Read [docs/product.md](docs/product.md) before changing product behaviour and
+[docs/architecture.md](docs/architecture.md) before changing structure.** The
+one-line version of both:
 
-- **Stack:** _to be filled in._
-- **Runs locally with:** _to be filled in._
-- **Never touch:** _to be filled in._
+> The files belong to the user, not to the application.
+
+- **Stack:** Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite.
+- **Layout:** `apps/notes-app/` (the Tauri app: `src/` React, `src-tauri/` thin
+  shell) · `crates/` (`notes-core`, `notes-fs`, `notes-index`, `notes-sync` —
+  where the Rust logic lives) · `packages/ui/` · `server/` (from milestone 0.5).
+  [ADR-003](docs/decisions.md#adr-003--the-rust-logic-lives-in-crates-and-the-tauri-shell-stays-thin).
+- **Runs locally with:** nothing yet — there is no application code in this
+  repository. Milestone 0.1 in [docs/roadmap.md](docs/roadmap.md) is the next
+  thing to be built. Update this line in the same commit that makes it wrong.
+- **Never do, without an ADR that reverses the one named:**
+  - store a note anywhere but as a `.md` file on the filesystem, or put the only
+    copy of anything the user wrote in SQLite or `.notes/`
+    ([ADR-001](docs/decisions.md#adr-001--markdown-files-on-the-filesystem-are-the-source-of-truth),
+    [ADR-004](docs/decisions.md#adr-004--notes-holds-only-data-that-can-be-rebuilt-and-must-be-deletable));
+  - write metadata into a user's note that the user did not ask for — a file
+    opened and not edited comes back out byte-identical;
+  - identify a file by path + `modified_at`
+    ([ADR-005](docs/decisions.md#adr-005--sync-is-out-of-the-mvp-but-the-file-identity-model-is-not-foreclosed));
+  - open a listening port in the desktop app
+    ([ADR-007](docs/decisions.md#adr-007--the-desktop-app-opens-no-network-port-by-default));
+  - touch `.git/` inside a user's workspace
+    ([ADR-006](docs/decisions.md#adr-006--git-is-not-a-dependency-and-not-a-feature-in-the-first-versions)).
+
+**Milestone numbers in [docs/roadmap.md](docs/roadmap.md) are not repository
+versions.** `0.3` there is a product stage; `0.3.0` here is whatever
+`version.md` says.
 
 ---
 
@@ -247,8 +274,12 @@ Format: `version - short description in English`. The version comes from
 <!-- The X/Y/Z slots and the discipline are the fleet convention. What counts as
      a Z is per-project — replace these with this project's real triggers. -->
 
-- **Z** — _e.g. a new screen, a new table, a layout change, a wording fix._
-- **Y** — _e.g. a new main service, an API redesign, a compatibility break._
+- **Z** — a command, a shortcut, an editor or sidebar behaviour, a settings
+  field, a preview or parsing fix, a documentation page, a bug fix. The normal
+  case; every change is at least a `Z`.
+- **Y** — a completed roadmap milestone; a new crate under `crates/`; a change
+  to the `FileSystemAdapter` surface; an index-schema change that forces a
+  reindex; an ADR that reverses an earlier one.
 - **X** — reserved; a stable release, by hand.
 
 Forbidden: `feat:` / `fix:` / `chore:` prefixes and vague messages ("ajuste",

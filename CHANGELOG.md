@@ -97,6 +97,39 @@ Also fixes a section reference in `roadmap.md` that pointed at
 `architecture.md#3` when the filesystem abstraction is §4 — stale in the same
 pass that created it.
 
+## 0.2.0 - adopt the scope in the agent instructions and empty the queue
+
+The last block of the conversion: making the documents the repository actually
+reads agree with the four that were just written.
+
+`CLAUDE.md` and `AGENTS.md` had `_to be filled in._` in all three identity slots.
+They now carry the stack, the repository layout and — the part worth having — a
+list of things not to do without an ADR reversing the one named: no note stored
+anywhere but as a `.md` file, no metadata written into a user's note that the
+user did not ask for, no file identified by path plus `modified_at`, no
+listening port in the desktop app, no touching `.git/` in a workspace. An
+instruction file that only describes the project is a file an agent skims; one
+that names the five ways to break it is one that changes behaviour.
+
+The `X`/`Y`/`Z` bump triggers stopped being the skeleton's examples and became
+this project's, in both the twins and `docs/versioning.md`. A `Y` here is a
+completed roadmap milestone, a new crate, a change to the `FileSystemAdapter`
+surface, an index-schema change forcing a reindex, or an ADR reversing an
+earlier one. Both places also state that milestone numbers are not versions:
+`0.3` in the roadmap and `0.3.0` in `version.md` will otherwise be read as the
+same thing, and they are not kept in step.
+
+`README.md` describes what the project is rather than what it was going to be,
+and says plainly that there is no application code here yet — the pre-flight in
+`docs/runbook.md` §6 asks for exactly that, and this repository is public.
+
+`.continue/` is empty of drafts. The two scope files are recorded in its "where
+things went" table with links to what replaced them. **They were never committed,
+so they are not in the history** — their content lives in `docs/`, translated and
+split, and nowhere else. The three questions that were open in the queue are
+closed and named against the ADRs that answered them, so they are reversed by a
+new ADR rather than re-opened as a queue item.
+
 ## 0.1.1 - rename the project to notes
 
 The project was called `franknote` until this commit. The name is dropped

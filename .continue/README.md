@@ -33,9 +33,10 @@ here would be a second source of truth.
 
 | Item | State | Who unblocks it |
 |---|---|---|
-| Product shape of the desktop Markdown editor — what v1 does and does not do | Under discussion, nothing decided | Samir |
-| Desktop stack choice | Blocked on the shape above | Samir |
-| How an optional public Git repository is linked to the app | Under discussion | Samir |
+| Scaffold milestone 0.1 — the Cargo workspace, `apps/notes-app/`, the first crates | Not started; the spec it implements is [../docs/roadmap.md](../docs/roadmap.md) | — |
+| Cut the concrete boundaries between `notes-core`, `notes-fs` and `notes-index` | Deferred to the first code that needs them, on purpose — see [ADR-003](../docs/decisions.md) | — |
+| Dependabot PR #1 (`actions/checkout` 5 → 7) | Open on GitHub | Samir |
+| Report the `CHANGELOG.md` header defect back to the repodocs skeleton | Found while bootstrapping this repo: the skeleton describes the commit format in Portuguese while repodocs' own root file says English. Fixed here at `0.1.0`; still ships to every new repository | Samir |
 
 ## 2. Where things went
 
@@ -45,13 +46,10 @@ here would be a second source of truth.
 
 | It was here | It is now at |
 |---|---|
-| _(nothing yet)_ | |
+| `scope.md` · `scope.md — Aplicativo Markdown Local-First.md` — the 1 338-line product draft, in Portuguese | Split and translated into [../docs/product.md](../docs/product.md) (what it is), [../docs/architecture.md](../docs/architecture.md) (how it is built), [../docs/roadmap.md](../docs/roadmap.md) (in what order) and [../docs/decisions.md](../docs/decisions.md) (ADR-001 … ADR-008). Landed at `0.2.0`; the originals were deleted, not kept in parallel |
 
 ## 3. Pending decisions
 
 | Decision | Whose | Note |
 |---|---|---|
-| Desktop stack — Tauri, Electron, or native | Samir | Becomes ADR-001 with the reason, not just the name |
-| Storage model — plain files on disk vs. an app-managed library | Samir | Decides whether the Git link is a feature or the storage layer |
-| Git linking — what "linkable to a public repo" means operationally | Samir | Clone-and-commit locally, or API-only; also what happens with no repo at all |
-| What a `Z` bump means in this project | Samir | The slots in `CLAUDE.md` stay as examples until this is answered |
+| _(nothing open)_ | | The four decisions that were here — stack, storage model, Git, and what a `Z` means — were all answered at `0.2.0`. They are ADR-002, ADR-001, ADR-006 and [../docs/versioning.md](../docs/versioning.md) respectively. Do not re-open one here; reverse it with a new ADR |
