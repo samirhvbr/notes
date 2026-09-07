@@ -1,0 +1,15 @@
+[package]
+name = "notes-fs"
+version = "0.0.0"
+description = "FileSystem trait, the root jail, and the atomic write."
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+notes-model = { workspace = true }
+blake3 = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

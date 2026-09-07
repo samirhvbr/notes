@@ -197,6 +197,59 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.5.0 - notes-model and notes-fs, with the root jail and the atomic write
+
+Two crates, 76 tests, no Tauri anywhere near them.
+
+**`notes-model`** is types and nothing else — the rule that makes the write
+protocol testable against a fake filesystem later. `RelPath` refuses every escape
+shape as a string and **never normalises**, because a normalised path is a string
+that does not open the file the user has on any filesystem storing NFD;
+comparison is `CompareKey`'s job, and it is a separate type so the two can never
+be confused. `ContentHash` serialises as `b3:<hex>` — prefixed by the algorithm,
+so changing hash one day is a migration rather than an ambiguity — and carries
+the digest of the empty input as a constant, which `notes-fs` asserts against the
+real hasher so the constant cannot rot.
+
+`TextProfile` is where the byte policy lives, and where front-matter preservation
+actually comes from: the editor only ever sees `\n` with no BOM, and `encode`
+puts the file's own shape back, so YAML survives 0.1a because nothing rewrites
+the buffer — not because a parser restores it. Mixed endings and invalid UTF-8
+return a read-only reason instead of a lossy decode.
+
+**`notes-fs`** is the seam. The root jail is two halves that fail differently:
+`RelPath` refuses what can be seen in the string, and `LocalFs::resolve`
+`symlink_metadata`s each segment as it appends it, because a symlink is a
+perfectly well-formed relative path that resolves somewhere else. Both halves run
+on **every** call — a root validated at open time says nothing about the path
+being used now.
+
+The atomic write is temp, fsync, mode copy, re-stat, rename, `fsync` on the
+directory — the last one because without it the contents survive a power cut and
+the name may not. `expect` re-stats immediately before the rename and returns
+`Diverged` with **nothing written**; a test asserts the external content is still
+there afterwards. A rewrite with identical bytes moves mtime and not the hash,
+and the test for that is the one that keeps size-and-mtime from ever authorising
+an overwrite on its own.
+
+The case-sensitivity probe reads instead of writing (D-01): it flips the case of
+one character of an existing name and compares `dev`+`ino`. Inconclusive resolves
+to *insensitive*, and the asymmetry is the point — a missed fold refuses a
+legitimate name, the opposite lets a create pass its collision check and
+overwrite a note.
+
+Five decisions the specification left open are in `docs/DECISIONS-0.1a.md` with
+their alternatives: a typed `IoKind` so a full disk is distinguishable from a
+denied permission by *code* rather than by a string the contract says not to read;
+`watch()` answering `Unsupported` until 0.1b rather than pulling `notify` early;
+a fixed table of byte shapes instead of a property-testing dependency; NFC and
+case-folding implemented in-crate rather than widening the four-dependency list
+`ARCHITECTURE.md` §2 fixes for `notes-model`; and `delete` reporting `Permanent`,
+which scope §7.7 allows as long as the user is told, and which no 0.1a command
+can reach.
+
+A `Y` bump: adding a crate is one, per `docs/versioning.md`.
+
 ## 0.4.1 - build the fixture corpora, because no fixture means no test
 
 Milestone 0.1a's acceptance criteria are almost all statements about a corpus:

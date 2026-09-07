@@ -1,0 +1,17 @@
+[package]
+name = "notes-model"
+version = "0.0.0"
+description = "Core types shared by every notes crate. No I/O."
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+ts-rs = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
