@@ -197,6 +197,49 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.7 - complete the 0.0 spike so it builds, tests and lints clean
+
+The Rust half the previous commit said was missing: the Tauri crate, the
+capability set, the window and CSP configuration, the icons, the five commands,
+the stylesheet, and the platform module. `cargo build`, `cargo clippy
+--all-targets` and `npm run build` all pass with zero warnings, and `cargo test`
+runs **12 tests with no Tauri and no window**.
+
+**The dmabuf decision was split into a pure function, and that is the point of
+the commit.** 0.0's first acceptance criterion is that the Wayland + NVIDIA
+workaround is applied automatically — on hardware this was not written on. A
+function that reads the environment can only be checked by having the
+environment. `decide_dmabuf(linux, opt_out, already_set, session, nvidia)` can be
+checked by anyone: it applies on Wayland + NVIDIA, stays out of the way on
+Wayland alone, on X11 with NVIDIA and off Linux, loses to
+`NOTES_NO_DMABUF_WORKAROUND=1`, and never overrides a value the user set. Six
+tests. **They prove the decision, not the rendering** — the window still has to
+be looked at, which is why 0.0 stays open.
+
+The other six cover the two things a spike can still get wrong in a way that
+matters later: `..`, `sub/../../` and absolute paths are refused against the
+resolved path rather than by string rules that each miss a case; and the atomic
+write round-trips bytes exactly for empty, plain, CRLF, BOM-led and
+accented/emoji payloads, leaving no temp file behind.
+
+Three rules are honoured now rather than retrofitted, because breaking them would
+make the spike measure the wrong thing: the webview gets `core:default` and
+`dialog:allow-open` and **no filesystem capability**; every path is re-resolved
+and re-checked against the root at the moment of use, not only at open; and
+opening a folder writes nothing into it, with the chosen path persisted in app
+data.
+
+The identifier is `br.com.samirhv.notes.spike`, suffixed deliberately. The
+production identifier is still open, it fixes the app-data path on three
+operating systems, and changing it later strands the state of everyone who
+installed — a spike must neither squat on it nor pollute its directory.
+
+`apps/notes-app/README.md` stops saying the app cannot run and starts saying what
+it is not: no `BaseRev`, so a write can still overwrite a concurrent external
+change; no identity registry, no draft recovery, no watcher, no byte policy. That
+list is milestone 0.1a, and naming it here is what keeps the spike from being
+mistaken for a first draft of it.
+
 ## 0.3.6 - amend ADR-004: index.db lives in app data, not in the workspace
 
 ADR-012, written as an **amendment** rather than a reversal, because ADR-004's

@@ -1,0 +1,120 @@
+/* Dark theme only (SCOPE §5). No remote fonts: the CSP forbids them and the
+   spike must render identically with no network. */
+:root {
+  --bg: #17171a;
+  --bg-raised: #1e1e22;
+  --line: #2b2b31;
+  --fg: #e6e6e6;
+  --fg-dim: #9a9aa3;
+  --accent: #7aa2f7;
+  --bad: #f7768e;
+  --good: #9ece6a;
+  --warn: #e0af68;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.app { display: flex; flex-direction: column; height: 100%; }
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-raised);
+  flex: 0 0 auto;
+}
+
+.tag {
+  font-size: 11px;
+  color: var(--warn);
+  border: 1px solid var(--warn);
+  border-radius: 3px;
+  padding: 1px 6px;
+}
+
+button {
+  font: inherit;
+  color: var(--fg);
+  background: #26262c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+/* State must never be carried by colour alone (SCOPE §9). */
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.state { font-size: 12px; color: var(--fg-dim); }
+.state-dirty::before { content: "● "; color: var(--warn); }
+.state-saved::before { content: "✓ "; color: var(--good); }
+.state-writing::before { content: "… "; }
+.state-error::before { content: "! "; color: var(--bad); }
+
+.body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+.side {
+  width: 300px;
+  flex: 0 0 auto;
+  border-right: 1px solid var(--line);
+  overflow: auto;
+  padding: 12px;
+}
+
+.side h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--fg-dim);
+  margin: 16px 0 6px;
+}
+
+.diag { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+.diag dl { margin: 0; font-size: 12px; }
+.diag dt { color: var(--fg-dim); margin-top: 6px; }
+.diag dd { margin: 0; }
+.diag .wrap { word-break: break-all; }
+.bad { color: var(--bad); }
+
+.files { list-style: none; margin: 0; padding: 0; }
+.files button {
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 3px;
+  padding: 4px 6px;
+}
+.files button:hover { background: #26262c; }
+.files button.on { background: #2a3350; color: #fff; }
+
+.main { flex: 1 1 auto; min-width: 0; display: flex; }
+.editor { flex: 1 1 auto; min-width: 0; overflow: hidden; }
+
+.empty { margin: auto; text-align: center; max-width: 42ch; padding: 24px; }
+.muted { color: var(--fg-dim); }
+code { font-family: "JetBrains Mono", ui-monospace, monospace; }
+
+.err {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  background: #3a1f26;
+  border-top: 1px solid var(--bad);
+  color: #ffd7dd;
+  font-size: 12px;
+  white-space: pre-wrap;
+}

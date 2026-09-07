@@ -180,7 +180,10 @@ function Diagnostics({
           {env.nvidia ? " · nvidia" : ""}
         </dd>
         <dt>dmabuf</dt>
-        <dd>{env.dmabufWorkaround}</dd>
+        <dd>
+          <strong>{env.dmabufApplied ? "APPLIED" : "not applied"}</strong> —{" "}
+          {env.dmabufWorkaround}
+        </dd>
         <dt>app data</dt>
         <dd className="wrap">{env.appDataDir}</dd>
         <dt>workspace</dt>

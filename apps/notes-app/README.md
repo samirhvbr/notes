@@ -1,44 +1,61 @@
 # notes-app — milestone 0.0 spike
 
-> **Status:** `INCOMPLETE — PARKED` · Committed deliberately unfinished, and not
-> to be built on until milestone 0.0 is resumed by decision. Nothing here is
-> product code: SCOPE §17 says of 0.0, *"nada vira produto"*.
+> **Status:** `ACTIVE` for what it is, and what it is is a **spike**. SCOPE §17
+> of the milestone: *nada vira produto*. It builds, it is tested, and **it is not
+> the application** — milestone 0.1a replaces almost all of it.
 
 ## What this is
 
-The shell that milestone 0.0 exists to run on real hardware. Its only job is to
-make the four 0.0 acceptance criteria observable — which is why the diagnostics
-panel is as prominent as the editor.
+The shell that milestone 0.0 exists to run on real hardware. Its product is
+evidence: what has been established and what has not is recorded in
+[`../../docs/SPIKE-0.0.md`](../../docs/SPIKE-0.0.md), including the checklist that
+can only be marked on Arch/Wayland/NVIDIA, an iPhone and an Android device.
 
-## What is here
+## Running it
 
-| Path | State |
-|---|---|
-| `package.json`, `vite.config.ts`, `tsconfig.json`, `index.html` | written |
-| `src/main.tsx`, `src/App.tsx`, `src/Editor.tsx` (CodeMirror 6), `src/api.ts` | written |
-| `src/styles.css` | **missing** |
-| `src-tauri/` — `Cargo.toml`, `build.rs`, `tauri.conf.json`, `capabilities/`, `src/` | **missing entirely** |
+```bash
+npm install
+npm run tauri dev      # dev, with the Vite server on 1420
+cargo test             # the core tests — no Tauri, no window
+```
 
-## What is NOT here, and must not be assumed
+## What it deliberately keeps from the specification
 
-- **The Rust side does not exist.** `src/api.ts` declares `spike_env`,
-  `open_workspace`, `restore_workspace`, `read_note` and `write_note` as Tauri
-  commands. **None of them is implemented.** The frontend cannot run.
-- `npm install` has never been run here; there is no lockfile.
-- `cargo build` has never been run against this app.
-- The Wayland + NVIDIA `WEBKIT_DISABLE_DMABUF_RENDERER` detection — 0.0
-  acceptance criterion 1 — is **designed and not written**: it belongs in the
-  missing `src-tauri/src/lib.rs`, before the webview is created.
+Doing otherwise would make the spike measure the wrong thing:
 
-## What it is not, even when finished
+- **No filesystem capability is granted to the webview.** The capability set is
+  `core:default` and `dialog:allow-open`, nothing more; every read and write goes
+  through a command in `src-tauri` (SCOPE §2.5).
+- **Every path is re-resolved and re-checked against the workspace root at the
+  moment of use**, not only when the folder is opened (§7.6). `..`, absolute
+  paths and symlinks escaping the root are refused by one test on the resolved
+  path rather than by three string rules that each miss a case.
+- **Opening a folder writes nothing into it** (§2.3). The chosen path is
+  persisted in app data.
+- **Writes go through a temp file and a rename** (§7.4).
+- **The dmabuf decision is a pure function**, so the Wayland + NVIDIA case this
+  machine cannot produce is covered by a test rather than by hope.
 
-Not milestone 0.1a. No `BaseRev`, no concurrency guard, no conflict detection,
-no watcher, no draft recovery, no atomic-write guarantees beyond a plain
-temp-and-rename. Those are 0.1a and are specified in `.continue/SCOPE_final.md`
-§7 and §12.
+## What it is NOT, and must not be mistaken for
 
-## Resuming
+Not milestone 0.1a, and not a draft of it:
 
-0.0 cannot be closed from a Debian/X11 machine: its acceptance needs
-Arch/Wayland/NVIDIA, an iPhone and an Android device. Findings go to
-`docs/SPIKE-0.0.md`, which does not exist yet either.
+- no `BaseRev`, so a write can overwrite a concurrent external change — the
+  central thing 0.1a adds (§12);
+- no identity registry, no `NoteId`;
+- no recoverable draft;
+- no watcher and no external-change detection;
+- no byte policy — BOM, CRLF and mixed EOL are not detected or preserved (§7.5);
+- errors cross to the frontend as plain strings, not the coded `CoreError` the
+  UI can translate;
+- listing is one level, root only, `.md` and `.markdown`.
+
+The identifier is `br.com.samirhv.notes.spike`, suffixed on purpose: the
+production identifier is still open, it fixes the app-data path on three
+operating systems, and a spike must neither squat on it nor pollute its
+directory.
+
+## Where the real thing is specified
+
+[`../../.continue/SCOPE_final.md`](../../.continue/SCOPE_final.md) and
+[`../../ARCHITECTURE.md`](../../ARCHITECTURE.md).

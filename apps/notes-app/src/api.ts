@@ -17,7 +17,9 @@ export interface SpikeEnv {
   session: SessionKind;
   /** Whether an NVIDIA kernel module was visible at startup. */
   nvidia: boolean;
-  /** Whether WEBKIT_DISABLE_DMABUF_RENDERER was set by us, and why or why not. */
+  /** Whether WEBKIT_DISABLE_DMABUF_RENDERER was set by us. 0.0 criterion 1. */
+  dmabufApplied: boolean;
+  /** Why it was, or was not. */
   dmabufWorkaround: string;
   /** Where per-workspace state is kept. Never inside the user's folder. */
   appDataDir: string;
