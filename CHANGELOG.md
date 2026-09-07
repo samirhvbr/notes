@@ -162,6 +162,28 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.1 - take SCOPE_final.md into the queue as the version to build
+
+`.continue/SCOPE_final.md` — the owner's v2.0 specification, in Portuguese, as
+[ADR-010](docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english)
+provides. It supersedes the two v1 drafts beside it and is the document the
+application gets built from. Committed on arrival, because the rule that nothing
+leaves the queue uncommitted is worth as little as its counterpart on the way in
+— the v1 drafts were lost at `0.2.0` precisely for want of this commit.
+
+It closes decisions the v1 left open, and several of them contradict ADRs that
+are currently `ACTIVE`: identity lives in the app's own registry and **no `id`
+is ever written into a `.md`**, not even when sync is switched on; the content
+hash stops being identity and becomes a correlation signal with explicit
+ambiguity rules; data outside the notes splits into three categories where only
+the derived one is disposable, which moves `index.db` out of the workspace by
+default — an active SQLite database copied mid-transaction by Dropbox or iCloud
+is a corrupt database; a concurrency guard ships with autosave at 0.1a rather
+than with sync; and a timeboxed 0.0 spike now precedes 0.1a.
+
+Those reversals are not applied in this commit. An ADR is reversed by an ADR,
+and this one only records the arrival of the document that argues for it.
+
 ## 0.3.0 - mark the unbuilt specifications as PROPOSED
 
 `product.md`, `architecture.md` and `roadmap.md` were written at `0.2.0` and
