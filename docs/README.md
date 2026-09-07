@@ -45,8 +45,8 @@ regenerated, and which questions are answered upstream rather than here.
 | something planned but **not built yet** | `.continue/`, in Portuguese. A worked-out copy may also live here as `PROPOSED`, and the queue is the authority while both exist |
 | something that happened, with its date and its why | `CHANGELOG.md` |
 
-**An item leaves `.continue/` when it has been built, not when it has been
-written up, and its size is never a reason to move it**
-([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
-That overrides the fleet rule which sends a half-page queue item here — the same
-fleet rule that was followed into the mistake ADR-009 records.
+**When an item leaves `.continue/` is the `QUEUE-RULE` block in
+[`../CLAUDE.md`](../CLAUDE.md)** — regenerated from the fleet standard, and the
+source. It is not restated here. It began as a local rule in this repository
+([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built))
+and the fleet adopted it the same day.

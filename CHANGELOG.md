@@ -197,6 +197,28 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.4 - stop restating the queue rule now that a block carries it
+
+`0.3.2` took the queue rule to repodocs and it came back as the regenerated
+`QUEUE-RULE` block. Four places in this repository still restated it as a local
+override, which is one rule with two sources — the exact thing that commit
+removed — and three of them now said something false: that the fleet rule does
+not apply here, when the fleet had adopted this one.
+
+Golden rules 1 and 2 collapse into one that points at the block and says **do not
+restate it here**; the list renumbers to nine. The freed slot goes to the rule
+that is genuinely local and is in no block: **an `ACTIVE` document in `docs/`
+wins a contradiction, a `PROPOSED` one does not** — the queue is the authority on
+intent while both exist. `.continue/README.md` and `docs/README.md` lose their
+copies the same way and keep only what is theirs: that the queue's README is the
+one file in the folder that is not queue material, and so stays in English while
+the items around it do not.
+
+The ADR bodies are untouched. Their status lines already record the fleet
+adoption, and `0.3.2` put it there; rewriting a decision's Context and
+Consequences to match what happened afterwards would turn the log into a
+description of the present rather than a record of what was decided and why.
+
 ## 0.3.3 - commit the 0.0 spike scaffold, unfinished and parked
 
 The Cargo workspace, and the frontend half of the 0.0 spike application:

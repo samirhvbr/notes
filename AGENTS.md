@@ -100,38 +100,35 @@ versions.** `0.3` there is a product stage; `0.3.0` here is whatever
 
 ## Golden rules
 
-1. **`.continue/` is the queue · `docs/` is the record · `CHANGELOG.md` is the
-   history.** **An item leaves the queue when it has been BUILT** — not when it
-   has been documented, decided, translated or written up
-   ([ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)). A queue note reading "a black screen with a yellow ball in
-   the middle" stays in `.continue/` until that screen exists and works.
-   **Nothing leaves the queue before it has been committed**, so a wrong call
-   costs a `git revert` rather than a reconstruction from memory.
-2. **Size is never a reason to move an item out of the queue.** A 1 300-line
-   specification belongs in `.continue/` for as long as its code does not exist.
-   This deliberately overrides the fleet rule that sends a half-page queue item
-   to `docs/` — that rule is the one that was followed into the mistake ADR-009
-   records.
-3. **In a contradiction between the queue and a document, the document wins.**
-4. **Every prescriptive document declares its status** on the first lines:
+1. **`.continue/` is the queue · `docs/` is what has been produced ·
+   `CHANGELOG.md` is the history.** The exit condition, what "produce" means and
+   why length is not one of them are in the **`QUEUE-RULE`** block below. That
+   block is regenerated from the fleet standard and is the source — **do not
+   restate it here.** The local restatement it replaced is
+   [ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built),
+   kept as the record of where the decision was made, not as a second copy of it.
+2. **In a contradiction, an `ACTIVE` document in `docs/` wins — a `PROPOSED` one
+   does not.** A `PROPOSED` document describes something that has not been built,
+   so the queue is the authority on intent for as long as both exist.
+3. **Every prescriptive document declares its status** on the first lines:
    `ACTIVE` · `HISTORICAL` · `PROPOSED` · `DEPRECATED` · `NOT ADOPTED`. One
    with no declaration is read as `ACTIVE`, which is exactly the failure mode.
-5. **A document made stale by a change is fixed in the same pass.** A document
+4. **A document made stale by a change is fixed in the same pass.** A document
    that ages in silence is worse than a missing one, because it has the
    authority of being written down.
-6. **`CLAUDE.md` and `AGENTS.md` are byte-identical below the H1.** Edit one,
+5. **`CLAUDE.md` and `AGENTS.md` are byte-identical below the H1.** Edit one,
    edit the other.
-7. **Everything is versioned; the only exception is a secret.** `.claude/` and
+6. **Everything is versioned; the only exception is a secret.** `.claude/` and
    `.continue/` are tracked on purpose. A new `.gitignore` exception beyond
    secrets requires an ADR, never a silent line.
-8. **Granting the agent a permission is the owner's act** — written into
+7. **Granting the agent a permission is the owner's act** — written into
    `.claude/settings.json` with its reason and how to revert it, never applied
    silently and never left as a promise in prose.
-9. **A new decision becomes an ADR** in `docs/decisions.md`, in the same pass.
-10. **You commit, and nothing is finished until you have.** The commit is the
-    last step of the task, not a follow-up — never report work as done while it
-    sits uncommitted. One subject per commit; a large delivery is split into
-    blocks.
+8. **A new decision becomes an ADR** in `docs/decisions.md`, in the same pass.
+9. **You commit, and nothing is finished until you have.** The commit is the
+   last step of the task, not a follow-up — never report work as done while it
+   sits uncommitted. One subject per commit; a large delivery is split into
+   blocks.
 
 ---
 

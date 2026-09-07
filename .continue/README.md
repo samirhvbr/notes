@@ -15,24 +15,17 @@ here would be a second source of truth.
 - **Git-tracked on purpose — deliberately NOT in `.gitignore`.** Opening the
   project on another machine brings the context along, which is the whole point:
   you can *continue* from where you stopped.
-- **An item leaves when it has been BUILT — not when it has been written up.**
-  This repository overrides the fleet rule here, and the override is
-  [ADR-009](../docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built).
-  A note reading "a black screen with a yellow ball in the middle" stays in this
-  folder until that screen exists and works. Documenting it, deciding about it,
-  translating it or writing an ADR about it does **not** retire it.
-- **Size is never a reason to move an item out.** A 1 300-line specification
-  belongs here while its code does not exist. The fleet rule that sends a
-  half-page item to `../docs/` does not apply in this repository (ADR-009).
-- **Nothing leaves before it has been committed.** A wrong call then costs a
-  `git revert` instead of a reconstruction from memory — which is the cost that
-  was actually paid at `0.2.0`.
-- **The items in this folder are written in Portuguese**
-  ([ADR-010](../docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english)).
-  Translation to English happens **on the way out**, when the thing has been built
-  and its document lands in `../docs/`. This README is the exception: it is the
-  folder's index rather than queue material, and stays in English like the rest of
-  the repository.
+- **When an item leaves, what "produce" means, and why length is not an exit
+  condition: the `QUEUE-RULE` block in [`../CLAUDE.md`](../CLAUDE.md).** It is
+  regenerated from the fleet standard and is the source — it is not restated
+  here, and it should not be. It was a local rule in this repository for one
+  version ([ADR-009](../docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built),
+  [ADR-010](../docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english));
+  the fleet adopted both, and the ADRs stay as the record of where the decision
+  was made.
+- **This README is the one file here that is not queue material.** It is the
+  folder's index, so it stays in English while the items around it are written
+  in the language their author thinks in.
 - **Nothing here is source of truth about what exists.** What already exists is
   described in [`../docs/`](../docs/); the permanent record of *when* is
   [`../CHANGELOG.md`](../CHANGELOG.md).
