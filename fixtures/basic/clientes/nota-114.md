@@ -1,0 +1,7 @@
+# Retenção Inventário Rede Runbook
+
+firewall rotação retenção nota container índice cliente firewall firewall servidor reunião reunião alerta deploy nota cliente índice rede retenção alerta volume cliente política consulta incidente backup runbook incidente rede rotação deploy topologia cliente política retenção inventário nota consulta topologia política topologia cliente cliente rede incidente rotação reunião índice backup alerta firewall chave retenção métrica alerta servidor backup latência backup
+
+container backup backup inventário inventário política container firewall chave deploy chave reunião container volume janela inventário alerta consulta incidente runbook backup latência projeto retenção servidor servidor projeto deploy projeto runbook política container rede alerta métrica consulta cliente política janela tarefa consulta inventário métrica alerta firewall alerta cliente consulta runbook rotação janela nota topologia deploy rotação latência volume topologia firewall incidente
+
+runbook política servidor container métrica política container rotação inventário chave servidor cliente métrica firewall volume runbook reunião janela janela política latência backup servidor firewall política container tarefa nota runbook retenção servidor cliente consulta deploy firewall runbook servidor firewall backup retenção backup cliente firewall backup inventário runbook servidor retenção servidor projeto incidente chave latência deploy rede latência projeto backup topologia backup rotação

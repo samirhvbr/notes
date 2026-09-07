@@ -1,0 +1,7 @@
+# Latência Topologia Rotação Container
+
+incidente política container chave reunião consulta rotação topologia alerta inventário inventário retenção servidor tarefa reunião reunião latência métrica tarefa retenção consulta janela topologia cliente nota container política inventário chave cliente container container consulta runbook rotação reunião cliente chave índice incidente chave reunião consulta nota topologia retenção deploy métrica topologia container rotação consulta volume chave servidor consulta deploy projeto alerta
+
+métrica janela incidente topologia projeto retenção runbook retenção volume chave métrica rede cliente container volume retenção firewall container topologia índice projeto volume latência volume topologia chave runbook inventário deploy incidente nota índice projeto rede inventário política backup alerta firewall cliente topologia servidor nota janela servidor política métrica chave janela volume política índice rede latência incidente latência chave política inventário chave
+
+índice índice runbook cliente reunião volume consulta política firewall chave container backup alerta métrica consulta container reunião consulta política cliente métrica janela container topologia consulta projeto runbook retenção volume rotação volume incidente política chave rotação backup incidente container consulta índice topologia runbook firewall deploy deploy alerta topologia servidor índice projeto firewall consulta volume rotação latência chave latência projeto chave nota chave

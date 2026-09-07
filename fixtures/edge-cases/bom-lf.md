@@ -1,0 +1,3 @@
+﻿# bom + lf
+
+corpo

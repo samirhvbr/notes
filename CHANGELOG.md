@@ -197,6 +197,46 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.4.1 - build the fixture corpora, because no fixture means no test
+
+Milestone 0.1a's acceptance criteria are almost all statements about a corpus:
+list `fixtures/basic` and `fixtures/large` in under a second, kill the process
+during a thousand saves against `large`, open and re-save every file in `basic`
+and `edge-cases` and see a clean `git status`. None of those corpora existed.
+
+`fixtures/basic/` — 200 notes over a nine-directory tree, plus the files that
+must **not** appear in it: a `.txt`, a `.png`, a dot-file, and three ignored
+directories. `fixtures/edge-cases/` — 26 files, one per hazard the byte policy
+has to survive: LF, CRLF, CR-only, missing final newline, BOM with each ending,
+mixed EOL, empty, whitespace-only, invalid UTF-8, a lone surrogate, valid and
+malformed front matter, front matter that is not on the first line, tabs, a name
+with a space, a trailing dot, a case collision, NFC and NFD names, and 5 MB.
+`fixtures/xss/` — 18 files, each an assertion rather than a sample, with two that
+must **survive**: the payloads inside a code fence have to render as text, and a
+renderer that strips them there is rewriting what the user wrote.
+
+Both committed corpora come from `tools/gen-fixtures.py`, which is deterministic
+by construction — a blake2b stream keyed on the file's own path, never
+`random` — so regenerating on a clean checkout leaves `git status` empty and a
+review can see where each byte came from. `tools/gen-large.sh` generates the
+performance corpus at 10 000 notes and 197 MiB and is never committed.
+
+**`.gitattributes` marks the corpus `-text`, and without it the byte-preservation
+criterion would be theatre.** The files under test deliberately carry CRLF,
+CR-only and mixed endings; git's default `text=auto` would normalise them on
+commit and re-expand on checkout, handing the Windows runner different bytes from
+the ones committed — so the test would pass or fail on git's behaviour rather
+than the application's, exactly where it is most likely to break.
+
+Two things the corpus cannot contain, recorded in `docs/DECISIONS-0.1a.md` rather
+than discovered later: a nested `.git/` directory, which git will not track, so
+that entry of the ignore list is covered by a unit test over a temp directory;
+and, on Windows, the trailing-dot filename, which the generator skips with a
+warning instead of failing.
+
+`tools/crash-save-loop` is not here: it drives the write path, and the crate that
+owns the write path arrives in the next commit.
+
 ## 0.4.0 - move the architecture into docs/ and resolve the scope contradictions
 
 Milestone 0.1a starts here. Nothing prescriptive is left at the repository root:

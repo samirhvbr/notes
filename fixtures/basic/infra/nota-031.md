@@ -1,0 +1,9 @@
+# Janela Cliente Incidente Backup
+
+backup backup backup firewall firewall rotação latência cliente topologia índice rotação tarefa retenção servidor inventário política volume cliente chave projeto latência rede projeto deploy topologia container runbook reunião container cliente rotação métrica incidente topologia rotação rotação servidor latência projeto container servidor projeto reunião reunião janela topologia rede topologia nota firewall consulta servidor alerta alerta incidente consulta
+
+latência chave nota índice métrica cliente backup tarefa chave firewall consulta janela rotação latência alerta projeto reunião chave servidor firewall índice incidente incidente tarefa janela tarefa retenção runbook incidente incidente rede deploy volume container chave janela alerta firewall índice chave volume topologia consulta container inventário runbook volume inventário servidor consulta chave consulta servidor latência deploy topologia topologia
+
+backup índice métrica retenção chave volume incidente janela runbook rede consulta incidente deploy latência janela incidente alerta reunião backup rotação rotação chave deploy deploy rotação alerta servidor runbook rede retenção servidor incidente volume container política tarefa chave consulta tarefa rotação topologia reunião rede inventário backup incidente firewall janela consulta servidor topologia retenção firewall janela janela reunião backup topologia
+
+volume rede janela deploy incidente cliente consulta topologia incidente container volume deploy rotação container alerta servidor runbook chave runbook chave firewall índice runbook firewall tarefa chave chave nota alerta consulta rede incidente alerta backup inventário consulta servidor backup rede servidor topologia consulta métrica topologia tarefa inventário servidor firewall tarefa deploy consulta incidente backup cliente nota rotação reunião índice rotação

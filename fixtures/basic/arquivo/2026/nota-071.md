@@ -1,0 +1,9 @@
+# Topologia Firewall Consulta Métrica
+
+topologia alerta chave nota inventário rotação inventário container rede volume deploy retenção incidente alerta reunião firewall retenção rotação cliente container tarefa inventário backup cliente inventário reunião alerta runbook cliente métrica firewall runbook retenção projeto cliente métrica política rede métrica nota índice runbook métrica reunião rede chave servidor janela topologia chave índice índice latência cliente runbook retenção
+
+rotação incidente runbook chave runbook volume rotação rede reunião servidor nota janela rotação cliente runbook projeto runbook reunião latência alerta runbook volume firewall container política consulta runbook política runbook firewall deploy firewall volume janela servidor política topologia política container reunião consulta inventário tarefa janela volume latência backup alerta rede rotação reunião runbook firewall chave retenção backup política
+
+inventário consulta deploy reunião cliente rede servidor inventário índice servidor política topologia política deploy retenção container retenção política política deploy topologia nota latência latência nota incidente nota métrica rede nota latência incidente tarefa deploy container topologia volume política métrica firewall container firewall tarefa firewall deploy deploy servidor latência firewall retenção rotação política firewall rotação métrica topologia política servidor
+
+consulta política runbook latência janela cliente rede alerta rotação inventário runbook alerta métrica rede rede métrica tarefa runbook rede volume topologia incidente incidente cliente runbook métrica tarefa firewall consulta métrica inventário rotação alerta rede deploy chave runbook nota container deploy projeto nota cliente reunião chave alerta latência rede cliente rede chave nota retenção tarefa índice topologia latência tarefa latência

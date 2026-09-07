@@ -1,0 +1,7 @@
+# Projeto Janela Topologia Nota
+
+container container rede inventário incidente cliente métrica servidor tarefa tarefa incidente incidente consulta tarefa topologia tarefa índice consulta incidente deploy rede nota tarefa tarefa retenção firewall deploy janela tarefa projeto backup incidente rotação retenção cliente janela backup nota rotação tarefa nota backup servidor firewall janela servidor cliente firewall chave projeto rede inventário consulta firewall projeto consulta tarefa topologia nota
+
+retenção volume índice deploy índice volume retenção container chave container janela inventário backup rotação nota rotação servidor alerta chave inventário servidor alerta tarefa índice retenção reunião rotação deploy janela política container chave runbook deploy política alerta rede topologia índice rotação chave servidor servidor janela consulta retenção inventário índice runbook consulta runbook política volume incidente projeto reunião firewall cliente reunião inventário
+
+nota rotação consulta reunião retenção firewall container chave runbook métrica topologia projeto reunião firewall backup backup política chave tarefa topologia servidor projeto deploy rede tarefa reunião chave rede cliente cliente chave firewall nota chave alerta projeto retenção alerta volume backup backup container firewall deploy rede métrica janela retenção nota reunião latência volume janela chave reunião servidor inventário latência rede incidente deploy

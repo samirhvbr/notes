@@ -1,0 +1,5 @@
+# Inventário Deploy Reunião Container
+
+consulta tarefa firewall janela cliente latência volume deploy política cliente métrica rede janela chave nota nota incidente backup retenção chave firewall tarefa rotação runbook chave incidente runbook backup backup volume firewall rede latência nota deploy firewall topologia retenção alerta rotação retenção runbook deploy janela alerta alerta reunião rede container volume firewall topologia índice retenção política container incidente chave nota métrica janela tarefa
+
+alerta container backup container runbook tarefa reunião backup métrica topologia política rede backup topologia deploy container inventário janela projeto latência firewall cliente rotação rotação deploy backup retenção projeto janela retenção alerta alerta reunião container container política inventário container índice reunião tarefa volume tarefa container rotação política política incidente inventário cliente inventário alerta inventário rotação runbook firewall volume reunião projeto incidente incidente topologia alerta

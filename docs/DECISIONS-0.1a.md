@@ -42,3 +42,42 @@ criterion to "leaves no file behind" instead of "creates none" — one line in
 `ARCHITECTURE.md` §3 and one in the acceptance document. The read probe is
 inconclusive only on an empty root or one whose every name is caseless, and both
 fall back to the safe default.
+
+---
+
+## D-02 — `.gitattributes` marks `fixtures/**` as `-text`
+
+**Decided.** `fixtures/** -text` (plus `linguist-generated=true`), disabling all
+end-of-line conversion for the corpus.
+
+**Gap closed.** G11, and a hole in the acceptance criterion itself.
+
+**Why.** The 0.1a criterion is *"abrir cada arquivo dos fixtures e salvar sem
+editar → `git status` limpo"*, and the corpus deliberately contains CRLF, CR-only
+and mixed-EOL files. With git's default `text=auto`, git would normalise those
+line endings on commit and re-expand them on checkout — on Windows CI it would
+hand the test different bytes than the ones committed. The criterion would then
+pass or fail on git's behaviour rather than on the application's, which is worse
+than not running it.
+
+**Alternative if you disagree.** Drop the file and keep the corpus on Linux CI
+only, accepting that the byte-preservation criterion is unverified on the Windows
+runner — where it is most likely to break.
+
+---
+
+## D-03 — `.git/` is not shipped inside `fixtures/basic/`
+
+**Decided.** The ignored-directory fixtures are `.obsidian/`, `.notes/` and
+`.trash/`. The `.git` entry of `IGNORE_DEFAULT` is covered by a unit test that
+creates the directory in a temp workspace.
+
+**Gap closed.** G10 test coverage.
+
+**Why.** Git refuses to track a nested `.git/` directory, so a committed fixture
+containing one is silently absent on every clone — a test that passes because
+the hazard is not there.
+
+**Alternative if you disagree.** Ship it as `dot-git/` and have the test rename
+it before running, which adds a moving part to every test that touches the
+corpus.

@@ -1,0 +1,9 @@
+# Cliente Métrica Latência Tarefa
+
+incidente backup latência rede rotação métrica índice volume consulta retenção topologia inventário latência nota janela container runbook deploy latência nota projeto política nota política rotação latência volume janela métrica incidente cliente política chave rotação firewall alerta volume deploy incidente rotação tarefa firewall tarefa métrica inventário consulta chave política consulta métrica janela janela volume janela métrica alerta
+
+chave retenção container janela métrica firewall nota incidente chave tarefa cliente firewall inventário topologia topologia backup rotação projeto inventário métrica rede inventário volume nota topologia retenção topologia cliente chave política inventário projeto topologia nota índice consulta incidente inventário runbook topologia servidor backup rotação reunião métrica política rotação inventário nota cliente inventário deploy consulta chave nota container container
+
+projeto firewall índice janela janela rede firewall reunião reunião topologia backup container incidente consulta cliente projeto incidente índice runbook servidor chave índice reunião janela métrica cliente container política retenção backup índice container incidente tarefa firewall janela métrica cliente chave incidente backup backup tarefa incidente política retenção runbook backup incidente projeto projeto métrica índice tarefa backup rede deploy consulta
+
+nota rede reunião backup volume runbook política firewall rede métrica reunião tarefa consulta rotação índice projeto índice projeto política topologia firewall container nota projeto chave latência janela reunião topologia projeto reunião incidente deploy cliente servidor topologia container volume topologia deploy inventário deploy janela cliente inventário rotação runbook métrica cliente consulta inventário tarefa runbook deploy inventário topologia reunião reunião projeto

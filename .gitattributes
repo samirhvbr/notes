@@ -1,0 +1,12 @@
+# The byte-preservation acceptance criterion of milestone 0.1a is: open every
+# fixture, save it unchanged, and `git status --porcelain` must be empty. That
+# test is only meaningful if git stores and checks out these files byte for
+# byte — line-ending normalisation would rewrite the very bytes under test and
+# turn a passing run into evidence of nothing.
+#
+# `-text` disables all EOL conversion and keeps the working tree identical to
+# the blob on every platform, Windows CI included.
+fixtures/** -text
+
+# Keep diffs of the corpus out of review noise; they are generated data.
+fixtures/** linguist-generated=true
