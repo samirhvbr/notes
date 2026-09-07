@@ -22,6 +22,14 @@
 # Local agent overrides (may contain machine-specific paths and tokens)
 .claude/settings.local.json
 
+# Build output — derived, reproducible, and never memory. The exception is
+# written down in docs/decisions.md as ADR-011, because this file says a new
+# exception beyond secrets requires one.
+target/
+node_modules/
+dist/
+.vite/
+
 # OS noise
 .DS_Store
 Thumbs.db

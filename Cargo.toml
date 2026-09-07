@@ -1,0 +1,24 @@
+# Cargo workspace root.
+#
+# A crate is created when the milestone that uses it begins (SCOPE §5), so the
+# only member today is the 0.0 spike application. notes-model, notes-fs,
+# notes-markdown and notes-core arrive at 0.1a; notes-index at 0.2; notes-mcp at
+# 0.3; server/ at 0.5.
+[workspace]
+resolver = "2"
+members = ["apps/notes-app/src-tauri"]
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+authors = ["Samir Hanna Verza"]
+repository = "https://github.com/samirhvbr/notes"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[profile.release]
+opt-level = "s"
+lto = true
+strip = true

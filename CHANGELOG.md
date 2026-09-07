@@ -197,6 +197,41 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.3 - commit the 0.0 spike scaffold, unfinished and parked
+
+The Cargo workspace, and the frontend half of the 0.0 spike application:
+`apps/notes-app/` with Vite, React, TypeScript and a CodeMirror 6 host, plus a
+diagnostics panel that exists because the spike's product is evidence rather
+than software.
+
+**It is committed incomplete, on purpose, and says so in three places** — the
+status line of `apps/notes-app/README.md`, a table of what is written against
+what is missing, and this entry. The Rust half does not exist: `src/api.ts`
+declares five Tauri commands and none of them is implemented, so the application
+cannot run. `npm install` and `cargo build` have never been executed against it.
+Committing it beats leaving it in a working tree nobody else can see, which is
+the failure this repository has already paid for once at `0.2.0`; pretending it
+works would be a different and worse failure.
+
+The design is recorded even where the code is not: the Wayland + NVIDIA
+`WEBKIT_DISABLE_DMABUF_RENDERER` detection is 0.0's first acceptance criterion,
+it belongs in the missing `src-tauri/src/lib.rs` before the webview is created,
+and the README says exactly that so the next session does not rediscover it.
+
+Two rules are honoured in the frontend from the start rather than retrofitted:
+no filesystem capability is granted to the webview, so every read and write in
+`api.ts` is a call into the core (SCOPE §2.5); and the editor adds nothing to
+input handling, because the mobile acceptance criterion is measuring the
+platform's IME, not ours.
+
+`.gitignore` gains `target/`, `node_modules/`, `dist/` and `.vite/`. That file
+requires an ADR for any exception beyond secrets, so ADR-011 owes it one — the
+line is written with a pointer, and the ADR follows in the architecture pass
+rather than being waved through as obvious.
+
+0.0 cannot be closed from this machine: its acceptance needs Arch/Wayland/NVIDIA,
+an iPhone and an Android device.
+
 ## 0.3.1 - take SCOPE_final.md into the queue as the version to build
 
 `.continue/SCOPE_final.md` — the owner's v2.0 specification, in Portuguese, as
