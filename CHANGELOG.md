@@ -197,6 +197,13 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.9 - track Cargo.lock, which the spike build produced and 0.3.7 missed
+
+The workspace builds a binary application, so the lockfile is part of the source:
+without it, a clone resolves whatever versions are current that day, and "it
+builds here" stops being a statement about this repository. `0.3.7` reported the
+build as passing and left the file that makes the result reproducible untracked.
+
 ## 0.3.8 - write the ADR the .gitignore was already pointing at
 
 `0.3.3` added `target/`, `node_modules/`, `dist/` and `.vite/` to `.gitignore`
