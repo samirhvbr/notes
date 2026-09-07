@@ -82,7 +82,9 @@ iOS and Android, against the same core.
 
 **The interface is adapted, not shrunk.** This is also the stage that pays for
 the filesystem abstraction in
-[architecture.md](architecture.md#3-the-filesystem-abstraction): "a folder the
+[architecture.md](architecture.md#4-the-filesystem-abstraction), and the reason
+it is here rather than at 0.1 is
+[ADR-008](decisions.md#adr-008--desktop-first-mobile-at-milestone-04-behind-the-same-abstraction): "a folder the
 user chose" is a desktop concept, and iOS in particular has no equivalent — the
 adapter is what absorbs that, and it exists from 0.1 precisely so this stage is
 not a rewrite.

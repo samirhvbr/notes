@@ -63,6 +63,40 @@ sync is built — `modified_at` alone cannot synchronise anything, because clock
 disagree, filesystems round timestamps differently, and a restored backup
 rewrites them all.
 
+## 0.2.0 - record the founding decisions as ADRs
+
+Eight ADRs in [docs/decisions.md](docs/decisions.md), replacing the skeleton's
+template. They exist so that the expensive parts of the scope are not
+re-litigated by the next session — each one carries the reason and, more
+importantly, the cost.
+
+ADR-001 is the load-bearing one: Markdown files on the filesystem are the source
+of truth, with no proprietary format at any point. It is recorded with what it
+gives up — sync gets harder, indexing must be incremental, writes must be atomic
+because the file is the only copy — because a decision that lists only benefits
+has not been thought through.
+
+The rest: Tauri 2 over Electron and Flutter, with the platform-webview tax
+stated; Rust logic in `crates/` with a thin `src-tauri/`, so `server/` can reuse
+the core at 0.5 without an extraction under pressure; `.notes/` restricted to
+data that can be rebuilt, with the "delete it — did the user lose anything they
+wrote?" test that keeps it from silently becoming the proprietary store ADR-001
+forbids; sync deferred but its identity model protected, because an app built on
+path + `modified_at` cannot be given sync later, only rewritten; Git dropped as
+a dependency; no network port opened by default, since an editor that quietly
+listens on a laptop joining untrusted networks is not a default worth shipping;
+and desktop before mobile, with the filesystem seam carried from 0.1 so that 0.4
+is an adapter rather than a rewrite.
+
+ADR-006 is the one that records a reversal: the project was first sketched as a
+Markdown editor with a public Git repository attached, and local-first replaced
+it. Written down as a decision rather than dropped, so the idea does not come
+back as a suggestion.
+
+Also fixes a section reference in `roadmap.md` that pointed at
+`architecture.md#3` when the filesystem abstraction is §4 — stale in the same
+pass that created it.
+
 ## 0.1.1 - rename the project to notes
 
 The project was called `franknote` until this commit. The name is dropped
