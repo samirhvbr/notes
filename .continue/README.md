@@ -15,16 +15,24 @@ here would be a second source of truth.
 - **Git-tracked on purpose — deliberately NOT in `.gitignore`.** Opening the
   project on another machine brings the context along, which is the whole point:
   you can *continue* from where you stopped.
-- **Nothing here is source of truth.** The moment a document describes something
-  that already exists, it moves to [`../docs/`](../docs/) and the permanent
-  record of *when* is [`../CHANGELOG.md`](../CHANGELOG.md).
-- **A finished item leaves.** It is deleted here, not ticked off — the permanent
-  record of completion is the changelog. A queue holding an already-done item
-  costs more than an incomplete queue: it makes the next session redo work.
-- **If an item needs half a page, it is in the wrong place.** Write it in
-  `../docs/` and leave one line and a pointer here.
-- **In a contradiction between this folder and a document in `../docs/`, the
-  document wins.**
+- **An item leaves when it has been BUILT — not when it has been written up.**
+  This repository overrides the fleet rule here, and the override is
+  [ADR-009](../docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built).
+  A note reading "a black screen with a yellow ball in the middle" stays in this
+  folder until that screen exists and works. Documenting it, deciding about it,
+  translating it or writing an ADR about it does **not** retire it.
+- **Size is never a reason to move an item out.** A 1 300-line specification
+  belongs here while its code does not exist. The fleet rule that sends a
+  half-page item to `../docs/` does not apply in this repository (ADR-009).
+- **Nothing leaves before it has been committed.** A wrong call then costs a
+  `git revert` instead of a reconstruction from memory — which is the cost that
+  was actually paid at `0.2.0`.
+- **Nothing here is source of truth about what exists.** What already exists is
+  described in [`../docs/`](../docs/); the permanent record of *when* is
+  [`../CHANGELOG.md`](../CHANGELOG.md).
+- **In a contradiction, an `ACTIVE` document in `../docs/` wins — a `PROPOSED`
+  one does not.** A `PROPOSED` document describes something that has not been
+  built, so this folder is the authority on intent for as long as both exist.
 - The **Continue** IDE also uses this folder for its own configuration.
 
 ## 1. What is left here

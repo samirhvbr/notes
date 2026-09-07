@@ -40,9 +40,13 @@ regenerated, and which questions are answered upstream rather than here.
 
 | It describes… | It goes to |
 |---|---|
-| something that already exists — a measurement, a contract, a runbook, an ADR | `docs/` |
-| something still to be done, in one line | `.continue/` + a pointer |
+| something that has been **built** — a measurement, a contract, a runbook | `docs/`, marked `ACTIVE` |
+| a decision that has been taken | `docs/decisions.md`, as an ADR, `ACTIVE` — a decision exists the moment it is taken, code or no code |
+| something planned but **not built yet** | `.continue/`, in Portuguese. A worked-out copy may also live here as `PROPOSED`, and the queue is the authority while both exist |
 | something that happened, with its date and its why | `CHANGELOG.md` |
 
-If a queue item needs half a page, it is in the wrong place: write it here and
-leave one line and a pointer in the queue.
+**An item leaves `.continue/` when it has been built, not when it has been
+written up, and its size is never a reason to move it**
+([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+That overrides the fleet rule which sends a half-page queue item here — the same
+fleet rule that was followed into the mistake ADR-009 records.

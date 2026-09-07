@@ -97,6 +97,46 @@ Also fixes a section reference in `roadmap.md` that pointed at
 `architecture.md#3` when the filesystem abstraction is §4 — stale in the same
 pass that created it.
 
+## 0.3.0 - an item leaves the queue only when it has been built
+
+`0.2.1` put the deleted drafts back. This writes down the rule that would have
+stopped them being deleted, because an override nobody wrote down is not an
+override — it is a mistake waiting to be repeated by whoever reads the rules and
+obeys them.
+
+**[ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built):
+an item leaves `.continue/` when the thing it describes has been BUILT** — not
+when it has been documented, decided, translated or written up. A queue note
+reading "a black screen with a yellow ball in the middle" stays in the queue
+until that screen exists and works. **Size is never a reason to move an item
+out**, which is the second half of the override: the fleet rule sending a
+half-page queue item to `docs/` is exactly the rule that was followed into the
+`0.2.0` mistake, and a 1 300-line specification stays in the queue while its code
+does not exist. And nothing leaves the queue before it has been committed — the
+operational half, which would have made `0.2.0` cost a `git revert` instead of a
+reconstruction from memory.
+
+The ambiguity that caused it is one word, and the ADR names it: the fleet
+convention says a document moves to the record when it describes "something that
+already exists", and *exists* was read as the definition existing rather than the
+thing existing. Under the first reading, describing something well is what makes
+it real. The failure is worst on a new project and that is not incidental — on
+day one everything is words and nothing is code, so a rule that retires an item
+once its text is tidy retires the whole queue. Which it did: four open items to
+zero, with no application code written.
+
+Golden rules 1 and 2 in `CLAUDE.md`/`AGENTS.md`, the "how it works" list in
+`.continue/README.md` and the "where a new document goes" table in
+`docs/README.md` all said the old thing and now say this one, each pointing at
+ADR-009. Three files repeating a rule is worse than one when they disagree, and
+they disagreed with the owner's intent in the same direction, which is how the
+mistake looked correct at every checkpoint.
+
+This is a `Y` because an ADR that overrides a fleet convention now counts as one.
+That trigger did not exist before this commit and is added by it — a repository
+quietly diverging from the fleet is exactly the change that has to be visible in
+the version history, and `Z` would have buried it.
+
 ## 0.2.1 - restore the scope drafts to the queue
 
 `0.2.0` deleted `.continue/scope.md` and

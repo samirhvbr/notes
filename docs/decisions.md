@@ -242,3 +242,46 @@ with the reasoning recorded in
 There is a real risk that the seam turns out to be cut in the wrong place when
 the iOS adapter is finally written; that is cheaper than a UI written directly
 against local paths.
+
+---
+
+## ADR-009 — An item leaves `.continue/` only when it has been built
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** The fleet convention says a document moves from queue to record
+"the moment it describes something that already exists", and a companion rule
+sends any queue item needing more than half a page to `docs/`. Both were
+followed at `0.2.0`, and the result is the reason this ADR exists: a 1 338-line
+specification for an application with zero lines of code was translated into
+`docs/`, deleted from `.continue/`, and the queue then reported nothing open —
+on a project where nothing at all had been built. The ambiguity is one word.
+"Exists" was read as *the definition* existing; the owner means *the thing*
+existing. Under the first reading, writing about a black screen with a yellow
+ball makes it exist. Under the second, only the screen does.
+
+The failure is specific to a new project and worst exactly there: on day one
+everything is words and nothing is code, so a rule that retires an item once its
+text is tidy retires the entire queue. A queue whose job is to list what is
+still missing must not lose an entry because someone described the entry well.
+
+**Decision.** In this repository an item leaves `.continue/` when the thing it
+describes **has been built and works** — not when it has been documented,
+decided, translated or written up. **Size is never a reason to move an item
+out**: a specification of any length stays in the queue while its code does not
+exist. A decision taken along the way still becomes an ADR in the same pass, and
+that ADR does **not** retire the queue item. And nothing leaves `.continue/`
+before it has been committed, so that a wrong call costs a `git revert` rather
+than a reconstruction from memory.
+
+**Consequences.** This overrides two fleet rules for this repository —
+`conventions.md` §1 and the golden rule that sends a half-page item to `docs/` —
+and an override that is not written down is not an override, which is what this
+ADR is for. The queue will hold large files. `docs/` may hold a document
+describing something that does not exist yet; those carry `PROPOSED` rather than
+`ACTIVE`, and the queue, not the document, is the authority on intent while both
+exist. The cost is real: the same subject can live in the queue and in `docs/` at
+once, in two languages, and they can drift. The mitigation is direction — intent
+changes in the queue, and `docs/` is updated when the thing is built. If this
+rule is right for the whole fleet rather than only here, it belongs in repodocs
+`conventions.md`, and this ADR is the argument to take there.

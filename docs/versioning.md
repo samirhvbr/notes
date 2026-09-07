@@ -47,7 +47,7 @@ commit of its own.
 | Part | When it moves | Who moves it |
 |---|---|---|
 | **Z** | A command, a keyboard shortcut, an editor or sidebar behaviour, a settings field, a Markdown parsing or preview fix, a documentation page, a bug fix | Every change. The normal case. |
-| **Y** | A completed milestone from [roadmap.md](roadmap.md); a new crate under `crates/`; a change to the `FileSystemAdapter` surface; an index-schema change that forces a reindex; an ADR that reverses an earlier one | When it lands |
+| **Y** | A completed milestone from [roadmap.md](roadmap.md); a new crate under `crates/`; a change to the `FileSystemAdapter` surface; an index-schema change that forces a reindex; an ADR that reverses an earlier one **or overrides a fleet convention** | When it lands |
 | **X** | Reserved — a stable release | Manual, owner's call |
 
 **Milestone numbers in [roadmap.md](roadmap.md) are not versions here.** `0.3`

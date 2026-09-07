@@ -101,10 +101,17 @@ versions.** `0.3` there is a product stage; `0.3.0` here is whatever
 ## Golden rules
 
 1. **`.continue/` is the queue · `docs/` is the record · `CHANGELOG.md` is the
-   history.** A document moves from queue to record the moment it describes
-   something that already exists. A finished item **leaves** the queue.
-2. **If a queue item needs half a page, it is in the wrong place.** Write it in
-   `docs/` and leave one line and a pointer.
+   history.** **An item leaves the queue when it has been BUILT** — not when it
+   has been documented, decided, translated or written up
+   ([ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)). A queue note reading "a black screen with a yellow ball in
+   the middle" stays in `.continue/` until that screen exists and works.
+   **Nothing leaves the queue before it has been committed**, so a wrong call
+   costs a `git revert` rather than a reconstruction from memory.
+2. **Size is never a reason to move an item out of the queue.** A 1 300-line
+   specification belongs in `.continue/` for as long as its code does not exist.
+   This deliberately overrides the fleet rule that sends a half-page queue item
+   to `docs/` — that rule is the one that was followed into the mistake ADR-009
+   records.
 3. **In a contradiction between the queue and a document, the document wins.**
 4. **Every prescriptive document declares its status** on the first lines:
    `ACTIVE` · `HISTORICAL` · `PROPOSED` · `DEPRECATED` · `NOT ADOPTED`. One
@@ -279,7 +286,8 @@ Format: `version - short description in English`. The version comes from
   case; every change is at least a `Z`.
 - **Y** — a completed roadmap milestone; a new crate under `crates/`; a change
   to the `FileSystemAdapter` surface; an index-schema change that forces a
-  reindex; an ADR that reverses an earlier one.
+  reindex; an ADR that reverses an earlier one **or overrides a fleet
+  convention**.
 - **X** — reserved; a stable release, by hand.
 
 Forbidden: `feat:` / `fix:` / `chore:` prefixes and vague messages ("ajuste",
