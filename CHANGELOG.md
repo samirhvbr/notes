@@ -197,6 +197,30 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.3 - check the Windows target locally instead of discovering it in CI
+
+The third CI round failed on Windows for the third time in a row, and for a
+class of reason Linux cannot see: a helper used only under `#[cfg(unix)]` is
+**dead code** on Windows, and `-D warnings` makes that a build failure. Not a
+test failing — the crate does not compile, so nothing runs. Three symbols were in
+that state (`IoKind`, `drafts_dir`, and two symlink tests that kept a fixture
+they no longer used), each behind a `#[cfg(unix)]` block inside an otherwise
+portable function.
+
+They are fixed by making the whole test Unix-only where that is what it is,
+rather than by threading `cfg` through a function body — which is also more
+honest: `no_command_accepts_a_path_outside_the_root` was two tests, a string
+half that needs no disk and a symlink half that does, and splitting them says so.
+
+**`tools/check.sh` now runs the gate including
+`cargo clippy --target x86_64-pc-windows-gnu`.** It costs one `rustup target
+add`, type-checks without linking, and would have caught all three of these plus
+the unstable-API failure at `0.7.2` — about thirty minutes of CI, found in
+seconds. The step skips with a message when the target is absent rather than
+failing.
+
+123 tests; native and Windows targets both clean.
+
 ## 0.7.2 - the second CI run found two more, and both were the product
 
 The first pass fixed the harness. This one is code and corpus.

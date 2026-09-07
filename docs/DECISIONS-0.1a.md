@@ -513,3 +513,25 @@ Windows renames at 0.1b and nothing at 0.1a, where nothing correlates.
 
 **Alternative if you disagree.** Add `windows-sys` to `notes-fs` now and
 implement the call ahead of its consumer.
+
+---
+
+## D-25 — The local gate cross-checks the Windows target
+
+**Decided.** `tools/check.sh` runs the whole pre-commit gate, including
+`cargo clippy --target x86_64-pc-windows-gnu` over the three crates.
+
+**Gap closed.** Two CI rounds spent on the same class of failure.
+
+**Why.** `cargo clippy` on Linux cannot see code behind `#[cfg(windows)]`, and
+cannot see that a helper used only under `#[cfg(unix)]` becomes **dead code** on
+Windows — where `-D warnings` turns it into a build failure. That is not a test
+failing; the crate does not compile, so nothing runs. It happened twice: once for
+`native_id` calling an unstable API, once for three unix-only test helpers.
+
+Checking the Windows target locally costs one `rustup target add`; it
+type-checks without linking, so no MSVC toolchain is involved. The step skips
+with a message when the target is not installed, rather than failing.
+
+**Alternative if you disagree.** Keep discovering it in CI, at roughly ten
+minutes a round.

@@ -5,7 +5,8 @@
 //! exists (`ARCHITECTURE.md` §4).
 
 use notes_core::{DraftChoice, DraftReason, SaveResult, WorkspaceService};
-use notes_model::{CoreError, IoKind, RelPath};
+use notes_model::{CoreError, RelPath};
+#[cfg(unix)]
 use std::path::PathBuf;
 
 struct Fixture {
@@ -35,6 +36,7 @@ fn rel(s: &str) -> RelPath {
     RelPath::parse(s).unwrap()
 }
 
+#[cfg(unix)]
 fn drafts_dir(svc: &WorkspaceService, id: notes_model::WorkspaceId) -> PathBuf {
     notes_core::paths::drafts_dir(&notes_core::paths::workspace_dir(svc.data_dir(), id))
 }
@@ -89,31 +91,36 @@ fn snapshot(root: &std::path::Path) -> Vec<(String, u64)> {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn no_command_accepts_a_path_outside_the_root() {
-    let f = setup();
+fn no_command_accepts_a_path_that_escapes_as_a_string() {
     for bad in ["../escape.md", "sub/../../escape.md", "/etc/passwd"] {
         assert!(RelPath::parse(bad).is_err(), "{bad} must not even parse");
     }
+}
 
-    #[cfg(unix)]
-    {
-        let outside = tempfile::tempdir().unwrap();
-        std::fs::write(outside.path().join("secret.md"), b"# secret\n").unwrap();
-        std::os::unix::fs::symlink(
-            outside.path().join("secret.md"),
-            f.work.path().join("link.md"),
-        )
-        .unwrap();
-        let mut svc = f.svc;
-        assert!(matches!(
-            svc.open_note(&rel("link.md")),
-            Err(CoreError::SymlinkNotFollowed { .. })
-        ));
-        assert_eq!(
-            std::fs::read(outside.path().join("secret.md")).unwrap(),
-            b"# secret\n"
-        );
-    }
+/// The half that needs a disk: a symlink is a well-formed relative path that
+/// resolves elsewhere, so no string rule can catch it.
+#[cfg(unix)]
+#[test]
+fn no_command_follows_a_symlink_out_of_the_root() {
+    let f = setup();
+    let outside = tempfile::tempdir().unwrap();
+    std::fs::write(outside.path().join("secret.md"), b"# secret\n").unwrap();
+    std::os::unix::fs::symlink(
+        outside.path().join("secret.md"),
+        f.work.path().join("link.md"),
+    )
+    .unwrap();
+
+    let mut svc = f.svc;
+    assert!(matches!(
+        svc.open_note(&rel("link.md")),
+        Err(CoreError::SymlinkNotFollowed { .. })
+    ));
+    assert_eq!(
+        std::fs::read(outside.path().join("secret.md")).unwrap(),
+        b"# secret\n",
+        "the file outside the root must be untouched"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +202,7 @@ fn a_suspended_note_keeps_its_edits_going_to_the_draft() {
 #[cfg(unix)]
 #[test]
 fn a_denied_write_is_reported_and_leaves_the_buffer_recoverable() {
+    use notes_model::IoKind;
     use std::os::unix::fs::PermissionsExt;
     // Root ignores the permission bits, so the denial this test needs cannot be
     // arranged — as it is in the Arch CI container. Skipping is honest;

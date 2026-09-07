@@ -68,25 +68,21 @@ fn a_symlink_out_of_the_root_is_refused_not_followed() {
     );
 }
 
+/// A symlinked *directory* mid-path is the case a check on the final component
+/// would miss.
+#[cfg(unix)]
 #[test]
 fn a_symlinked_directory_is_refused_mid_path() {
     let (dir, fs) = workspace();
     let outside = tempfile::tempdir().unwrap();
     std::fs::write(outside.path().join("secret.md"), b"# secret\n").unwrap();
-
-    #[cfg(unix)]
     std::os::unix::fs::symlink(outside.path(), dir.path().join("escape")).unwrap();
-    #[cfg(not(unix))]
-    return;
 
-    #[cfg(unix)]
-    {
-        let p = RelPath::parse("escape/secret.md").unwrap();
-        assert!(matches!(
-            fs.read(&p),
-            Err(CoreError::SymlinkNotFollowed { .. })
-        ));
-    }
+    let p = RelPath::parse("escape/secret.md").unwrap();
+    assert!(matches!(
+        fs.read(&p),
+        Err(CoreError::SymlinkNotFollowed { .. })
+    ));
 }
 
 #[test]
