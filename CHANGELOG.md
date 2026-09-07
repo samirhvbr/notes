@@ -34,6 +34,35 @@ in `version.md` are otherwise going to be read as the same thing.
 This is a `Y` bump rather than a `Z`: the repository went from having no product
 definition to having one, and every later decision is measured against it.
 
+## 0.2.0 - record the architecture in docs/
+
+[docs/architecture.md](docs/architecture.md), the second half of the scope
+conversion. It opens with the layering rule — Markdown is the source of truth,
+SQLite is index and cache, the server is sync, REST is integrations, MCP is
+agents — because that is the rule every later proposal gets checked against, and
+the two forbidden shapes (SQLite as the only copy of a note; a proprietary
+format with a Markdown export bolted on afterwards) are written down as
+forbidden rather than left to be inferred.
+
+Two things in the draft contradicted each other and are resolved here. The
+`apps/` + `crates/` + `server/` layout and the `src/` + `src-tauri/` layout are
+not two proposals: the second is what lives *inside* `apps/notes-app/`. The page
+states both levels together, and adds the rule that makes the split worth
+anything — **the Rust logic lives in `crates/`, and `src-tauri/` stays a thin
+shell with no business logic**, which is what lets `server/` reuse the core at
+milestone 0.5 instead of extracting it under pressure.
+
+The filesystem abstraction is documented as existing from milestone 0.1, when it
+will have exactly one adapter behind it. That looks like premature generality, so
+the page carries the reason inline: "a folder the user picked" is a desktop
+concept that iOS does not have, and finding that out after the UI has been
+written against local paths is a UI rewrite.
+
+The sync section states the constraint that shapes the data model years before
+sync is built — `modified_at` alone cannot synchronise anything, because clocks
+disagree, filesystems round timestamps differently, and a restored backup
+rewrites them all.
+
 ## 0.1.1 - rename the project to notes
 
 The project was called `franknote` until this commit. The name is dropped
