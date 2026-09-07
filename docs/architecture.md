@@ -1,11 +1,22 @@
 # Architecture — how notes is put together
 
+> **Status:** `SUPERSEDED` · **Do not build against this file.** The architecture
+> document milestone 0.1a is built against is [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+> at the repository root — it is aligned to `.continue/SCOPE_final.md` v2.0 and
+> closes all of its §20. This page was derived from the **v1** draft and
+> contradicts v2 in several places, identity and app-data layout among them. It
+> is kept only as the record of what was understood before v2 arrived.
+>
+> <details><summary>original status line</summary>
+>
 > **Status:** `PROPOSED` · **Nothing described here has been built yet.** This
 > document is the worked-out form of a specification that still lives in the
 > queue, [`../.continue/`](../.continue/README.md), and **the queue is the
 > authority on intent while both exist** — intent changes there, and this page is
 > updated when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
 > A section becomes `ACTIVE` when its code exists and works.
+>
+> </details>
 >
 > The structure of the system and the rules it must not
 > break. What the product is lives in [product.md](product.md); the order things

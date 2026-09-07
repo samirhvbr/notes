@@ -197,6 +197,29 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.10 - track ARCHITECTURE.md and retire the v1-derived page it replaces
+
+`ARCHITECTURE.md` at the repository root, written by the owner and aligned to
+`.continue/SCOPE_final.md` v2.0. It closes every item SCOPE §20 delegates —
+layout, crates, core types, app-data schemas, the command contract, `CoreError`,
+the inter-process lock, the markdown IR, `Caps`, distribution — and its §18 lists
+the decisions to record as ADRs. It is `PROPOSED` and becomes `ACTIVE` in the
+commit that ships 0.1a, which is when those ADRs get written and numbered from
+the last one here.
+
+It arrived untracked. Committing it is the same rule that `0.2.0` broke in the
+other direction: a document the project is about to be built from, existing only
+in one working tree, is one accident from being the loss this repository has
+already paid for once.
+
+**Two architecture documents was the actual risk**, and this closes it.
+`docs/architecture.md` — derived from the **v1** draft — is marked `SUPERSEDED`
+with a line telling the reader not to build against it, and it names the file
+that replaces it. It contradicts v2 on identity and on the app-data layout, and a
+stale document is worse than a missing one precisely because it has the authority
+of being written down. It is kept rather than deleted: it is the record of what
+was understood before v2, and its original status line is preserved underneath.
+
 ## 0.3.9 - track Cargo.lock, which the spike build produced and 0.3.7 missed
 
 The workspace builds a binary application, so the lockfile is part of the source:
