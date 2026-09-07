@@ -181,3 +181,136 @@ from the UI.
 
 **Alternative if you disagree.** Add `trash` now and set `caps.trash` from
 whether it succeeds, ahead of the command that uses it.
+
+---
+
+## D-09 — The registry is populated when a note is **opened**, never by listing
+
+**Decided.** `list_dir` assigns no `NoteId` and reads no file. `open_note`
+hashes the note, assigns or refreshes its record, and persists the registry.
+
+**Gap closed.** G1.
+
+**Why.** `ARCHITECTURE.md` §4.1 gives every record a `hash`, and §6.2 says a
+`NoteId` is assigned "the first time a note is seen". If *seen* meant *listed*,
+opening a workspace would hash every file — and the 0.1a acceptance criterion is
+that `fixtures/large` lists in under a second **without reading content**. Lazy
+population satisfies both, and costs nothing at 0.1a because nothing consumes a
+`NoteId` for a note that has never been opened.
+
+**Alternative if you disagree.** Populate in a background task after the first
+listing, which needs a progress state, a cancellation path and a rule for what
+happens to a save that arrives mid-scan.
+
+---
+
+## D-10 — `workspaces.json` carries `last_workspace`
+
+**Decided.** The global index gains `last_workspace: Option<WorkspaceId>`, and
+`restore_last_workspace()` uses it. A root that no longer exists returns
+`Unavailable` rather than `None`.
+
+**Gap closed.** G3.
+
+**Why.** "Persistir o último workspace" is 0.1a scope, and `ARCHITECTURE.md` §4
+gave the index only a list with `last_opened` per entry. Picking the maximum
+timestamp is a tie-break invented at read time, and it is wrong the moment two
+workspaces are opened in the same second. Distinguishing "there has never been a
+workspace" from "your notes are not where they were" is the other half: they are
+the two answers a user most needs told apart.
+
+**Alternative if you disagree.** Sort by `last_opened` and accept the tie-break.
+
+---
+
+## D-11 — `write_draft` is a command; the core cannot snapshot a buffer it does not hold
+
+**Decided.** `WorkspaceService::write_draft(note_id, text, buffer_version,
+base_rev, reason)` persists a buffer **without touching the note**.
+
+**Gap closed.** G2, G16, G17.
+
+**Why.** `ARCHITECTURE.md` §4.2 requires a draft after 30 s of dirty buffer and
+on exit, and §5 says that while autosave is suspended "edits keep going to the
+draft, every debounce". The frontend owns the buffer (§5, §13), so the core has
+no text to write on its own — every one of those three rules was unimplementable
+without a command, and none was in §7.1.
+
+**Alternative if you disagree.** Have the frontend keep its own recovery copy in
+`localStorage`, which puts the only copy of the user's words in the webview's
+storage rather than in the operational directory that has retention rules.
+
+---
+
+## D-12 — The temporary file has a deterministic name
+
+**Decided.** `.{name}.tmp`, not `.{name}.tmp-{random}`.
+
+**Gap closed.** A defect `tools/crash-save-loop.sh` found on its first run.
+
+**Why.** No process cleans up after `SIGKILL`, so a kill between the write and
+the rename leaves the temporary file behind — that is inherent, not a bug. With a
+random suffix, **every crash leaves a new one and they accumulate in the user's
+folder forever**. With one name per note, a crash leaves at most one and the next
+save of that note overwrites it. The crash loop asserts that bound directly.
+
+Two of our processes writing the same note are serialised by `write.lock`, so the
+shared name cannot collide, and a third-party editor does not use our naming.
+`IGNORE_DEFAULT` hides `.*.tmp` from the tree in any case, so the user does not
+see one even before it is overwritten.
+
+**Alternative if you disagree.** Keep random names and sweep stale temporaries on
+workspace open — which would make opening a folder modify it, against scope §2.3
+and the acceptance criterion that tests it.
+
+---
+
+## D-13 — `close_workspace` is told which buffers are dirty
+
+**Decided.** `close_workspace(dirty: &[NoteId])` returns
+`DirtyBuffers { note_ids, count }` when the slice is non-empty.
+
+**Gap closed.** G16, the `workspace_close` row of `ARCHITECTURE.md` §7.1.
+
+**Why.** The frontend owns buffers, so the core cannot know which are dirty. The
+error names them so the UI can offer to flush rather than only refuse.
+
+**Alternative if you disagree.** Have the core treat "has a draft" as "is dirty",
+which would refuse to close a workspace whose only draft is a *resolved* conflict
+nobody has cleared.
+
+---
+
+## D-14 — One migration rule, applied to every state file
+
+**Decided.** `state::load` handles `schema` for all of `registry.json`,
+`session.json`, `settings.json` and `workspaces.json`: a lower schema is backed
+up to `<file>.json.bak-<old>` before rewriting, and a **higher** one opens the
+workspace read-only and is never overwritten.
+
+**Gap closed.** G7, G8.
+
+**Why.** `ARCHITECTURE.md` §4.1 stated the rule once, inside the registry
+section, naming `registry.json.bak-<old-schema>` — which reads as registry-only,
+leaving drafts, sessions and settings with a `schema` field and no rule. Reading
+the schema before the body matters too: a file from the future must be detected
+even when its shape no longer deserialises into ours.
+
+**Alternative if you disagree.** Migrate per file with its own rule, which is
+four rules to keep in step and three of them will drift.
+
+---
+
+## D-15 — `DocStatus` is a type in `notes-model`, not a string assembled in the UI
+
+**Decided.** The seven states of scope §9 are an enum, exported to TypeScript
+with everything else. The frontend computes the value; the vocabulary is shared.
+
+**Gap closed.** G4.
+
+**Why.** Scope §9 says `Saved` may only appear after the backend confirms — a
+guarantee of the core, not a convention for whoever writes the component. Naming
+the states in the model is what lets a test assert on them.
+
+**Alternative if you disagree.** Leave it to the frontend and accept that the
+status vocabulary lives in a component.

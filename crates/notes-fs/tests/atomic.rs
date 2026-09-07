@@ -64,7 +64,7 @@ fn a_write_leaves_no_temporary_behind() {
         .unwrap()
         .flatten()
         .map(|e| e.file_name().to_string_lossy().to_string())
-        .filter(|n| n.contains(".tmp-"))
+        .filter(|n| n.ends_with(".tmp"))
         .collect();
     assert!(leftovers.is_empty(), "temp files left behind: {leftovers:?}");
 }

@@ -105,15 +105,21 @@ impl LocalFs {
             CoreError::Internal { message: "target has no file name".into() }
         })?;
         // Same directory, therefore the same volume, therefore the rename is
-        // atomic and `same_volume_move` holds. Uniqueness comes from the pid,
-        // a process-wide counter and the clock — enough for a name that lives
-        // for milliseconds, and no `rand` dependency for it.
-        let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.subsec_nanos())
-            .unwrap_or(0);
-        Ok(dir.join(format!(".{name}.tmp-{:x}{:x}{:x}", std::process::id(), n, now)))
+        // atomic and `same_volume_move` holds.
+        //
+        // **The name is deterministic, and that is a deliberate change from a
+        // random one.** A `SIGKILL` between the write and the rename leaves the
+        // temporary file behind — no process can clean up after being killed —
+        // and with a random name every crash leaves a *new* one, so they
+        // accumulate in the user's folder forever. With one name per note, a
+        // crash leaves at most one, and the next save of that note overwrites
+        // it. `tools/crash-save-loop.sh` asserts exactly that bound.
+        //
+        // Two of our processes writing the same note are serialised by
+        // `write.lock`, so the shared name cannot collide; a third-party editor
+        // does not use our naming.
+        let _ = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+        Ok(dir.join(format!(".{name}.tmp")))
     }
 }
 

@@ -115,6 +115,26 @@ impl Caps {
     };
 }
 
+/// The seven states scope §9 requires the status bar to distinguish.
+///
+/// Named in the model rather than assembled in the UI for one reason: **`Saved`
+/// may only appear after the backend confirms**, which is a guarantee of the
+/// core and not a convention for whoever writes the component. The frontend
+/// computes the value from the last `SaveResult`, the open note's read-only
+/// reason and the workspace's availability; it never invents a seventh.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DocStatus {
+    Saved,
+    Pending,
+    Writing,
+    Conflict,
+    ReadOnly,
+    Error,
+    Unavailable,
+}
+
 /// One entry of a directory listing. `is_note` is the core's judgement, not the
 /// filesystem's.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]

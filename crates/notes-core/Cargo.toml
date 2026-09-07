@@ -1,0 +1,21 @@
+[package]
+name = "notes-core"
+version = "0.0.0"
+description = "WorkspaceService: registry, write protocol, drafts, session, settings."
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+notes-model = { workspace = true }
+notes-fs = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+dirs = { workspace = true }
+fd-lock = { workspace = true }
+ts-rs = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

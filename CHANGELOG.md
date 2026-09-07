@@ -197,6 +197,50 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.6.0 - notes-core: the write protocol, drafts, the registry and the lock
+
+117 tests, none of which needs Tauri or a window. Four of the eight 0.1a
+acceptance criteria are now automated tests rather than intentions.
+
+**The write protocol** is `ARCHITECTURE.md` §5 with `base_rev` explicit on the
+wire. The order matters and is asserted: identical content is a no-op that never
+moves mtime, so an unchanged save leaves `git status` clean; a disk whose bytes
+already equal the buffer is *convergence*, not a conflict; a change in mtime with
+an unchanged hash is a touch, and only a changed hash is a conflict. Size and
+mtime never authorise an overwrite on their own.
+
+**A failed write is a result, not an error**, and that was a real bug found by
+writing the acceptance test first: propagating `Err` out of `save_note` skipped
+the draft, so "disco cheio / permissão negada → buffer recuperável ao reabrir"
+would have been false while the code looked right. The test denies write
+permission on the directory and asserts the draft holds the buffer verbatim.
+
+**`tools/crash-save-loop.sh` found a defect on its first run.** The note never
+truncated across sixty kills — but every `SIGKILL` between the write and the
+rename left a temporary file behind, and with a random suffix **they accumulate
+in the user's folder forever**. No process cleans up after being killed, so the
+fix is not cleanup: the temporary name is now deterministic, one per note, and
+the next save overwrites it. The loop asserts that bound rather than asserting
+zero, because zero is not achievable and a test that demands it would be
+disabled within a week.
+
+Seven more decisions in `docs/DECISIONS-0.1a.md`, each with its alternative. The
+load-bearing ones: the registry is populated when a note is **opened** and never
+by listing, because a `hash` per record plus population-on-listing would mean
+reading every file in a workspace the criterion says must list in under a second;
+`write_draft` exists as a command at all, because §4.2 wants a draft after 30 s
+of dirty buffer and on exit while §5 gives the buffer to the frontend, so all
+three rules were unimplementable; and `workspaces.json` gains `last_workspace`,
+because picking the maximum `last_opened` is a tie-break invented at read time
+that is wrong the moment two workspaces open in the same second.
+
+State loading reads the `schema` before the body, so a file written by a newer
+build is detected even when its shape no longer parses — that workspace opens
+read-only and **nothing is overwritten**, with a test that asserts the bytes
+survive.
+
+A `Y` bump: a new crate.
+
 ## 0.5.0 - notes-model and notes-fs, with the root jail and the atomic write
 
 Two crates, 76 tests, no Tauri anywhere near them.
