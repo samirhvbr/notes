@@ -105,22 +105,25 @@ def gen_edge() -> list[str]:
         "front-matter-not-first.md": b"\n---\ntitle: nao conta\n---\n\n# corpo\n",
         "tabs.md":               b"# tabs\n\n\tindentado com tab\n\t\tmais fundo\n",
         "com espaco.md":         b"# nome com espaco\n\nok\n",
-        "Duplicate.md":          b"# maiuscula\n\nA\n",
-        "duplicate.md":          b"# minuscula\n\nb\n",
         "CASE.md":               b"# caixa alta\n\nok\n",
     }
-    # Names differing only by Unicode normalisation: two files on Linux, one on
-    # macOS. Written with explicit forms so the difference is in the bytes.
-    files[unicodedata.normalize("NFC", "café-nfc.md")] = b"# nfc\n\nok\n"
-    files[unicodedata.normalize("NFD", "café-nfd.md")] = b"# nfd\n\nok\n"
-    files["acentuacao-ção.md"] = b"# acentuacao no nome\n\nok\n"
+    files[unicodedata.normalize("NFC", "acentuacao-\u00e7\u00e3o.md")] = b"# acentuacao no nome\n\nok\n"
 
-    # Deliberately NOT here: a name ending in a dot. Git cannot check such a
-    # file out on Windows — `error: invalid path` aborts the clone before any
-    # test runs — so committing one makes the whole repository unusable there.
-    # The rule it was meant to exercise (a new name may not end in a dot) is a
-    # unit test on `portable_name`, and the "an existing odd name is flagged,
-    # never renamed" half is created at runtime by a test that skips on Windows.
+    # Deliberately NOT here, for the same reason as the trailing dot: a set of
+    # names some target filesystem cannot hold at once must not be committed,
+    # because the checkout on that platform is already wrong before any test
+    # runs. Both were found by the macOS CI job.
+    #
+    #   Duplicate.md + duplicate.md  collapse into one file on case-insensitive
+    #                                APFS or NTFS: git checks one out over the
+    #                                other and reports the survivor as modified.
+    #   café-nfc.md + café-nfd.md    APFS normalises to NFD, so the name in the
+    #                                index and the name on disk disagree — git
+    #                                sees one missing and one untracked.
+    #
+    # Both pairs are created at runtime by tests that skip on a filesystem which
+    # cannot hold them.
+
     written = []
     for name, data in files.items():
         try:

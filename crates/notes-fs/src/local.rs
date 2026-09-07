@@ -333,16 +333,22 @@ fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
     })
 }
 
+/// Windows reports no native id at 0.1a.
+///
+/// `MetadataExt::volume_serial_number` and `file_index` sit behind the unstable
+/// `windows_by_handle` feature, so a stable build cannot call them — the Windows
+/// CI job did not fail a test, it **failed to compile**. Reading them properly
+/// means `GetFileInformationByHandle` through `windows-sys`, which is a
+/// dependency decision and belongs to 0.1b, where the first consumer — identity
+/// correlation after an external rename — arrives.
+///
+/// The degradation is the one `docs/ARCHITECTURE.md` §11 already specifies:
+/// without a native id, correlation falls back to the content hash alone and
+/// yields a **new** `NoteId` in more ambiguous cases. That is the safe
+/// direction, so this costs precision on Windows renames and nothing else.
 #[cfg(windows)]
-fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
-    use std::os::windows::fs::MetadataExt;
-    match (meta.volume_serial_number(), meta.file_index()) {
-        (Some(v), Some(i)) => Some(NativeId::Windows {
-            volume: v as u64,
-            index: i,
-        }),
-        _ => None,
-    }
+fn native_id(_: &fs::Metadata) -> Option<NativeId> {
+    None
 }
 
 #[cfg(not(any(unix, windows)))]

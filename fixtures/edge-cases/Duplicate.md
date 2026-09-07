@@ -1,3 +1,0 @@
-# maiuscula
-
-A

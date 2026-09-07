@@ -197,6 +197,38 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.2 - the second CI run found two more, and both were the product
+
+The first pass fixed the harness. This one is code and corpus.
+
+**Windows did not fail a test — it failed to compile.**
+`MetadataExt::volume_serial_number` and `file_index` sit behind the unstable
+`windows_by_handle` feature, so `native_id` could never have built on stable.
+It now returns `None` there and `Caps::LOCAL.native_id` is `cfg!(unix)`, which is
+the degradation `ARCHITECTURE.md` §11 already specifies: correlation falls back
+to the content hash and yields a new `NoteId` in more ambiguous cases — the safe
+direction, and it costs nothing at 0.1a because nothing correlates yet. Doing it
+properly needs `GetFileInformationByHandle` and belongs with its first consumer
+at 0.1b.
+
+**macOS found the general form of the trailing-dot defect.** Two more sets of
+names cannot be materialised on APFS: `Duplicate.md` and `duplicate.md` are *one
+file* on a case-insensitive filesystem, so git checks one out over the other and
+the survivor reports as modified on a clean clone; and APFS normalises to NFD, so
+the NFC name in the index and the NFD name on disk disagree, leaving one missing
+and one untracked. Both pairs are gone from the committed corpus and are created
+at runtime by tests that **ask the filesystem what it does** rather than assume —
+the case test asserts a collision only where the root folds case.
+
+The rule generalises, and is written down: a committed fixture must be
+materialisable on every platform in the matrix. What tests a thing a filesystem
+cannot represent is built at runtime.
+
+That is three defects in two runs that only a real matrix could find, and two of
+them made the repository unusable on a platform before a single test executed.
+122 tests; `fmt`, `clippy -D warnings`, the workspace suite and the generated
+types are all clean here.
+
 ## 0.7.1 - the CI matrix ran for the first time and found four real problems
 
 Three were the test harness. **One made the repository unclonable on Windows.**

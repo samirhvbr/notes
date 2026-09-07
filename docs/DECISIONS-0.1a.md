@@ -464,3 +464,52 @@ fraction of the time.
 
 **Alternative if you disagree.** Install the system libraries on the contracts
 job too, and pay a GTK build for a grep.
+
+---
+
+## D-23 — The corpus holds no set of names a target filesystem cannot hold at once
+
+**Decided.** Removed from `fixtures/edge-cases/`: `Duplicate.md` +
+`duplicate.md`, and `café-nfc.md` + `café-nfd.md`. Both pairs are created at
+runtime by tests that adapt to what the filesystem under them actually does.
+
+**Gap closed.** Two macOS CI failures, and the general form of the trailing-dot
+defect (D-20).
+
+**Why.** On case-insensitive APFS the two `duplicate` names are **one file**:
+git checks one out over the other, and the survivor reports as modified on a
+clean clone. APFS also normalises to NFD, so the NFC name in the index and the
+NFD name on disk disagree — git sees one missing and one untracked. In both cases
+the working tree is wrong before any test runs, and the byte-preservation script
+correctly refuses to start on a dirty corpus.
+
+The rule is now general: **a committed fixture must be materialisable on every
+platform in the CI matrix.** Anything testing what a filesystem cannot represent
+is created at runtime, by a test that asks the filesystem rather than assuming.
+
+**Alternative if you disagree.** Keep the pairs and exclude the corpus from the
+macOS and Windows jobs, which removes the byte-preservation criterion from the
+two platforms where it is most likely to break.
+
+---
+
+## D-24 — `native_id` is Unix-only at 0.1a
+
+**Decided.** `native_id` returns `None` on Windows and `Caps::LOCAL.native_id`
+is `cfg!(unix)`.
+
+**Gap closed.** A compile failure, not a test failure.
+
+**Why.** `MetadataExt::volume_serial_number` and `file_index` are behind the
+unstable `windows_by_handle` feature, so the Windows job did not fail a test —
+**it failed to build**. Reading a file index properly means
+`GetFileInformationByHandle` through `windows-sys`, a dependency decision whose
+first consumer (identity correlation after an external rename) arrives at 0.1b.
+
+`ARCHITECTURE.md` §11 already specifies the degradation: without a native id,
+correlation falls back to the content hash and yields a **new** `NoteId` in more
+ambiguous cases — the safe direction, already chosen. So this costs precision on
+Windows renames at 0.1b and nothing at 0.1a, where nothing correlates.
+
+**Alternative if you disagree.** Add `windows-sys` to `notes-fs` now and
+implement the call ahead of its consumer.

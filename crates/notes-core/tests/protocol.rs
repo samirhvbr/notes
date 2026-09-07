@@ -598,3 +598,63 @@ fn an_existing_name_with_a_trailing_dot_is_listed_and_left_alone() {
     );
     assert!(odd.exists(), "and never renamed");
 }
+
+/// A name that differs only by case collides, on a root that folds case.
+///
+/// Created at runtime rather than committed: `Duplicate.md` and `duplicate.md`
+/// are one file on case-insensitive APFS or NTFS, so committing both makes the
+/// checkout wrong on those platforms before any test runs — which is how the
+/// macOS CI job found it.
+#[test]
+fn a_name_differing_only_by_case_is_refused_when_the_root_folds_case() {
+    let mut f = setup();
+    std::fs::write(f.work.path().join("Nota.md"), b"# maiuscula\n").unwrap();
+    let folds = std::fs::metadata(f.work.path().join("nota.md")).is_ok()
+        && std::fs::read(f.work.path().join("nota.md")).unwrap() == b"# maiuscula\n";
+
+    // Re-open so the case probe sees the file that was just created.
+    f.svc.open_workspace(f.work.path()).unwrap();
+    let result = f.svc.create_note(&RelPath::root(), "NOTA");
+
+    if folds {
+        assert!(
+            matches!(result, Err(CoreError::AlreadyExists { .. })),
+            "a case-folding root must refuse a colliding name, got {result:?}"
+        );
+    } else {
+        assert!(
+            result.is_ok(),
+            "a case-sensitive root allows it: {result:?}"
+        );
+    }
+}
+
+/// A name in NFD is a distinct file where the filesystem stores what it is
+/// given, and the same file where it normalises. Created at runtime for the
+/// same reason as the case pair.
+#[test]
+fn a_name_in_nfd_is_compared_against_its_nfc_form() {
+    let mut f = setup();
+    let nfc = "cafe\u{301}.md"; // e + combining acute — NFD on disk
+    std::fs::write(f.work.path().join(nfc), b"# nfd\n").unwrap();
+    f.svc.open_workspace(f.work.path()).unwrap();
+
+    let listed: Vec<_> = f
+        .svc
+        .list_dir(&RelPath::root())
+        .unwrap()
+        .into_iter()
+        .map(|e| e.name)
+        .collect();
+    assert!(
+        listed.iter().any(|n| n.contains("caf")),
+        "the file is listed under whatever form the filesystem stored: {listed:?}"
+    );
+
+    // Creating the composed form collides: CompareKey normalises, RelPath does not.
+    let result = f.svc.create_note(&RelPath::root(), "café");
+    assert!(
+        matches!(result, Err(CoreError::AlreadyExists { .. })),
+        "NFC and NFD are the same name to compare against, got {result:?}"
+    );
+}

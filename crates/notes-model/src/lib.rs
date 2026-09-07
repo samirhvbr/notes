@@ -144,12 +144,18 @@ impl Caps {
     };
 
     /// A local POSIX or NTFS filesystem.
+    ///
+    /// `native_id` is Unix-only at 0.1a: the standard library's Windows
+    /// accessors are behind an unstable feature, so a stable build cannot read
+    /// a file index. `docs/ARCHITECTURE.md` §11 already specifies what is lost —
+    /// correlation falls back to the content hash and yields a new id in more
+    /// ambiguous cases, which is the safe direction.
     pub const LOCAL: Caps = Caps {
         atomic_replace: true,
         rename: true,
         trash: true,
         watch: true,
-        native_id: true,
+        native_id: cfg!(unix),
         preserve_mode: cfg!(unix),
         create_new: true,
         same_volume_move: true,
