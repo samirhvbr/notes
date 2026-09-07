@@ -1,4 +1,4 @@
-# Documentation — franknote
+# Documentation — notes
 
 > **Status:** `ACTIVE`
 

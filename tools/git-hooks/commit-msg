@@ -12,7 +12,7 @@
 set -euo pipefail
 
 # Rename this to your project prefix, e.g. SHVIA_NO_HOOK. One place to change.
-HOOK_ESCAPE_VAR="FRANKNOTE_NO_HOOK"
+HOOK_ESCAPE_VAR="NOTES_NO_HOOK"
 
 if [ "${!HOOK_ESCAPE_VAR:-0}" = "1" ]; then
   echo "commit-msg: skipped ($HOOK_ESCAPE_VAR=1)" >&2

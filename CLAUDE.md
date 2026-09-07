@@ -1,4 +1,4 @@
-# franknote — Instructions for Claude Code
+# notes — Instructions for Claude Code
 
 <!--
   The content below the H1 is duplicated between CLAUDE.md (read by Claude
@@ -54,13 +54,13 @@ Two hooks then run, and each exists because the other cannot reach its moment:
 minutes becomes `--no-verify` the following week, and then the control is dead.
 **With no reachable remote it degrades with a warning, never a refusal.** Escape
 hatch declared in both, named by `HOOK_ESCAPE_VAR` at the top of each hook —
-rename it to `FRANKNOTE_NO_HOOK`.
+rename it to `NOTES_NO_HOOK`.
 
 ---
 
 ## What this project is
 
-**franknote** — a desktop app for writing Markdown, standalone and optionally linked to a public Git repository
+**notes** — a desktop app for writing Markdown, standalone and optionally linked to a public Git repository
 
 <!-- Replace the block below with what an agent actually needs: the stack, where
      the entry points are, what runs locally, and what must never be touched. -->

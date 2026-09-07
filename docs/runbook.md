@@ -1,4 +1,4 @@
-# Runbook — franknote
+# Runbook — notes
 
 > **Status:** `ACTIVE` · From a clean machine to a running environment, and the
 > checklists that gate a release.
@@ -13,8 +13,8 @@ _Fill in: runtimes and versions, system packages, accounts and access needed._
 ## 2. From a clean machine to running
 
 ```bash
-git clone git@github.com:samirhvbr/franknote.git
-cd franknote
+git clone git@github.com:samirhvbr/notes.git
+cd notes
 git config core.hooksPath tools/git-hooks   # once per clone — see §5
 
 # install, configure, run — fill this in
@@ -53,7 +53,7 @@ git commit --allow-empty -m "feat: teste"                      # must be REJECTE
 git commit --allow-empty -m "0.1.0 - primeiro commit do repo"  # must be accepted
 ```
 
-Rename `HOOK_ESCAPE_VAR` at the top of each hook to `FRANKNOTE_NO_HOOK`.
+Rename `HOOK_ESCAPE_VAR` at the top of each hook to `NOTES_NO_HOOK`.
 Rules: [versioning.md](versioning.md).
 
 ## 6. Pre-flight before making a repository public

@@ -1,4 +1,4 @@
-# Claude Code profile — franknote
+# Claude Code profile — notes
 
 > **Status:** `ACTIVE`
 

@@ -30,7 +30,7 @@ The current `master` is the supported state.
 
 ## Context
 
-franknote is a **public** repository, and has been since its first commit.
+notes is a **public** repository, and has been since its first commit.
 
 That makes this file the first point of contact for anyone reporting a problem
 from outside the house, and it makes the pre-flight in

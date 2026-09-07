@@ -1,4 +1,4 @@
-# Versioning and commits — franknote
+# Versioning and commits — notes
 
 > **Status:** `ACTIVE` · **Single source** for how a version is set and how a
 > commit is written in this repository.
@@ -248,7 +248,7 @@ reason. What it does not allow is an override nobody wrote down. `pre-push`
 stays useful either way.
 
 Escape hatch, declared in both: rename `HOOK_ESCAPE_VAR` at the top of each hook
-from `PROJECT_NO_HOOK` to **`FRANKNOTE_NO_HOOK`**.
+from `PROJECT_NO_HOOK` to **`NOTES_NO_HOOK`**.
 
 An escape hatch is not a loophole — it is what keeps the hooks installed. A
 guard with no declared bypass gets bypassed with `--no-verify`, which bypasses

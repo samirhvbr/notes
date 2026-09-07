@@ -8,7 +8,7 @@
     "ANTHROPIC_DEFAULT_OPUS_MODEL": "claude-opus-5"
   },
   "permissions": {
-    "_comment": "Project permissions for franknote. The allow-list starts at reading, writing and git — NOTHING for your stack is granted yet. GRANTING A NEW PERMISSION IS THE OWNER'S ACT: it gets written into this file together with its reason and how to revert it, never applied silently. THE DENY-LIST ALWAYS BEATS THE ALLOW-LIST. ADR-019 GRANT (05/09/2026): the four read-only `gh` entries — `repo view`, `pr list`, `issue list`, `api repos/` — exist because the guest clause requires reading an upstream's language before we write into it, and a rule that prompts on every check is a rule that gets skipped. They read; they change nothing. To revert, delete those four lines: the clause then still applies, it just asks each time. `gh repo edit` and `gh repo delete` stay in `ask` and the deny-list still wins.",
+    "_comment": "Project permissions for notes. The allow-list starts at reading, writing and git — NOTHING for your stack is granted yet. GRANTING A NEW PERMISSION IS THE OWNER'S ACT: it gets written into this file together with its reason and how to revert it, never applied silently. THE DENY-LIST ALWAYS BEATS THE ALLOW-LIST. ADR-019 GRANT (05/09/2026): the four read-only `gh` entries — `repo view`, `pr list`, `issue list`, `api repos/` — exist because the guest clause requires reading an upstream's language before we write into it, and a rule that prompts on every check is a rule that gets skipped. They read; they change nothing. To revert, delete those four lines: the clause then still applies, it just asks each time. `gh repo edit` and `gh repo delete` stay in `ask` and the deny-list still wins.",
     "defaultMode": "plan",
     "allow": [
       "Read",

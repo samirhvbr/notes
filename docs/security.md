@@ -1,4 +1,4 @@
-# Security guidelines — franknote
+# Security guidelines — notes
 
 > **Status:** `ACTIVE` — normative. In a conflict with any other document, this
 > one wins.
