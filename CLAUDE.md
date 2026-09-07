@@ -65,7 +65,7 @@ iOS and Android. The user picks a folder; that folder is the workspace; the
 `.md` files inside it are the notes.
 
 **Read [docs/product.md](docs/product.md) before changing product behaviour and
-[docs/architecture.md](docs/architecture.md) before changing structure.** The
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing structure.** The
 one-line version of both:
 
 > The files belong to the user, not to the application.

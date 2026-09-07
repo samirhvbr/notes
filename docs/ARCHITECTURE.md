@@ -15,9 +15,9 @@ It is not the roadmap (`docs/roadmap.md`), not the product rules
 `.continue/SCOPE_final.md`), and not the security policy —
 **`docs/security.md` is normative and wins any conflict with this file.**
 
-This file replaces the earlier `docs/architecture.md`, which was derived from
-scope v1 and is superseded by the v2.0 scope on identity, data categories,
-registry location, concurrency and the crate set. ADRs referenced as `ADR-NNN` live in `docs/decisions.md`; the
+This file replaces the earlier scope-v1 architecture page, kept as
+[`architecture-v1.md`](architecture-v1.md) and superseded by the v2.0 scope on
+identity, data categories, registry location, concurrency and the crate set. ADRs referenced as `ADR-NNN` live in `docs/decisions.md`; the
 new decisions this document introduces are listed in §18 for recording there.
 
 ---
@@ -59,9 +59,10 @@ notes/
 └── .continue/
 ```
 
-Cargo workspace at the root (`crates/*`, `apps/notes-app/src-tauri`); pnpm
-workspace for `apps/*` and `packages/*`. `rust-toolchain.toml` pins stable at
-the version current when 0.1a starts; `.nvmrc` pins Node LTS.
+Cargo workspace at the root (`crates/*`, `apps/notes-app/src-tauri`); **npm**
+for `apps/*` and `packages/*`, with `package-lock.json` committed.
+`rust-toolchain.toml` pins stable at the version current when 0.1a starts;
+`.nvmrc` pins Node LTS.
 
 Dependency direction, enforced by `Cargo.toml` and checked in CI:
 
@@ -154,12 +155,27 @@ segment; `\`; NUL or C0 control characters; a trailing `/`. It does **not**
 normalize Unicode or case — the string is kept as given so it can be joined to
 the root and hit the file the user actually has.
 
-Case-sensitivity of the root is determined at registration without creating a
-file (product rule 3): macOS `pathconf(_PC_CASE_SENSITIVE)`; Windows assumed
-insensitive; Linux assumed sensitive; overridable in `registry.json`
-(`case_insensitive`). If a `list()` ever returns two entries equal under
-case-fold on a root marked insensitive, the flag flips to sensitive and is
-persisted.
+Case-sensitivity of the root is **probed, never assumed from the operating
+system** — a Linux mount can be exFAT, NTFS or SMB, and macOS can be formatted
+case-sensitive. The probe is read-only, because product rule 3 and the 0.1a
+acceptance criterion both forbid creating anything in a folder that was merely
+opened:
+
+1. `list()` the root (needed for the tree anyway). Pick an entry whose name
+   contains a cased letter.
+2. `stat()` that name with its case inverted. Both succeed **and** report the
+   same `native_id` → **insensitive**. The flipped name does not exist →
+   **sensitive**.
+3. No usable entry (empty root, or every name caseless) → **Unknown**, and
+   Unknown is treated as **insensitive**, which is the safe direction: treating a
+   sensitive filesystem as insensitive refuses a legitimate name, while the
+   reverse lets `note_create` pass a collision check and overwrite a note.
+
+The result is persisted in `registry.json` (`case_insensitive`) and
+**self-corrects in both directions** from later observations: two entries equal
+under case-fold on a root marked insensitive → flip to sensitive; a successful
+case-flipped `stat` with a matching `native_id` on a root marked sensitive →
+flip to insensitive. Both flips are persisted.
 
 ---
 
@@ -284,24 +300,31 @@ above) and, when the user enables it, in `.notes/config.json` (§16).
 
 The frontend owns the buffer; the core owns the disk state. Every tab carries a
 monotonic `buffer_version`. The frontend debounces (`autosave_ms`) and calls
-`note_save(note_id, text, buffer_version)`; `note_flush` is the same call with
-no debounce. Saves are queued per document inside the core; at most one save
+`note_save(note_id, text, buffer_version, base_rev)`; `note_flush` is the same
+call with no debounce.
+
+**`base_rev` is explicit on the wire** — the `BaseRev` the buffer was read
+against, returned by `note_open` or by the previous `Saved`. Scope §9 requires
+every write to carry `(buffer_version, BaseRev)`, and it makes the app and
+`notes-mcp` [0.3] a single write path with one contract instead of two: the
+agent already has to send the base it read (scope §15), and a core-held
+`open_rev` would have given the app a second, weaker rule. Saves are queued per document inside the core; at most one save
 per document is in flight.
 
 ```
-note_save(note_id, text, buffer_version)
+note_save(note_id, text, buffer_version, base_rev)
  1. take per-document async mutex
  2. take write.lock (§6)                                    ── LockTimeout → step 9
  3. encode: text + TextProfile → bytes (re-add BOM, EOL, final newline); hash
  4. if hash == registry.hash and stat(disk) == registry.(size,mtime)
        → release; return Saved { unchanged: true }          (no write, no mtime bump)
- 5. stat(disk); compare to open_rev (the BaseRev this tab opened against)
+ 5. stat(disk); compare to base_rev (sent by the caller)
        size+mtime equal                       → proceed
        differ → read + hash
-         hash == open_rev.hash                → proceed (touch-only change; refresh base)
+         hash == base_rev.hash                → proceed (touch-only change; refresh base)
          hash == new buffer hash              → convergence; update registry; return Saved
          else                                 → CONFLICT (step 8)
- 6. fs.write_atomic(path, bytes, expect: Some(open_rev))    ── fs re-stats immediately before rename
+ 6. fs.write_atomic(path, bytes, expect: Some(base_rev))    ── fs re-stats immediately before rename
  7. registry: size, mtime, hash, rev += 1; arm self-write expectation (path, hash, ttl 2 s);
     delete draft if draft.buffer_version ≤ buffer_version;
     release; return Saved { base_rev, buffer_version }
@@ -389,8 +412,8 @@ an IPC type.
 | | `workspace_reindex()` `[0.2]` | `()` |
 | tree | `tree_list(dir: RelPath)` | `Vec<Entry { path, kind, size?, is_note, is_symlink }>` — one level, lazy |
 | notes | `note_open(path: RelPath)` | `OpenedNote { note_id, text, profile, base_rev, read_only: Option<reason>, draft: Option<DraftInfo> }` |
-| | `note_save(note_id, text, buffer_version)` | `SaveResult` = `Saved { base_rev, buffer_version, unchanged }` \| `Conflict { disk_rev }` \| `WriteFailed { kind }` |
-| | `note_flush(note_id, text, buffer_version)` | `SaveResult` |
+| | `note_save(note_id, text, buffer_version, base_rev)` | `SaveResult` = `Saved { base_rev, buffer_version, unchanged }` \| `Conflict { disk_rev }` \| `WriteFailed { kind }` |
+| | `note_flush(note_id, text, buffer_version, base_rev)` | `SaveResult` |
 | | `note_reload(note_id)` | `OpenedNote` |
 | | `note_close(note_id, buffer_version)` | `()` |
 | | `note_create(dir: RelPath, name: String)` | `Entry` — `AlreadyExists` on collision, by `CompareKey` |
@@ -457,7 +480,7 @@ return from background `[0.4]`.
 
 ```
 raw watcher events ─▶ notify-debouncer (200 ms) ─▶ normalize to FsEvent { Created | Modified | Removed | Renamed { from, to } }
-  ─▶ drop ignored dirs and our own temp files (.*.tmp-*)
+  ─▶ drop ignored entries (§16 IGNORE_DEFAULT) and our own temp files (.*.tmp-*)
   ─▶ self-write filter: (path, hash) matches an armed expectation, not expired → consume expectation, drop event
   ─▶ per path: stat; if (size, mtime) ≠ registry → hash; if hash ≠ registry → real change
   ─▶ dispatch:
@@ -591,11 +614,20 @@ re-probed when `root_native_id` changes.
   `CoreError` to the response. No branching on business state.
 - `asset_protocol.rs` — `notes-asset://` handler (§10).
 - `linux.rs` — before the WebView exists: if `WAYLAND_DISPLAY` is set and an
-  NVIDIA driver is present (`/proc/driver/nvidia/version` or `nvidia-smi` on
-  `PATH`) and `settings.linux.webkit_dmabuf_workaround != "off"`, set
-  `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Logged once. This is the black-window /
-  flicker fix for WebKitGTK on Wayland + NVIDIA and is an acceptance item of
-  milestone 0.0.
+  NVIDIA driver is present (`/proc/driver/nvidia/version`, `/sys/module/nvidia`,
+  or `nvidia-smi` on `PATH`), set `WEBKIT_DISABLE_DMABUF_RENDERER=1`. Logged
+  once. This is the black-window / flicker fix for WebKitGTK on Wayland + NVIDIA
+  and is an acceptance item of milestone 0.0.
+
+  **At 0.0 the workaround is unconditional** on that hardware: `settings.json`
+  belongs to 0.1a (§4.5, §17), so gating 0.0 on a settings key would gate it on a
+  file that does not exist. From 0.1a the gate is
+  `settings.linux.webkit_dmabuf_workaround` (`auto` | `off` | `force`), read
+  before the WebView, and **a missing or unreadable settings file degrades to
+  `auto`, never to `off`** — the failure mode of not applying it is a black
+  window, and the failure mode of applying it needlessly is slightly slower
+  compositing. An explicit `WEBKIT_DISABLE_DMABUF_RENDERER` already in the
+  environment is never overridden.
 
 Capabilities (`src-tauri/capabilities/default.json`): `core:default`,
 `dialog:allow-open` (directories only), `clipboard-manager:allow-read-text`,
@@ -648,13 +680,13 @@ network and gets its own ADR when it comes).
 | `notes-markdown` | golden HTML for `fixtures/basic`; every file in `fixtures/xss` produces no `<script>`, no `javascript:`, no remote fetch, no `file:` | Linux |
 | crash | `tools/crash-save-loop`: spawns a writer against `fixtures/large`, `SIGKILL`s at random points 1000×, asserts no truncated or empty note | all four CI OS, nightly and on release |
 | byte-preservation | open → save-unchanged for every file in `fixtures/basic` + `edge-cases`; `git status --porcelain` must be empty | all four CI OS |
-| frontend | `vitest` for stores and `ipc/` mapping; WebDriver e2e after 0.1c | Linux |
+| frontend | `vitest` for stores and `ipc/` mapping; a CI check that regenerated `ipc/types.ts` matches the committed file; WebDriver e2e after 0.1c | Linux |
 
 CI matrix: `ubuntu-latest`, `archlinux:latest` container (installs
 `webkit2gtk-4.1`, `gtk3`, `rustup`, builds the Tauri app — rolling breakage
 shows here first), `macos-latest`, `windows-latest`. Steps: `cargo fmt --check`,
-`cargo clippy -D warnings`, `cargo test --workspace`, `pnpm lint`, `pnpm
-typecheck`, `pnpm test`, `cargo tauri build`. A desktop milestone is not closed
+`cargo clippy -D warnings`, `cargo test --workspace`, `npm run lint`,
+`npm run typecheck`, `npm test`, `cargo tauri build`. A desktop milestone is not closed
 without green on all four (`docs/roadmap.md` §19 rule).
 
 `fixtures/large` is generated in CI by `tools/gen-large.sh` (deterministic
@@ -684,16 +716,36 @@ repository (CLAUDE.md golden rule 7).
 
 ## 16. `.notes/` portable configuration
 
-Off by default; opening a folder creates nothing in it. When the user enables
-"portable workspace settings", the app writes `.notes/config.json`:
+### The default ignore list is a constant, not configuration
 
-```json
-{ "schema": 1, "ignore": [".git", ".obsidian"], "attachments_dir": "attachments" }
+`IGNORE_DEFAULT` lives in `notes-core` and applies to every workspace whether or
+not `.notes/` exists:
+
+```rust
+// notes-core::ignore
+pub const IGNORE_DEFAULT: &[&str] = &[".notes", ".git", ".obsidian", ".trash"];
+// plus, by rule: any entry whose name starts with '.', and our own temp files
+// (`.<name>.tmp-<8 random>`).
 ```
 
-Rules: read on open if present; keys defined there override the per-workspace
-settings in app data; invalid JSON → logged, defaults used, the file is left
-alone. Never contains ids, index data, drafts, or anything the app needs to
+Scope §7.6 requires this list by default, and `.notes/` is off by default, so the
+list cannot live there — a default that only exists once the user opts in is not
+a default. The user's `.gitignore` is never read as a visibility policy.
+
+### `.notes/config.json`
+
+Off by default; opening a folder creates nothing in it. When the user enables
+"portable workspace settings", the app writes:
+
+```json
+{ "schema": 1, "ignore": ["build", "node_modules"], "attachments_dir": "attachments" }
+```
+
+Rules: read on open if present; **`ignore` extends `IGNORE_DEFAULT` and never
+replaces it** — there is no way to make the app show `.git/`, because a config
+file that can unhide the repository's internals is a foot-gun with no use case;
+other keys override the per-workspace settings in app data; invalid JSON →
+logged, defaults used, the file is left alone. Never contains ids, index data, drafts, or anything the app needs to
 open the folder. Fine to commit to Git; merge conflicts inside it are the
 user's, and the app tolerates them by falling back to defaults.
 
@@ -718,6 +770,19 @@ user's, and the app tolerates them by falling back to defaults.
 
 ---
 
+## 17.1 Points where this document overrides the Portuguese scope
+
+Resolved by the owner on 07/09/2026; `.continue/SCOPE_final.md` is not edited
+(the queue is not rewritten), so the divergence is recorded here.
+
+| Scope | Says | This document | Resolution |
+|---|---|---|---|
+| §5 crate list | `notes-markdown` untagged, so 0.1a by the diagram's convention | `[0.1b]` (§2, §17) | **This document wins.** Its first consumer is the 0.1b preview; front matter stays intact at 0.1a through the byte policy (§5.1), not through a parser |
+| §12 | Four resolutions: compare · keep mine · use disk · save as copy | `KeepLocal \| UseDisk \| SaveAsCopy` (§7.1) | **This document wins.** "Compare" is 0.1b UI over data the frontend already has; it changes nothing on disk, so it is not a command |
+| §12 | Draft written on conflict or write failure | Also on 30 s dirty, and on exit (§4.2) | **This document wins** — a superset. More situations in which a buffer survives cannot make the guarantee weaker |
+| §9 | Every write carries `(buffer_version, BaseRev)` | `note_save(..., base_rev)` (§5, §7.1) | **The scope wins**; this document was changed to match |
+| §7.6 | Default ignore list | `IGNORE_DEFAULT` in `notes-core` (§16) | Same list; the scope did not say where it lives |
+
 ## 18. Decisions this document introduces (record as ADRs)
 
 To be added to `docs/decisions.md` in the commit that makes this file `ACTIVE`;
@@ -726,15 +791,16 @@ numbers continue from the last ADR there.
 1. **Crate set extends ADR-003**: `notes-model`, `notes-markdown` added;
    `notes-index` created at 0.2, `notes-mcp` at 0.3, `notes-sync` at 0.6 —
    no crate exists before the milestone that uses it.
-2. **Identity never enters a note file.** No `id:` in front matter, not even
-   when sync is enabled (sharpens ADR-005). Identity lives in the registry and,
-   later, the server.
+2. **Identity never enters a note file, and the hash is not identity.** No
+   `id:` in front matter, not even when sync is enabled; identity lives in the
+   registry and, later, the server; the content hash is a correlation signal
+   with explicit ambiguity rules (§9). **Amends ADR-005**, whose Decision reads
+   "a file eventually carries `file_id` … `content_hash` …" — both halves are
+   amended by this one ADR, together with item 9, so ADR-005 is amended once.
 3. **Registry is operational state, separate from the index**: JSON in 0.1,
-   `registry.db` (own SQLite file, WAL) from 0.2; `index.db` is the only
-   deletable database — and it lives in app data, not in the workspace.
-   **Amends ADR-004:** `.notes/` remains optional and deletable, but the clause
-   placing `index.db` inside it is reversed (an active SQLite file copied by a
-   third-party sync client mid-transaction is a corrupt copy).
+   `registry.db` (own SQLite file, WAL) from 0.2, so that deleting the index can
+   never touch identity. **The `index.db` location is already ADR-012** and is
+   not recorded again here.
 4. **One data directory owned by the core** (`dirs::data_dir()/notes`), shared
    by the app and `notes-mcp`; Tauri's `app_data_dir()` is not used.
 5. **Cross-process coordination by advisory lock** (`write.lock`, flock /
@@ -743,11 +809,15 @@ numbers continue from the last ADR there.
    frontend has no Markdown parser.
 7. **Symlinks and junctions are not traversed** in the MVP.
 8. **One Tauri command per operation; types generated with `ts-rs`.**
-9. **Hash is correlation, not identity**: external rename reconnects a
-   `NoteId` only on a unique native-id or unique non-empty-hash match.
+9. *(folded into item 2 — one ADR amends ADR-005 once.)* The rule stands: an
+   external rename reconnects a `NoteId` only on a unique native-id or unique
+   non-empty-hash match.
 10. **Autosave and the base-rev guard ship together** in 0.1a; drafts and
     conflict snapshots are operational data with retention rules.
-11. **Linux WebKitGTK workaround** applied automatically on Wayland + NVIDIA;
-    Arch Linux is a release target via AUR and has its own CI job.
+11. **Linux WebKitGTK workaround** applied automatically on Wayland + NVIDIA,
+    unconditional at 0.0 and gated by a setting that degrades to `auto` from
+    0.1a.
+11b. **Arch Linux is a release target** via AUR, with its own CI job against
+    rolling `webkit2gtk-4.1`. (Separate subject from 11; separate ADR.)
 12. **Distribution requires signing**: no unsigned macOS or Windows artifact is
     published.

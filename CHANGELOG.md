@@ -197,6 +197,60 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.4.0 - move the architecture into docs/ and resolve the scope contradictions
+
+Milestone 0.1a starts here. Nothing prescriptive is left at the repository root:
+`ARCHITECTURE.md` moves to `docs/ARCHITECTURE.md`, and the scope-v1 page it
+replaced becomes `docs/architecture-v1.md` — which also removes the hazard of two
+files whose names differ only in case, on a filesystem where §11 of the same
+document says case may not distinguish them.
+
+The eight contradictions the review found are resolved in the document itself:
+
+**The scope wins on the write contract.** `note_save(note_id, text,
+buffer_version, base_rev)` — the `BaseRev` is explicit on the wire rather than
+held core-side. That is scope §9 as written, and it collapses the app and
+`notes-mcp` onto one write path: the agent already had to send the base it read,
+and a core-held `open_rev` would have given the app a second, weaker rule for the
+same guard.
+
+**The document wins on three**, all recorded in a new §17.1 rather than by
+editing the queue: `notes-markdown` is 0.1b because its first consumer is the
+0.1b preview and front matter survives 0.1a through the byte policy, not a
+parser; conflict resolution has three variants because "compare" changes nothing
+on disk and is therefore UI, not a command; and a draft is written on four
+occasions rather than two, a superset that cannot weaken the guarantee.
+
+**The default ignore list is a constant in `notes-core`**, not configuration. It
+could not live in `.notes/config.json`: that file is off by default, and a
+default that only exists once the user opts in is not a default. `.notes/`
+extends the list and can never replace it — no configuration file can unhide
+`.git/`.
+
+**The dmabuf workaround is unconditional at 0.0** and gated by a setting only
+from 0.1a, because `settings.json` is itself 0.1a: gating 0.0 on it would gate it
+on a file that does not exist. From 0.1a a missing settings file degrades to
+`auto`, never to `off` — not applying it yields a black window, applying it
+needlessly yields slightly slower compositing.
+
+**Case sensitivity is probed rather than assumed**, and the probe reads instead
+of writing — see `docs/DECISIONS-0.1a.md` D-01. The mechanism the owner specified
+would have created a temporary file inside a folder that was merely opened,
+which scope §2.3 forbids and a 0.1a acceptance criterion tests for. The intent is
+kept: nothing is assumed from the operating system, and the flag self-corrects in
+both directions.
+
+**npm, not pnpm** — the lockfile has been committed since `0.3.7`.
+
+`§18` is corrected for the ADR pass that closes 0.1a: items 2 and 9 fold into one
+ADR so that ADR-005 is amended once rather than twice in the same commit; item 3
+drops its `index.db` half, which is already ADR-012; and item 11 splits, because
+the WebKitGTK workaround and Arch-as-a-release-target are two subjects.
+
+`fixtures/large/` joins `.gitignore` under ADR-011's test. `.continue/` is
+untouched, as instructed — which leaves one stale link in its README pointing at
+the old root path.
+
 ## 0.3.11 - record what the 0.0 spike established, and what it did not
 
 `docs/SPIKE-0.0.md`, in two halves, because the second is the one that matters.

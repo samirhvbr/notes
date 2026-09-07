@@ -41,7 +41,7 @@ there is no schema to query directly. In exchange, every other decision in this
 project becomes cheap to reverse: the app can be rewritten, abandoned or
 replaced, and the user's notes are untouched. This is the decision the rest of
 the architecture hangs off — see
-[architecture.md §1](architecture.md#1-the-layering-rule).
+[architecture.md §1](architecture-v1.md#1-the-layering-rule).
 
 ---
 
@@ -240,7 +240,7 @@ mobile interface is adapted to mobile rather than a shrunk desktop.
 **Consequences.** Mobile users wait. The abstraction is carried for three
 milestones before a second implementation justifies it — accepted deliberately,
 with the reasoning recorded in
-[architecture.md §4](architecture.md#4-the-filesystem-abstraction) so it is not
+[architecture.md §4](architecture-v1.md#4-the-filesystem-abstraction) so it is not
 "simplified away" by a later reader who sees one adapter behind an interface.
 There is a real risk that the seam turns out to be cut in the wrong place when
 the iOS adapter is finally written; that is cheaper than a UI written directly

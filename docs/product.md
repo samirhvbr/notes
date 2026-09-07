@@ -10,7 +10,7 @@
 > The product definition. What the application is, what it
 > does, and what it deliberately does not do. The order in which it gets built is
 > in [roadmap.md](roadmap.md); how it is built is in
-> [architecture.md](architecture.md); why each irreversible choice was made is in
+> [architecture.md](architecture-v1.md); why each irreversible choice was made is in
 > [decisions.md](decisions.md).
 
 ## 1. What it is

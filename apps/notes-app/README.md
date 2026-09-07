@@ -58,4 +58,4 @@ directory.
 ## Where the real thing is specified
 
 [`../../.continue/SCOPE_final.md`](../../.continue/SCOPE_final.md) and
-[`../../ARCHITECTURE.md`](../../ARCHITECTURE.md).
+[`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

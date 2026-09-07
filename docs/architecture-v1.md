@@ -1,7 +1,7 @@
 # Architecture — how notes is put together
 
 > **Status:** `SUPERSEDED` · **Do not build against this file.** The architecture
-> document milestone 0.1a is built against is [`../ARCHITECTURE.md`](../ARCHITECTURE.md)
+> document milestone 0.1a is built against is [`ARCHITECTURE.md`](ARCHITECTURE.md)
 > at the repository root — it is aligned to `.continue/SCOPE_final.md` v2.0 and
 > closes all of its §20. This page was derived from the **v1** draft and
 > contradicts v2 in several places, identity and app-data layout among them. It

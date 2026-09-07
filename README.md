@@ -38,7 +38,7 @@ git config core.hooksPath tools/git-hooks
 | Path | What it is |
 |---|---|
 | [docs/product.md](docs/product.md) | **What notes is** — the local-first constraint, the workspace model, the editor, and what the first version deliberately does not do |
-| [docs/architecture.md](docs/architecture.md) | **How it is put together** — the layering rule, the stack, the repository layout, the filesystem abstraction, the index, the sync model |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | **How it is put together** — layout, crates, core types, app-data schemas, the command contract, `CoreError`, the write and concurrency protocol, `Caps`, distribution |
 | [docs/roadmap.md](docs/roadmap.md) | **The order it gets built in** — seven milestones, from a desktop editor to an MCP server |
 | [docs/decisions.md](docs/decisions.md) | **The ADRs** — what was decided, why, and what it cost |
 | [docs/](docs/README.md) | **The record** — the full index, plus security, versioning and runbooks |

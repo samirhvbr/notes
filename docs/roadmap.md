@@ -10,7 +10,7 @@
 > What is built when, and what each stage must be able to
 > do before the next one starts. What the product *is* lives in
 > [product.md](product.md); how it is put together, in
-> [architecture.md](architecture.md).
+> [architecture.md](architecture-v1.md).
 
 The stage numbers below are **product milestones, not repository versions.** The
 repository version is whatever `../version.md` says and moves per commit; a
@@ -89,7 +89,7 @@ iOS and Android, against the same core.
 
 **The interface is adapted, not shrunk.** This is also the stage that pays for
 the filesystem abstraction in
-[architecture.md](architecture.md#4-the-filesystem-abstraction), and the reason
+[architecture.md](architecture-v1.md#4-the-filesystem-abstraction), and the reason
 it is here rather than at 0.1 is
 [ADR-008](decisions.md#adr-008--desktop-first-mobile-at-milestone-04-behind-the-same-abstraction): "a folder the
 user chose" is a desktop concept, and iOS in particular has no equivalent — the

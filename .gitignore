@@ -31,6 +31,9 @@ dist/
 .vite/
 apps/notes-app/src-tauri/gen/schemas/
 
+# Generated test corpus — tools/gen-large.sh rebuilds it deterministically (ADR-011)
+fixtures/large/
+
 # OS noise
 .DS_Store
 Thumbs.db
