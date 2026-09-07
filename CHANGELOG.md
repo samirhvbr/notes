@@ -8,6 +8,32 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.2.0 - record the product scope and roadmap in docs/
+
+The scope arrived as a 1 338-line draft in `.continue/`, written in Portuguese.
+Two rules in this repository say it cannot stay there: a queue item that needs
+half a page belongs in `docs/` with a pointer left behind, and everything in the
+repository is written in English (US). This commit lands the first half of that
+conversion — [docs/product.md](docs/product.md) and
+[docs/roadmap.md](docs/roadmap.md).
+
+`product.md` is the definition: local-first, a user-chosen folder as the
+workspace, `.md` files on the filesystem as the source of truth, one dark theme,
+CodeMirror 6, Source/Preview/Split with Live Preview explicitly deferred, and the
+list of what the first version does not do. The promise it exists to protect is
+that the files belong to the user rather than to the application — everything
+else in the document is downstream of it.
+
+`roadmap.md` is the order: seven product milestones from a desktop editor to an
+MCP server. Its ordering constraint is that **each stage is useful on its own** —
+someone who stops receiving updates after the first one still has a working
+Markdown editor. It also states in its own header that its stage numbers are
+product milestones and not repository versions, because `0.3` there and `0.3.0`
+in `version.md` are otherwise going to be read as the same thing.
+
+This is a `Y` bump rather than a `Z`: the repository went from having no product
+definition to having one, and every later decision is measured against it.
+
 ## 0.1.1 - rename the project to notes
 
 The project was called `franknote` until this commit. The name is dropped

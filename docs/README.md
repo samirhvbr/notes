@@ -12,6 +12,8 @@ that lists everything stops being read.
 
 | Document | What it answers |
 |---|---|
+| [product.md](product.md) | **What notes is** — the local-first constraint the whole product hangs off, the workspace model, the file format and the promise that the app never rewrites a note it was not asked to, the interface, the editor and its view modes, autosave and write safety, search, links, and the explicit list of what the first version does not do. |
+| [roadmap.md](roadmap.md) | **The order it gets built in** — the seven product milestones from a desktop editor to an MCP server, what each must do before the next starts, and why each one is useful on its own. |
 | [versioning.md](versioning.md) | How a version is set and a commit is written. `version.md` is the sole authority and the version is the **first semver in it**; the `X`/`Y`/`Z` criteria **for this project**; `X.Y.Z - description in English` — and the host's convention instead, in a repository we do not own; **[tags and Releases](versioning.md#tags-and-releases)**; what the two git hooks check. |
 | [decisions.md](decisions.md) | **ADRs** — the chronological record of what was decided here and why, so it is not re-litigated. |
 | [security.md](security.md) | The normative security document. In a conflict with any other document, it wins. |
