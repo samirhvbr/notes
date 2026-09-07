@@ -1,8 +1,14 @@
 # Architecture
 
-**Status: PROPOSED** — becomes `ACTIVE` in the commit that ships milestone 0.1a.
-Sections tagged `[0.2]`, `[0.3]`, `[0.4]` stay `PROPOSED` until their milestone
-ships, and are here only so that 0.1a does not foreclose them.
+**Status: ACTIVE** — milestone 0.1a ships in the commit that made this line
+`ACTIVE`. Sections tagged `[0.1b]`, `[0.2]`, `[0.3]` and `[0.4]` remain
+`PROPOSED` until their milestone ships, and are here only so that 0.1a does not
+foreclose them.
+
+The decisions this document introduced are recorded as **ADR-013 … ADR-024** in
+[decisions.md](decisions.md); the calls taken while building, with their
+alternatives, are in [DECISIONS-0.1a.md](DECISIONS-0.1a.md); what each acceptance
+criterion is verified by is in [ACCEPTANCE-0.1a.md](ACCEPTANCE-0.1a.md).
 
 This document closes the decisions the product scope leaves to architecture:
 repository layout, crates, core types, the app-data layout and its schemas, the

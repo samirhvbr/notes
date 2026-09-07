@@ -135,7 +135,11 @@ the app.
 
 ## ADR-005 — Sync is out of the MVP, but the file identity model is not foreclosed
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · **amended** by
+[ADR-014](#adr-014--identity-lives-in-the-registry-never-in-the-note-and-the-hash-is-correlation)
+on two points of its Decision: identity is never written into a note file, and
+the content hash is a correlation signal rather than an identity field. The rest
+stands
 
 **Context.** Multi-device sync is at milestone 0.6, four milestones after the
 first usable app. The risk is not that it is late; it is that decisions taken now
@@ -402,3 +406,280 @@ keeps per-workspace state the user cannot see from their file manager, so where
 it lives has to be discoverable rather than folklore. ADR-004's test is untouched
 and still applies to everything proposed for `.notes/`: delete it, and if the
 user loses something they wrote, it never belonged there.
+
+---
+
+## ADR-013 — The crate set, and when each one is created
+
+**Status:** `ACCEPTED` · 07/09/2026 · extends
+[ADR-003](#adr-003--the-rust-logic-lives-in-crates-and-the-tauri-shell-stays-thin)
+
+**Context.** ADR-003 put the Rust logic in `crates/` and left the set open.
+Building it out invites the opposite failure: crates created early, empty, "so
+the structure is there", which are then refactored before they have a consumer
+to constrain them.
+
+**Decision.** `notes-model` (types, no I/O), `notes-fs` (the `FileSystem` trait,
+`LocalFs`, the root jail, the atomic write), `notes-core` (`WorkspaceService`)
+at 0.1a; `notes-markdown` at 0.1b, `notes-index` at 0.2, `notes-mcp` at 0.3,
+`notes-sync` at 0.6. **No crate exists before the milestone that uses it.**
+`notes-model` depends on nothing that does I/O — the rule that makes the write
+protocol testable against a fake filesystem.
+
+**Consequences.** `notes-markdown` is absent at 0.1a and front matter survives
+anyway, through the byte policy rather than a parser — which is the evidence the
+rule was right. The cost is that a crate boundary is decided when its first
+consumer appears rather than in advance, so a wrong cut is found later; against
+that, a boundary drawn with a consumer in hand is drawn from evidence.
+
+---
+
+## ADR-014 — Identity lives in the registry, never in the note, and the hash is correlation
+
+**Status:** `ACCEPTED` · 07/09/2026 · amends
+[ADR-005](#adr-005--sync-is-out-of-the-mvp-but-the-file-identity-model-is-not-foreclosed)
+
+**Context.** ADR-005's Decision reads "a file eventually carries `file_id` …
+`content_hash` …", which can be read as the file carrying them — and lists the
+hash among the identity fields. Both readings have to be closed before sync is
+built, and closing them separately would amend ADR-005 twice for one subject.
+
+**Decision.** A `NoteId` lives in the app's registry and, later, on the server.
+**Nothing is ever written into a `.md` file** — not a front-matter `id:`, not at
+0.1a, not when sync is enabled at 0.6. And **the hash is not identity**: an
+external rename reconnects a `NoteId` only on a unique native-id match or a
+unique non-empty-hash match. Zero-byte files are never correlated by hash, and
+any ambiguity yields a new id. Re-identifying is cheaper than attaching a note to
+the wrong history.
+
+**Consequences.** Copying a workspace folder produces a second workspace with new
+ids, and reconnecting to a server is an explicit flow rather than something that
+happens by itself. A user who wants portable identity across machines does not
+get it from the file, and if that is ever wanted it is a separate opt-in feature
+with the user told their files will change. In exchange the promise that the app
+never writes what the user did not type survives contact with sync, which is the
+milestone at which most note applications break it.
+
+---
+
+## ADR-015 — The registry is operational state, and moves to its own database at 0.2
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** The identity registry and the search index are both derived-looking
+files that live outside the workspace, and treating them alike is the mistake:
+the index is rebuildable from the notes, the registry is not. From 0.3 a second
+process (`notes-mcp`) updates the registry, and a JSON read-modify-write between
+two processes has no story better than a lock held for the whole file.
+
+**Decision.** The registry is **operational** state: it has retention and
+migration rules and no cleanup touches it. JSON at 0.1, moving to `registry.db`
+— a SQLite file **separate from `index.db`** — at 0.2, so "delete the index" can
+never touch identity. The `index.db` location is already
+[ADR-012](#adr-012--indexdb-lives-in-app-data-not-in-the-workspace) and is not
+re-decided here.
+
+**Consequences.** Two database files instead of one, with two schemas and two
+migration paths. The JSON at 0.1 is rewritten whole on every change, which is
+O(n) in the number of notes ever opened — acceptable while nothing consumes a
+`NoteId`, and the reason the move at 0.2 is stated as mandatory rather than
+conditional.
+
+---
+
+## ADR-016 — One data directory, resolved by the core
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** Tauri offers `app_data_dir()`, and using it is the obvious choice
+for an application built on Tauri. `notes-mcp` is not: from 0.3 it runs as a
+stdio process with no Tauri and no window, and it reads and writes the same
+registry.
+
+**Decision.** `notes-core` resolves the directory itself —
+`dirs::data_dir()/notes`, overridable by `NOTES_DATA_DIR`. Tauri's
+`app_data_dir()` is not used.
+
+**Consequences.** The bundle identifier no longer determines where state lives,
+so changing it does not strand anyone. `NOTES_DATA_DIR` is what makes the whole
+service testable without touching a developer's real notes, and it is what
+"portable install" will mean later. The cost is one more thing that must agree
+across processes, stated in one function rather than assumed twice.
+
+---
+
+## ADR-017 — Cross-process coordination is an advisory lock, per workspace
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** From 0.3 the app and `notes-mcp` write to the same files. Using the
+same crate does not share a lock; the lock has to be in the filesystem. A pid
+file is the usual reach, and it leaves a stale lock behind whenever a process
+dies badly — which is exactly when it matters.
+
+**Decision.** `write.lock` in the workspace's app-data directory, taken with an
+OS advisory lock (`flock` / `LockFileEx`), one per workspace, guarding the
+*stat → compare → replace* sequence and the registry update and nothing else.
+Timeout 5 s, then `LockTimeout`, handled as a write failure — a draft is written
+and the user is told. **There is no stale-lock problem by construction**: the
+kernel releases an advisory lock when its holder dies. It exists from 0.1a, when
+there is one process, so the protocol is exercised before a second arrives.
+
+**Consequences.** One lock per workspace rather than per note serialises two
+concurrent saves to different notes; hold time is milliseconds and simplicity
+wins. **The lock coordinates our processes only** — a third-party editor does not
+take it, and its writes are caught by the base-rev check instead. The scope does
+not promise mutual exclusion with the rest of the system, and this ADR does not
+either.
+
+---
+
+## ADR-018 — Preview crosses the IPC as sanitised HTML; outline and links as a slim document
+
+**Status:** `ACCEPTED` · 07/09/2026 · applies from 0.1b
+
+**Context.** The preview needs rendered Markdown in the WebView. Sending an AST
+and rendering in JavaScript would put a Markdown parser in the frontend, and
+sanitisation with it — inside the process that a malicious note is trying to
+reach.
+
+**Decision.** `notes-markdown` renders to HTML and `ammonia` sanitises it in
+Rust; that HTML crosses the IPC. A slim `Document` — headings, links, tasks,
+spans — crosses for outline and link work. The full AST does not, and the
+frontend contains no Markdown parser.
+
+**Consequences.** Sanitisation happens at one boundary, in one language, and can
+be tested against `fixtures/xss/` without a browser. Interactive preview features
+that would want the AST client-side have to ask the core instead, which is a
+round trip. Front matter preservation is not this crate's job at all — the byte
+policy keeps it intact because nothing rewrites the buffer.
+
+---
+
+## ADR-019 — Symlinks and junctions are not traversed
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** A symlink is a well-formed relative path that resolves somewhere
+else, which makes it the one way a validated `RelPath` can leave the workspace.
+Following them also makes the tree potentially infinite and identity ambiguous —
+two paths, one file.
+
+**Decision.** They appear in the tree marked as what they are and **do not
+open**. Every path is resolved segment by segment and a symlink anywhere along
+the way is refused, on every call rather than at open time. Following them is
+opt-in, later, with its own ADR.
+
+**Consequences.** A user who organises a workspace with symlinks finds them
+inert, and the tree shows why rather than hiding them. The check costs a
+`symlink_metadata` per segment per operation, which is a stat and is not
+measurable against the read that follows.
+
+---
+
+## ADR-020 — One Tauri command per operation, with types generated by `ts-rs`
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** A single typed `dispatch(Request) -> Response` would put every
+cross-cutting concern in one place and would let `notes-mcp` reuse the envelope.
+Tauri's capability system is per command.
+
+**Decision.** One command per operation. Types cross as `serde` JSON and `ts-rs`
+generates the TypeScript for every one of them into
+`apps/notes-app/src/ipc/generated`, which is committed; **CI regenerates it and
+fails on any diff.** The frontend never hand-writes an IPC type.
+
+**Consequences.** The argument that settles it is the capability: permitting
+`dispatch` permits `delete`, and there is no way to grant half of it — a single
+command would be a switch for the filesystem. The cost is many command names to
+register and list. Generating the types caught a defect a Rust-only test could
+not have: a nanosecond `mtime_ns` sent as a JSON number is silently rounded by
+JavaScript and comes back wrong in the next `BaseRev`.
+
+---
+
+## ADR-021 — Autosave and the base-rev guard ship together
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** Autosave is a 0.1a feature and conflict detection reads like a sync
+problem, so shipping autosave first and the guard later is the natural
+sequencing. It is also the sequencing that loses data: the moment autosave
+exists, the app is writing to files that VS Code, a script or an AI agent may be
+writing at the same time, and without the guard it overwrites them.
+
+**Decision.** They ship in the same milestone. Every write compares a `BaseRev`
+before replacing; a divergence suspends autosave for that note, snapshots the
+buffer to a draft, and writes nothing. Drafts and conflict copies are operational
+data with retention rules and are **never deleted as cache**.
+
+**Consequences.** 0.1a carries machinery that looks like sync infrastructure long
+before sync — and it is the rehearsal for it. Storage that cannot replace
+atomically has to say so rather than pretend. The user-facing cost is a note that
+stops autosaving until they resolve it, which is the correct behaviour and has to
+be visible: it is why the status bar has seven states rather than two.
+
+---
+
+## ADR-022 — The WebKitGTK dmabuf workaround is applied automatically on Wayland with NVIDIA
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** WebKitGTK on Wayland with the NVIDIA driver has a long history of a
+black or flickering window. The mitigation —
+`WEBKIT_DISABLE_DMABUF_RENDERER=1` — must be set before the WebView is created,
+and telling users to export a variable means the first experience of the
+application is a black window.
+
+**Decision.** Detect Wayland and an NVIDIA driver at startup, before
+`tauri::Builder`, and set the variable. Unconditional at 0.0, since `settings.json`
+belongs to 0.1a; gated from 0.1a by `settings.linux.webkit_dmabuf_workaround`
+(`auto` / `off` / `force`), where **a missing or unreadable settings file
+degrades to `auto`, never to `off`**. A value already in the environment is never
+overridden.
+
+**Consequences.** Slightly slower compositing for users who did not need it, in
+exchange for a window that renders. The degrade direction is chosen from the
+asymmetry of the failures: not applying it yields a black window, applying it
+needlessly costs a little performance. The decision is a pure function of its
+inputs so the case the developer's machine cannot produce is covered by a test.
+
+---
+
+## ADR-023 — Arch Linux is a release target, with its own CI job
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** Arch is rolling. `webkit2gtk-4.1` moves without warning, and a build
+that passes on Debian stable says nothing about it. The owner develops on Arch.
+
+**Decision.** Arch is a release target, distributed through the AUR
+(`notes-bin` from the release tarball, `notes-git` optional), and CI runs a job
+in an `archlinux:latest` container against the current `webkit2gtk-4.1`.
+
+**Consequences.** Upstream breakage surfaces in CI before it reaches a user, and
+a red Arch job on a green Debian one is information rather than noise. The cost
+is a CI job that can fail for reasons outside the repository, which is the point
+and must not be treated as flakiness to be muted.
+
+---
+
+## ADR-024 — No unsigned macOS or Windows artefact is published
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** An unsigned Windows build trips SmartScreen and an unsigned macOS
+build is refused by Gatekeeper. Both produce a first run that looks like the
+application is malware, and the workaround taught to get past them is the same
+one an actual attacker needs the user to learn.
+
+**Decision.** macOS artefacts are signed with a Developer ID and notarised;
+Windows artefacts are signed with an OV certificate. **No unsigned artefact is
+published** for either. Linux artefacts (`.deb`, AppImage, AUR) need no signature
+and are published without one.
+
+**Consequences.** An Apple Developer account and a code-signing certificate are
+prerequisites of the first macOS and Windows releases — cost and lead time, not
+engineering. Linux ships before them, which matches where the project is
+developed. Secrets live in CI secrets and never in the repository.

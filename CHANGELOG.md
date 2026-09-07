@@ -197,6 +197,61 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.0 - milestone 0.1a ships: ARCHITECTURE.md is ACTIVE and its decisions are ADRs
+
+A workspace is a folder, its `.md` files are notes, and editing one is safe
+against everything else on the machine that might touch it at the same time.
+
+**Seven of the eight acceptance criteria are met, one is partly met, and
+`docs/ACCEPTANCE-0.1a.md` says which is which** — each against a named test or a
+documented manual step, with the measurements rather than assurances:
+
+- a 10 000-note, 197 MiB workspace **opens in 226 µs and its whole tree lists in
+  37.5 ms**, two orders of magnitude under the one-second criterion, with the
+  registry still empty afterwards — proof that listing assigned no identity and
+  therefore hashed nothing;
+- **1000 kills mid-save, 0 failures**, no truncated or empty note;
+- **228 files opened and saved unchanged with `git status` clean**, in the
+  criterion's literal form, plus a hermetic copy-based version that cannot dirty
+  the repository;
+- the external-append case, the path-escape cases and "opening a folder creates
+  nothing" are all automated in the core, as the criteria require.
+
+**The one that is only partly met is said so plainly.** Permission-denied is
+automated and proven to leave a recoverable draft; **no test fills a
+filesystem**, so the path from a real ENOSPC to a visible error is documented as
+a manual step and listed as unverified. Automating it needs loopback privileges
+in CI, which is a decision about CI rather than about this milestone.
+
+`ARCHITECTURE.md` becomes `ACTIVE`, and the twelve decisions it introduced become
+**ADR-013 … ADR-024**. Three are worth naming here. ADR-014 amends ADR-005 once
+rather than twice, closing both readings of its Decision together: identity never
+enters a note file, and the content hash is correlation rather than identity —
+which is what keeps the promise that the app never writes what the user did not
+type alive through 0.6, the milestone at which most note applications break it.
+ADR-020 records that one command per operation was chosen over a single
+`dispatch` on a capability argument, not a stylistic one: permitting `dispatch`
+permits `delete`, and there is no way to grant half of it. ADR-021 records why
+autosave and the base-rev guard could not ship apart — the moment autosave
+exists, the app is writing to files that VS Code or an agent may be writing too,
+and without the guard it overwrites them.
+
+`docs/DECISIONS-0.1a.md` holds the nineteen calls the specification did not make,
+each with the alternative if the owner disagrees. Two changed the design rather
+than filling a hole: the case-sensitivity probe reads instead of writing, because
+the mechanism specified would have created a file inside a folder that was merely
+opened; and the temporary file has a deterministic name, because the crash loop
+proved that random ones accumulate in the user's folder forever.
+
+**Not verified, and not claimed: the window has never been launched.** Everything
+above comes from the core and the corpus. The CI matrix — Ubuntu, macOS, Windows
+and an Arch container against rolling `webkit2gtk-4.1` — has not run yet either,
+so `ARCHITECTURE.md` §11's capability matrix remains a specification rather than
+an observation. Milestone 0.0 stays open in `.continue/`, on hardware this
+machine does not have.
+
+A `Y` bump: a completed roadmap milestone.
+
 ## 0.6.1 - the Tauri shell, the typed IPC boundary, and the 0.1a interface
 
 Nineteen commands, one per operation, each of them parse → call the core →

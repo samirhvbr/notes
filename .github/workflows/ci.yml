@@ -83,6 +83,11 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test --workspace
 
+      # The byte-preservation criterion in its literal form: git is the only
+      # thing that can answer "git sees no change".
+      - run: tools/byte-preservation.sh
+        shell: bash
+
   # Arch is rolling: WebKitGTK moves without warning, and breakage shows here
   # before it reaches a user (docs/ARCHITECTURE.md §3).
   arch:
