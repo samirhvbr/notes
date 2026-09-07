@@ -8,6 +8,41 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.3.2 - the queue rule arrives as a regenerated block, and stops being local
+
+This repository decided two things on the day its queue was emptied and
+restored: an item leaves `.continue/` only when the thing has been built
+([ADR-009](docs/decisions.md)), and the queue is written in Portuguese
+([ADR-010](docs/decisions.md)). Both were written as **local exceptions**, placed
+deliberately outside the marked echo blocks so a fleet pass would not erase them.
+
+The fleet adopted both the same day, as ADR-021 and ADR-022 in
+[samirhvbr/repodocs](https://github.com/samirhvbr/repodocs). What was an
+exception is the norm, so keeping a local copy of it would be the thing the
+standard forbids: one rule with two sources, and no way to tell which is stale.
+
+The rule now arrives in the new **`QUEUE-RULE`** block — the single exit
+condition, the definition of *produce*, the bound on the half-a-page rule that
+authorised the deletion in the first place, and the sentence that is the actual
+instruction: **never empty this folder as tidying**. `LANGUAGE-RULE` and
+`COMMIT-RULE` are regenerated in the same pass; the language block now names
+three carve-outs, the third being this queue.
+
+Why the block matters more than the correction it carries: on 07/09/2026, of the
+52 repositories in the fleet, **2** carried any version of the queue rule and
+**35** never mention `.continue/` in their agent instructions. It had never been
+an echo block — it lived in the skeleton's `CLAUDE.md`, which is copied once at
+creation and never regenerated. This repository was created from that skeleton
+hours before the fix, which is precisely why the fix had to become something that
+travels.
+
+The two local ADRs stay as the record of **where** the decision was made, each
+carrying a note that the fleet adopted it. The block is the source if they ever
+disagree. Two details this repository holds that the fleet rule does not spell
+out survive in prose: `.continue/README.md` is the folder's index and stays
+English, and writing the `docs/` page in English is part of checking that the
+thing was actually built.
+
 ## 0.2.0 - record the product scope and roadmap in docs/
 
 The scope arrived as a 1 338-line draft in `.continue/`, written in Portuguese.

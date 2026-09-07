@@ -247,7 +247,11 @@ against local paths.
 
 ## ADR-009 — An item leaves `.continue/` only when it has been built
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · **Adopted fleet-wide the same day** as
+[repodocs ADR-021](https://github.com/samirhvbr/repodocs/blob/master/docs/decisions.md)
+— it stopped being local. The rule now arrives here in the `QUEUE-RULE` block of
+`CLAUDE.md`, which is regenerated; this ADR stays as the record of where the
+decision was made, and the block is the source if the two ever differ
 
 **Context.** The fleet convention says a document moves from queue to record
 "the moment it describes something that already exists", and a companion rule
@@ -290,7 +294,10 @@ rule is right for the whole fleet rather than only here, it belongs in repodocs
 
 ## ADR-010 — `.continue/` is written in Portuguese; everything else is English
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · **Adopted fleet-wide the same day** as
+[repodocs ADR-022](https://github.com/samirhvbr/repodocs/blob/master/docs/decisions.md),
+which makes it the third carve-out of the English rule rather than this
+repository's exception to it. The `LANGUAGE-RULE` block above now carries it
 
 **Context.** The language rule — repodocs `conventions.md` §8, stamped into
 `CLAUDE.md` and `AGENTS.md` as the `LANGUAGE-RULE` echo — puts everything in the

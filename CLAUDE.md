@@ -135,6 +135,46 @@ versions.** `0.3` there is a product stage; `0.3.0` here is whatever
 
 ---
 
+<!-- QUEUE-RULE:repodocs -->
+
+## The queue empties by production, and by nothing else
+
+> Marked echo. The single source is **[samirhvbr/repodocs](https://github.com/samirhvbr/repodocs/blob/master/docs/conventions.md#1-continue-is-the-queue--docs-is-what-has-been-produced)**
+> — change it there, not here. This block is regenerated.
+
+**`.continue/` holds work that does not exist yet.** A document leaves it when —
+and **only** when — the thing it describes **exists**. Length is not an exit
+condition. Neither is age, language, untidiness, the end of a session, or an
+agent who would have written it differently.
+
+> `tela.md` says *"a black screen with a yellow ball in the middle"*. It leaves
+> the queue when there is a black screen with a yellow ball. Until then it stays,
+> at any length, in whatever shape it is in — because until then it is the only
+> place that thing exists.
+
+**"Produce", applied to a queue item, means making the thing exist.** Not editing
+the document, not translating it, not promoting it to `docs/`. The document is
+the specification; the deliverable is the thing. Removing the document is the
+**last step of the commit that carries the work** — never a step of its own.
+
+**Never empty this folder as tidying.** A queue item deleted without the work
+being done destroys the only artefact a project has before it has code — and
+what usually replaces it is worse than the loss: a `docs/` page describing a
+screen nobody built, indistinguishable from a page describing one that exists.
+If a plan has to be visible in `docs/` before it is built, it is `PROPOSED`,
+never `ACTIVE`.
+
+**The half-a-page rule is about a record that ended up in the queue**, and about
+nothing else. It has no opinion on the length of a specification of unbuilt
+work: a 1,300-line brief about something that does not exist is in the only
+place it can be. A long queue item is a project with a lot still to build.
+
+**The queue is written in the language its author thinks in**, and becomes
+English (US) on the way out, when the work is produced and the document moves to
+`docs/`. A Portuguese draft in `.continue/` is not a violation to be fixed.
+
+<!-- /QUEUE-RULE -->
+
 <!-- LANGUAGE-RULE:repodocs -->
 
 ## Language — English (US) at home, the upstream's when we are guests
@@ -150,13 +190,20 @@ Commit format: `X.Y.Z - short description in English`. The version comes from
 `version.md` and is bumped in the same commit. Conventional Commits prefixes
 (`feat:`, `fix:`, `chore:`) and vague one-word messages are forbidden.
 
-**Two carve-outs, and only two.** The first is end-user-facing strings — UI
+**Three carve-outs, and only three.** The first is end-user-facing strings — UI
 text, transactional email, product copy: product i18n for a Brazilian audience,
 not repository content. The second is the **Blue3 internal repositories**
 (`BLUE3-ISP/*`, `samirhvbr/blue3-intranet`, `samirhvbr/blue3-ai-login`), which
 are Portuguese throughout — if you are reading this block inside one of them,
 this is the wrong block: they carry `LANGUAGE-RULE-PT`. A repository joins that
 set by a written decision, never by argument.
+
+**The third is `.continue/`.** The queue is written in the language its author
+thinks in, and becomes English (US) when the work is **produced** and the
+document moves to `docs/`. A Portuguese draft in the queue is not a violation to
+be fixed: it is unfinished work in the language it is being thought in, and
+translating it or moving it out before the thing exists destroys the only place
+that thing exists.
 
 History is not rewritten: Portuguese messages already in the log stay as they
 are.
@@ -186,29 +233,31 @@ are English wherever you are.
 
 ---
 
-## Language — the local exception: the queue is Portuguese
+## Language — the queue exception is now the fleet norm
 
-> **This section is deliberately OUTSIDE the `LANGUAGE-RULE` block above.** That
-> block is a marked echo, regenerated from repodocs; an exception written inside
-> the markers is erased by the next fleet pass with nobody noticing. The
-> precedent is `BLUE3-INTRANET`, whose language exception sits outside the block
-> for exactly this reason.
+> **This section is deliberately OUTSIDE the `QUEUE-RULE` and `LANGUAGE-RULE`
+> blocks above.** Those are marked echoes, regenerated from repodocs; anything
+> written inside the markers is erased by the next fleet pass with nobody
+> noticing.
 
-**`.continue/` is written in Portuguese**
-([ADR-010](docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english)).
-The queue is where the owner thinks before anything is built, and it is his
-language. `.continue/README.md` is the one exception inside it — the folder's
-index, not queue material, and English like the rest.
+**What it says is no longer local.** `.continue/` in Portuguese, and an item
+leaving the queue only when the thing has been built, were decided here first —
+[ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)
+and [ADR-010](docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english),
+on the day the queue of this repository was emptied and restored. On 07/09/2026
+the fleet adopted both, as **ADR-021** and **ADR-022** in
+[samirhvbr/repodocs](https://github.com/samirhvbr/repodocs/blob/master/docs/decisions.md),
+and they arrive here in the `QUEUE-RULE` block above.
 
-**Translation happens on the way out.** When the thing has been built and its
-document lands in `docs/`, it is written in English (US). Writing it in English
-is part of checking that it was actually built
-([ADR-009](docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+So this is no longer an exception to anything: the two local ADRs stay as the
+record of **where the decision was made**, and the rule itself is now read from
+the block, which is regenerated. If the two ever disagree, the block is the
+source.
 
-Everything in the block above otherwise stands unchanged: `docs/`, commit
-messages, pull request titles and bodies, issues, code comments, changelog
-entries and release notes are English (US).
-
+Two details this repository holds that the fleet rule does not spell out, and
+both survive: `.continue/README.md` is the folder's index rather than queue
+material, and is English like the rest; and writing the `docs/` page in English
+is part of checking that the thing was actually built.
 ---
 
 ## Branch
