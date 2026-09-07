@@ -197,6 +197,34 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.3.11 - record what the 0.0 spike established, and what it did not
+
+`docs/SPIKE-0.0.md`, in two halves, because the second is the one that matters.
+
+**Verified here**, on Debian 13 / X11 / no NVIDIA: `cargo build`, `cargo clippy
+--all-targets` and `npm run build` with zero warnings, and 12 tests passing with
+no Tauri and no window. The document says what those tests actually cover rather
+than reporting a count.
+
+**Not verified here, and not claimed.** The window was never launched on this
+machine, so "renders correctly" is unverified even for Debian/X11 — the document
+says so and gives the command. Wayland, NVIDIA, macOS, Windows, iOS and Android
+do not exist here at all. The checklist for them is written to be *seen* rather
+than reasoned about: the diagnostics panel prints the word `APPLIED`, so
+criterion 1 is read off a screen, not inferred from the fact that the code looks
+right.
+
+**Milestone 0.0 stays open and its queue item stays in `.continue/`.** The tests
+prove the decision, not the rendering, and the whole reason a spike exists is the
+part that only hardware can answer. Closing it here would be the failure the
+document exists to prevent: a milestone marked done because the machine that
+could not test it had nothing left to run.
+
+The queue also records that my `.continue/ARCHITECTURE.md` is superseded by the
+owner's `ARCHITECTURE.md`. It is kept rather than deleted — it is where the
+questions were asked, and three of the four were answered by the document that
+replaced it.
+
 ## 0.3.10 - track ARCHITECTURE.md and retire the v1-derived page it replaces
 
 `ARCHITECTURE.md` at the repository root, written by the owner and aligned to
