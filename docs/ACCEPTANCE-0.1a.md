@@ -19,7 +19,7 @@
 | 5 | Disk full / permission denied → visible error, recoverable buffer | **partly met** — see §5 |
 | 6 | No command accepts a path outside the root | **met** — automated |
 | 7 | Opening a folder creates no file in it | **met** — automated |
-| 8 | `cargo test` passes with no Tauri | **met** — 117 tests |
+| 8 | `cargo test` passes with no Tauri | **met** — 123 tests |
 
 **The application window has never been launched.** Every result below comes
 from the core and the corpus; the interface compiles and typechecks and has not
@@ -178,17 +178,12 @@ This is the criterion that made the case-sensitivity probe read-only
 
 ## 8. `cargo test` passes with no Tauri
 
-**Automated** — `cargo test --workspace`, 117 tests, no window and no display:
+**Automated** — `cargo test --workspace`, 123 tests, no window and no display.
+No crate under `crates/` depends on `tauri`, and the suite is **green on Ubuntu,
+macOS, Windows and an Arch container against rolling `webkit2gtk-4.1`**.
 
-```
-notes-model   44
-notes-fs      23   (3 unit · 8 atomic · 7 fixtures · 5 jail)
-notes-core    41   (22 unit · 18 protocol · 1 performance, ignored by default)
-notes-app      8   (the Linux startup decision, as a pure function)
-```
-
-No crate under `crates/` depends on `tauri`, and CI runs the suite on Ubuntu,
-macOS, Windows and an Arch container against rolling `webkit2gtk-4.1`.
+`tools/check.sh` runs the whole gate locally, including a Windows cross-check
+that needs no MSVC toolchain.
 
 ---
 
@@ -213,16 +208,32 @@ Everything listed under 0.1a in `.continue/SCOPE_final.md` §17:
 - **The window has never been launched.** The interface compiles, typechecks and
   bundles; no human has driven it. Every result above is from the core and the
   corpus. To run it: `cd apps/notes-app && npm run tauri dev`.
-- **Only Linux/X11/ext4 is green end to end.** The CI matrix ran for the first
-  time at `0.7.0` and found four real problems, all fixed at `0.7.1`; the most
-  serious was that **`actions/checkout` aborted on Windows** —
-  `invalid path 'fixtures/edge-cases/trailing-dot.md.'` — which made the
-  repository unclonable there before any test could run. No run exists yet on
-  APFS, NTFS, SMB, exFAT or a case-insensitive root, so the capability matrix of
-  `ARCHITECTURE.md` §11 is still a specification rather than an observation.
+- **The capability matrix is still a specification.** The CI matrix is green on
+  Ubuntu, macOS, Windows and Arch as of `0.7.3`, which means the suite passes on
+  ext4, APFS and NTFS — but no run exists on SMB, NFS, exFAT or a FUSE mount, so
+  the rows of `ARCHITECTURE.md` §11 for those backends are asserted rather than
+  observed.
 - **The permission-denied criterion does not run as root**, and the Arch CI
   container is root — it skips there rather than passing for the wrong reason
-  ([DECISIONS-0.1a.md](DECISIONS-0.1a.md) D-21).
+  ([DECISIONS-0.1a.md](DECISIONS-0.1a.md) D-21). It runs on Ubuntu and macOS.
+
+### What four CI rounds found, and none of it was a failing test
+
+Every problem the matrix surfaced stopped the build or the checkout before a test
+could run, which is why none of them could have been caught locally:
+
+| Round | Platform | What happened |
+|---|---|---|
+| 1 | Windows | **`actions/checkout` aborted**: `invalid path 'fixtures/edge-cases/trailing-dot.md.'`. A committed file whose name ends in a dot cannot exist on NTFS, so the repository was unclonable |
+| 1 | macOS · Arch · contracts | A path comparison against an unresolved `/var`, a permission test run as root, and a job that built the Tauri app to run a grep |
+| 2 | Windows | **Failed to compile**: `native_id` called `windows_by_handle`, an unstable API |
+| 2 | macOS | `Duplicate.md` + `duplicate.md` are one file on APFS, and APFS normalises names to NFD — the corpus could not be checked out faithfully |
+| 3 | Windows | **Failed to compile**: three helpers used only under `#[cfg(unix)]` are dead code on Windows, which `-D warnings` makes fatal |
+
+The response to the last one was `tools/check.sh`, which cross-checks the Windows
+target locally ([DECISIONS-0.1a.md](DECISIONS-0.1a.md) D-25) — one `rustup target
+add`, no MSVC toolchain, and it would have caught both compile failures in
+seconds.
 - **The full-disk path**, as §5 states.
 - **Milestone 0.0 remains open**, on hardware this machine does not have —
   [SPIKE-0.0.md](SPIKE-0.0.md). It is orthogonal to this milestone and blocks

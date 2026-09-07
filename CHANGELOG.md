@@ -197,6 +197,22 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.4 - the CI matrix is green on all four platforms
+
+Ubuntu, macOS, Windows and Arch, plus the contracts job, the frontend and the
+1000-round crash loop. `docs/ACCEPTANCE-0.1a.md` said the matrix had not run;
+now it has, and what it found is written down there as a table.
+
+**Not one of the four rounds was a failing test.** Every problem stopped the
+build or the checkout before a test could execute — an unclonable repository on
+Windows, a corpus APFS cannot materialise, two compile failures behind `cfg`
+walls Linux cannot see. That is the argument for the matrix in one line, and it
+is why "it passes here" was never the same claim as "it passes".
+
+What remains asserted rather than observed is narrower now: the suite runs on
+ext4, APFS and NTFS, so §11's rows for SMB, NFS, exFAT and FUSE are the ones
+still unproven.
+
 ## 0.7.3 - check the Windows target locally instead of discovering it in CI
 
 The third CI round failed on Windows for the third time in a row, and for a
