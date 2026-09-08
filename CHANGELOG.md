@@ -197,6 +197,62 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.8.0 - notes-markdown: the preview corpus, the sanitizer suite, and the crate that reads them
+
+`fixtures/xss/` was committed at 0.1a with a README calling each file *"an
+assertion, not a sample"*, and nothing read it. This commit is the thing that
+reads it, and the corpus it needed beside it.
+
+**The fixtures came first, and that mattered.** `fixtures/markdown/` holds
+seventeen inputs, each with the exact HTML and the exact `Document` it must
+produce, compared byte for byte; `fixtures/markdown/README.md` states the
+contract one row per file *before* any of it existed. The goldens are generated
+with `NOTES_BLESS=1` and then **read against that table** — blessing is not
+accepting (docs/DECISIONS-0.1b.md D-04). That reading caught four defects the
+suite would otherwise have frozen as decisions: `outra.md#uma-secao` lost its
+fragment; `<alguem@example.com>` was classified as a relative path and rendered
+as a note link to a file with an `@` in its name; a refused image dropped its
+alt text; and a bare `https://…` in prose was not linkified, which scope §8.1
+lists among the GFM features. All four are fixed and pinned.
+
+**The XSS corpus is now a census.** Every `.md` in `fixtures/xss/` is rendered
+under all four combinations of `raw_html` and `remote_images` and checked
+structurally — tags and attributes read back out of the sanitized output, never
+substrings. `safe-in-code.md` is why: it must render `javascript:alert(1)` **as
+text**, so a suite that greps for `javascript:` asserts the opposite of the
+requirement. Adding a payload to the folder is therefore enough; forgetting to
+write a test for it cannot make it pass. Each file also keeps a named test of
+its own, asserting it was refused for the right reason and that the rest of the
+note still rendered.
+
+**Two layers, on purpose.** The rewrite pass in `url.rs` decides what every
+destination may become — schemes, root escapes, the raster-only `data:`
+allowlist that excludes `image/svg+xml`, remote images blocked and named rather
+than silently missing. `ammonia` then applies a closed allowlist that knows
+nothing about notes, forces every `<input>` to be a disabled checkbox, and
+permits exactly three `style` values, on table cells only. A mistake in one has
+to coincide with a hole in the other to reach a user.
+
+**`mailto:` renders as text**, and so does an email autolink. Scope §8.4 says
+*"outros esquemas recusados"*, and `shell:allow-open` is restricted to `http`
+and `https` — a `mailto:` anchor would be a link that does nothing when clicked.
+Widening that capability is the owner's act, not the renderer's (D-06).
+
+**One 0.1a defect surfaced on the way and is fixed here.** `RelPath::root()`
+serialises to `""` and `TryFrom<String>` refused `""`, so the type could not
+deserialise a value it produces. `tree_list` takes a `RelPath`, and the
+frontend's `ROOT` is that string: every listing of the workspace root was
+rejected by argument deserialisation before the command body ran — the sidebar's
+first call on every launch. `parse` still refuses an empty name; only the wire
+form accepts it (D-05). Three tests hold the line.
+
+`docs/ARCHITECTURE.md` §10 is rewritten to describe what was built rather than
+what was proposed. The generated-types check now covers `notes-markdown` and asks
+two questions instead of one — `git diff` for a changed file and
+`git ls-files --others` for an untracked one — because a type introduced by a
+new crate arrives untracked, which is how eight new `.ts` files stayed invisible
+to a green gate.
+
 ## 0.7.5 - the debt 0.1a left: the Windows check runs by default and the full disk is automated
 
 Three things 0.1a left behind, cleared before any 0.1b feature so that the

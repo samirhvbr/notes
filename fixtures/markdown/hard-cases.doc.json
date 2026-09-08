@@ -1,0 +1,35 @@
+{
+  "front_matter": null,
+  "headings": [],
+  "links": [
+    {
+      "target": "https://example.com/já-com-acento",
+      "kind": "url",
+      "span": {
+        "start": 80,
+        "end": 116
+      },
+      "in_code": false
+    },
+    {
+      "target": "https://example.com/já-com-acento",
+      "kind": "url",
+      "span": {
+        "start": 81,
+        "end": 115
+      },
+      "in_code": false
+    },
+    {
+      "target": "outra.md",
+      "kind": "relative_path",
+      "span": {
+        "start": 118,
+        "end": 127
+      },
+      "in_code": false
+    }
+  ],
+  "tasks": [],
+  "tags": []
+}

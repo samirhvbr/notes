@@ -95,3 +95,123 @@ else the window owes.
 and give the CI job `sudo`; the test binary is unchanged, only the harness that
 provides `NOTES_TINY_DIR` differs, and that recipe is still printed in
 `ACCEPTANCE-0.1a.md` §5 for kernels that forbid unprivileged user namespaces.
+
+---
+
+## D-04 — The preview corpus is golden files, blessed and then **read**
+
+**Decided.** `fixtures/markdown/` holds `NAME.md` with `NAME.html` and
+`NAME.doc.json` beside it, compared byte for byte with no normalisation.
+`NOTES_BLESS=1 cargo test -p notes-markdown` rewrites them from the renderer.
+
+**Gap closed.** "Fixtures do preview antes do parser: markdown de entrada com a
+saída HTML esperada ao lado." A prose description of expected output cannot fail
+a build.
+
+**Why blessing exists, and why it is not the same as accepting.** Hand-authoring
+the exact bytes `pulldown-cmark` and `ammonia` produce — attribute order, where
+the newlines fall inside a table — is guesswork, and a first commit of thirty
+hand-written goldens is thirty diffs against incidental formatting rather than
+against the contract. So the inputs and the **contract** are written first
+(`fixtures/markdown/README.md`, one row per file), the goldens are generated, and
+then every one is read against that table before the commit. A golden blessed
+without being read records a bug as if it were a decision, which is the only
+failure mode a corpus like this has.
+
+**That reading was not ceremonial.** It caught four defects on the first pass,
+each of which the test suite would have frozen: `outra.md#uma-secao` lost its
+fragment; `<alguem@example.com>` was classified as a *relative path* and rendered
+as a note link to a file with an `@` in its name; a refused image dropped its alt
+text and left an empty paragraph; and a bare `https://…` in prose was not
+linkified at all, which scope §8.1 lists among the GFM features.
+
+**Alternative if you disagree.** Hand-author the goldens and forbid `NOTES_BLESS`
+— the comparison is unchanged, only how the expected file is first written. Or
+normalise whitespace before comparing, which makes the corpus tolerant of a
+`pulldown-cmark` upgrade and blind to a real change in output.
+
+---
+
+## D-05 — `RelPath` accepts `""` on the wire, and `parse` still refuses it
+
+**Decided.** `TryFrom<String> for RelPath` maps the empty string to
+`RelPath::root()`. `RelPath::parse` is unchanged and still returns
+`PathError::Empty`.
+
+**Gap closed.** A defect from 0.1a, found while wiring this crate: `RelPath::root()`
+**serialises** to `""` and `try_from` **refused** `""`, so the type could not
+deserialise a value it produces. The frontend's `ROOT` is that string, and
+`tree_list` takes a `RelPath` — every listing of the workspace root was rejected
+by argument deserialisation before the command body ran. It is the sidebar's
+first call on every launch.
+
+**Why here rather than in `parse`.** `parse` reads something a user typed, and an
+empty name is not a path; relaxing it would let `note_create(dir, "")` through to
+a collision check. The wire form is a different question with a different answer,
+and `RelPath` already has two constructors for exactly that reason.
+
+**Alternative if you disagree.** Give the root its own wire value — `"."`, or a
+`Option<RelPath>` on every command that can take it. Both cost a change to every
+signature that names a directory, and `"."` is a segment `parse` refuses on
+purpose.
+
+---
+
+## D-06 — `mailto:` is refused, because the scope and the capability file both say so
+
+**Decided.** A `mailto:` link, and an email autolink `<alguem@example.com>`,
+render as **text**. Only `http` and `https` become anchors.
+
+**Gap closed.** Scope §8.4: *"Links externos `http(s)` abrem no navegador do SO
+por clique. Outros esquemas recusados."*
+
+**Why not make an exception.** `shell:allow-open` in
+`src-tauri/capabilities/default.json` is restricted to `{ "url": "https://**" }`
+and `{ "url": "http://**" }`. Rendering a `mailto:` anchor would therefore
+produce a link that does nothing when clicked — worse than text, because it
+looks like it works. Making it work means widening a capability, and **granting
+the agent a permission is the owner's act** (CLAUDE.md golden rule 7): written
+into the capability file with its reason, never applied on the way past.
+
+**The email autolink is the same decision wearing a different hat.**
+`pulldown-cmark` reports `<alguem@example.com>` with the scheme stripped, so
+without this rule it was classified as a relative path and rendered as a link to
+a note called `alguem@example.com`. The golden corpus caught it.
+
+**Alternative if you disagree.** Add `{ "url": "mailto:*" }` to `shell:allow-open`
+and change one match arm in `notes-markdown/src/url.rs`. The capability edit is
+yours to make; the code half is two lines.
+
+---
+
+## D-07 — Exactly one attribute is force-set on `<input>`, because `ammonia` reorders the ones it forces
+
+**Decided.** `ammonia` forces `type="checkbox"` on every `<input>`; `disabled`
+and `checked` are allowlisted rather than forced.
+
+**Gap closed.** A flapping golden. Forcing both `type` and `disabled` made
+`fixtures/markdown/tasklists.html` differ between runs of the same code:
+`ammonia` lifts a forced attribute out of its position and re-appends it while
+iterating a `HashMap`, whose order is per-process. With one forced attribute the
+output is fixed; with two it is a coin toss, and a byte-exact corpus would have
+been abandoned as "flaky" rather than read as the real finding it is.
+
+**What it costs.** An `<input>` written by a note in a workspace that has opted
+into raw HTML comes out as an **enabled** checkbox rather than a disabled one.
+That is the whole difference, and it carries nothing: `name`, `value` and every
+`on*` attribute are dropped, `<form>` and `<button>` are refused outright, so
+there is nothing to send and nowhere to send it. The task-list markers the
+application itself renders always carry `disabled` — the writer emits it and the
+golden pins it.
+
+**Why it was found here and not in review.** The suite ran green three times
+before the corpus was committed; the failure only appeared when `cargo test`
+happened to run the golden target in a process whose hash seed ordered the map
+the other way. A test that is byte-exact turns "occasionally different" into a
+red build, which is the argument for byte-exact comparison rather than against
+it.
+
+**Alternative if you disagree.** Force both and normalise attribute order before
+comparing — the corpus then tolerates any future reordering, including one that
+matters. Or drop `<input>` from the allowlist entirely and render task markers
+as a `<span>` with a glyph, which loses the semantics a screen reader uses.

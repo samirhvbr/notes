@@ -1,0 +1,46 @@
+{
+  "front_matter": null,
+  "headings": [
+    {
+      "level": 1,
+      "text": "Tarefas",
+      "slug": "tarefas",
+      "span": {
+        "start": 0,
+        "end": 10
+      }
+    }
+  ],
+  "links": [],
+  "tasks": [
+    {
+      "checked": false,
+      "span": {
+        "start": 13,
+        "end": 16
+      }
+    },
+    {
+      "checked": true,
+      "span": {
+        "start": 28,
+        "end": 31
+      }
+    },
+    {
+      "checked": true,
+      "span": {
+        "start": 40,
+        "end": 43
+      }
+    },
+    {
+      "checked": false,
+      "span": {
+        "start": 85,
+        "end": 88
+      }
+    }
+  ],
+  "tags": []
+}

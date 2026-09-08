@@ -1,0 +1,89 @@
+{
+  "front_matter": null,
+  "headings": [
+    {
+      "level": 1,
+      "text": "Título nível 1",
+      "slug": "título-nível-1",
+      "span": {
+        "start": 0,
+        "end": 19
+      }
+    },
+    {
+      "level": 2,
+      "text": "Um título com Acentuação e Pontuação!",
+      "slug": "um-título-com-acentuação-e-pontuação",
+      "span": {
+        "start": 20,
+        "end": 66
+      }
+    },
+    {
+      "level": 3,
+      "text": "Repetido",
+      "slug": "repetido",
+      "span": {
+        "start": 67,
+        "end": 80
+      }
+    },
+    {
+      "level": 3,
+      "text": "Repetido",
+      "slug": "repetido-1",
+      "span": {
+        "start": 81,
+        "end": 94
+      }
+    },
+    {
+      "level": 4,
+      "text": "Nível 4",
+      "slug": "nível-4",
+      "span": {
+        "start": 95,
+        "end": 109
+      }
+    },
+    {
+      "level": 5,
+      "text": "Nível 5",
+      "slug": "nível-5",
+      "span": {
+        "start": 110,
+        "end": 125
+      }
+    },
+    {
+      "level": 6,
+      "text": "Nível 6",
+      "slug": "nível-6",
+      "span": {
+        "start": 126,
+        "end": 142
+      }
+    },
+    {
+      "level": 1,
+      "text": "Setext nível 1",
+      "slug": "setext-nível-1",
+      "span": {
+        "start": 143,
+        "end": 174
+      }
+    },
+    {
+      "level": 2,
+      "text": "Setext nível 2",
+      "slug": "setext-nível-2",
+      "span": {
+        "start": 175,
+        "end": 206
+      }
+    }
+  ],
+  "links": [],
+  "tasks": [],
+  "tags": []
+}

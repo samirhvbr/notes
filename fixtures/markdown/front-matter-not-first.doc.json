@@ -1,0 +1,17 @@
+{
+  "front_matter": null,
+  "headings": [
+    {
+      "level": 2,
+      "text": "title: não é front matter",
+      "slug": "title-não-é-front-matter",
+      "span": {
+        "start": 22,
+        "end": 54
+      }
+    }
+  ],
+  "links": [],
+  "tasks": [],
+  "tags": []
+}

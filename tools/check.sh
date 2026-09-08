@@ -35,7 +35,7 @@ windows_target_ready() {
 
 if why=$(windows_target_ready); then
   step "clippy (windows)"   cargo clippy --target x86_64-pc-windows-gnu \
-                              -p notes-model -p notes-fs -p notes-core \
+                              -p notes-model -p notes-fs -p notes-core -p notes-markdown \
                               --all-targets -- -D warnings
 else
   printf '\n== clippy (windows)\n   WARNING, not run — %s\n' "${why:-unknown}"
@@ -45,8 +45,12 @@ step "byte preservation"    tools/byte-preservation.sh
 step "full disk (ENOSPC)"   tools/enospc.sh
 step "generated types"      bash -c '
   rm -rf apps/notes-app/src/ipc/generated
-  cargo test -p notes-model -p notes-core --quiet >/dev/null 2>&1
-  git diff --quiet --exit-code -- apps/notes-app/src/ipc/generated'
+  cargo test -p notes-model -p notes-core -p notes-markdown --quiet >/dev/null 2>&1
+  # Two questions, because one command answers only half of it: `git diff` sees
+  # a changed file, and a type added by a new crate arrives *untracked*, which a
+  # diff does not see at all.
+  git diff --quiet --exit-code -- apps/notes-app/src/ipc/generated &&
+  [ -z "$(git ls-files --others --exclude-standard -- apps/notes-app/src/ipc/generated)" ]'
 step "no fs capability"     bash -c '
   ! grep -rqE "\"fs:[a-z-]+\"" apps/notes-app/src-tauri/capabilities/'
 step "i18n keys match"      python3 -c '

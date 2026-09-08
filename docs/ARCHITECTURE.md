@@ -546,21 +546,28 @@ pub struct Document {
     pub headings: Vec<Heading { level: u8, text: String, slug: String, span: Span }>,
     pub links: Vec<Link { target: String, kind: LinkKind, span: Span, in_code: bool }>,
     pub tasks: Vec<Task { checked: bool, span: Span }>,
-    pub tags: Vec<Tag>,                       // [0.3]
+    pub tags: Vec<String>,                    // [0.3]
 }
-pub enum LinkKind { RelativePath, Url, Anchor, Wiki /* [0.3] */ }
+pub enum LinkKind { RelativePath, Url, Anchor, Wiki /* [0.3] */, Refused }
 
 pub struct RenderOpts { pub base: RelPath, pub raw_html: bool, pub remote_images: bool, pub workspace_id: WorkspaceId }
-pub struct Rendered { pub html: String, pub outline: Vec<Heading> }
+pub struct Rendered { pub html: String, pub outline: Vec<Heading>, pub blocked_remote: Vec<String> }
 ```
 
 Front matter preservation is not this crate's job: the byte policy in §5.1
 keeps it intact because nothing rewrites the buffer. This crate only reports
-its span.
+its span, and **only for a block at byte 0** — the metadata extension is enabled
+per document, because `pulldown-cmark` will otherwise swallow any `---`-fenced
+block anywhere in the note.
 
 Pipeline: strip front matter (span kept) → `pulldown-cmark` with `TABLES |
 STRIKETHROUGH | TASKLISTS | FOOTNOTES` → event rewrite pass → HTML →
 `ammonia` with an allowlist → `Rendered`.
+
+**There are two layers on purpose.** The rewrite pass decides what each
+destination may become; `ammonia` then applies a closed allowlist that knows
+nothing about notes. Either would do on a good day; together, a mistake in one
+has to coincide with a hole in the other to reach a user.
 
 The rewrite pass is the security policy in code:
 
@@ -568,23 +575,50 @@ The rewrite pass is the security policy in code:
   (which still goes through `ammonia`).
 - Image URLs: relative and resolving inside the root →
   `notes-asset://<workspace_id>/<relpath>`; `http(s)` → kept only if
-  `remote_images`, else replaced by a placeholder with the URL as text; any
-  other scheme (`file:`, `javascript:`, `data:` except in an allowlist) →
-  dropped.
+  `remote_images`, else replaced by
+  `<span class="blocked-image" data-blocked-src="…">URL</span>` and listed in
+  `Rendered.blocked_remote`; `data:` only for the raster allowlist —
+  `image/png`, `image/jpeg`, `image/gif`, `image/webp`, and **never
+  `image/svg+xml`**, which is a scriptable document; any other scheme, and a
+  relative path that escapes the root, → dropped, **with the alt text kept as
+  text** so nothing the user wrote disappears silently.
 - Link URLs: relative → kept, with `data-note-path` so the frontend opens the
-  note in-app; `http(s)` → kept, `target=_blank rel=noopener`, opened by the
-  shell's `shell:open` which only accepts `http(s)`; other schemes → dropped.
-- Task list items → `<input type="checkbox" disabled>`; code blocks →
-  `<pre><code class="language-x">`. `ammonia` is configured to allow exactly
-  these attributes and nothing else on those tags.
+  note in-app, and `data-note-anchor` beside it when the link named a
+  `#section` (scope §8.3's `caminho/relativo.md#titulo-opcional`); `http(s)` →
+  kept, `target=_blank rel="noopener noreferrer"`, opened by the shell's
+  `shell:open` which only accepts `http(s)`; **`mailto:` and every other scheme
+  → dropped, link text kept.** Scope §8.4 says *"outros esquemas recusados"*,
+  and the capability file agrees: a rendered `mailto:` would be a link that does
+  nothing when clicked. Widening `shell:allow-open` is the owner's act
+  (`DECISIONS-0.1b.md` D-06).
+- A bare `https://` or `http://` in prose is linkified — scope §8.1 lists
+  autolinks. Never inside code, never inside an existing link, and **`www.`
+  without a scheme is not**: GFM guesses `http://` for it, and guessing an
+  insecure scheme for the user is not something this application does quietly.
+- Task list items → `<input type="checkbox" disabled>`. `ammonia` **forces**
+  both attributes on every `<input>` rather than allowing them, so a raw
+  `<input name=… value=…>` in a workspace that has opted into raw HTML cannot
+  become a control that accepts anything.
+- Code blocks → `<pre><code class="language-x">`. Table cells may carry a
+  `style` attribute holding one of exactly three alignment strings, enforced by
+  an attribute filter; every other `style` is dropped.
 
 Heading slugs follow the GitHub algorithm (lowercase, strip punctuation, spaces
-to `-`, dedupe with `-n`). `Document.links` with `in_code: true` are reported
-but never rewritten by the 0.2 rename tool and never counted as tags in 0.3.
+to `-`, dedupe with `-n`). `Document.links` with `in_code: true` are reported —
+including link-shaped text found inside code spans and fenced blocks, so the
+inventory is complete — and never rewritten by the 0.2 rename tool, nor counted
+as tags in 0.3.
 
 `notes-asset://` is a Tauri custom URI scheme registered in `src-tauri`; its
 handler calls `notes-core`, which applies the same root jail as every other
 path and serves only file types in the image allowlist.
+
+**The corpora are the specification.** `fixtures/markdown/` holds an input and
+its exact expected HTML and `Document` side by side; `fixtures/xss/` holds
+payloads, each rendered under all four combinations of `raw_html` and
+`remote_images` and checked structurally — tags and attributes read back out of
+the output, never substrings, because `safe-in-code.md` must render
+`javascript:alert(1)` **as text**.
 
 ---
 

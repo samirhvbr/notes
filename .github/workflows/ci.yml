@@ -38,10 +38,14 @@ jobs:
           # Only the crates that export types. `--workspace` would build the
           # Tauri app and need GTK and WebKit on a job whose whole point is that
           # it does not.
-          cargo test -p notes-model -p notes-core --quiet >/dev/null
-          if ! git diff --quiet --exit-code -- apps/notes-app/src/ipc/generated; then
+          cargo test -p notes-model -p notes-core -p notes-markdown --quiet >/dev/null
+          # Two questions, because one command answers only half of it: a diff
+          # sees a changed file, and a type introduced by a new crate arrives
+          # *untracked*, which a diff cannot see at all.
+          if ! git diff --quiet --exit-code -- apps/notes-app/src/ipc/generated \
+             || [ -n "$(git ls-files --others --exclude-standard -- apps/notes-app/src/ipc/generated)" ]; then
             echo "::error::ipc/generated is stale — run cargo test and commit the result"
-            git --no-pager diff --stat -- apps/notes-app/src/ipc/generated
+            git --no-pager status --porcelain -- apps/notes-app/src/ipc/generated
             exit 1
           fi
           test -n "$(ls -A apps/notes-app/src/ipc/generated)" || { echo "::error::nothing was generated"; exit 1; }

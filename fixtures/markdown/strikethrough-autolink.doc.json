@@ -1,0 +1,44 @@
+{
+  "front_matter": null,
+  "headings": [],
+  "links": [
+    {
+      "target": "https://example.com/pagina",
+      "kind": "url",
+      "span": {
+        "start": 45,
+        "end": 71
+      },
+      "in_code": false
+    },
+    {
+      "target": "https://example.com/outra",
+      "kind": "url",
+      "span": {
+        "start": 96,
+        "end": 123
+      },
+      "in_code": false
+    },
+    {
+      "target": "https://example.com/outra",
+      "kind": "url",
+      "span": {
+        "start": 97,
+        "end": 122
+      },
+      "in_code": false
+    },
+    {
+      "target": "alguem@example.com",
+      "kind": "refused",
+      "span": {
+        "start": 133,
+        "end": 153
+      },
+      "in_code": false
+    }
+  ],
+  "tasks": [],
+  "tags": []
+}

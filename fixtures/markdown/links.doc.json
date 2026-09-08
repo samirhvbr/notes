@@ -1,0 +1,89 @@
+{
+  "front_matter": null,
+  "headings": [],
+  "links": [
+    {
+      "target": "outra.md",
+      "kind": "relative_path",
+      "span": {
+        "start": 0,
+        "end": 22
+      },
+      "in_code": false
+    },
+    {
+      "target": "sub/dentro.md",
+      "kind": "relative_path",
+      "span": {
+        "start": 24,
+        "end": 57
+      },
+      "in_code": false
+    },
+    {
+      "target": "outra.md#uma-secao",
+      "kind": "relative_path",
+      "span": {
+        "start": 59,
+        "end": 97
+      },
+      "in_code": false
+    },
+    {
+      "target": "#uma-secao",
+      "kind": "anchor",
+      "span": {
+        "start": 99,
+        "end": 131
+      },
+      "in_code": false
+    },
+    {
+      "target": "https://example.com/pagina",
+      "kind": "url",
+      "span": {
+        "start": 133,
+        "end": 176
+      },
+      "in_code": false
+    },
+    {
+      "target": "http://example.com/pagina",
+      "kind": "url",
+      "span": {
+        "start": 178,
+        "end": 219
+      },
+      "in_code": false
+    },
+    {
+      "target": "mailto:alguem@example.com",
+      "kind": "refused",
+      "span": {
+        "start": 221,
+        "end": 256
+      },
+      "in_code": false
+    },
+    {
+      "target": "leia-me.txt",
+      "kind": "relative_path",
+      "span": {
+        "start": 258,
+        "end": 295
+      },
+      "in_code": false
+    },
+    {
+      "target": "outra.md",
+      "kind": "relative_path",
+      "span": {
+        "start": 314,
+        "end": 327
+      },
+      "in_code": true
+    }
+  ],
+  "tasks": [],
+  "tags": []
+}

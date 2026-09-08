@@ -123,9 +123,23 @@ impl fmt::Display for RelPath {
     }
 }
 
+/// The wire form, and **the one place the empty string means the root**.
+///
+/// [`RelPath::parse`] refuses `""` on purpose: it parses something a user typed,
+/// and an empty name is not a path. But `RelPath::root()` is a legitimate value
+/// of this type — `tree_list` takes it on every listing — and it serialises to
+/// `""`, so a `try_from` that refused `""` made the type unable to deserialise a
+/// value it can produce. The frontend's `ROOT` is exactly that string, and every
+/// `tree_list` of the workspace root was rejected before the command body ran.
+///
+/// Accepting it here rather than relaxing `parse` keeps the strictness where it
+/// belongs: a name the user typed still cannot be empty.
 impl TryFrom<String> for RelPath {
     type Error = PathError;
     fn try_from(s: String) -> Result<Self, Self::Error> {
+        if s.is_empty() {
+            return Ok(RelPath::root());
+        }
         RelPath::parse(&s)
     }
 }
@@ -291,6 +305,39 @@ fn compose(base: char, mark: char) -> Option<char> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The regression this type was carrying in silence.
+    ///
+    /// `RelPath::root()` serialises to `""`, and `try_from` refused `""`, so the
+    /// root could cross the wire in one direction only. Every `tree_list` of the
+    /// workspace root failed to deserialise before the command body ran — the
+    /// sidebar's first call, on every launch.
+    #[test]
+    fn the_workspace_root_survives_a_round_trip() {
+        let root = RelPath::root();
+        let json = serde_json::to_string(&root).unwrap();
+        assert_eq!(json, "\"\"");
+        let back: RelPath = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, root);
+        assert!(back.is_root());
+    }
+
+    /// …and the strictness stays where it belongs.
+    #[test]
+    fn an_empty_name_is_still_not_a_path() {
+        assert_eq!(RelPath::parse(""), Err(PathError::Empty));
+    }
+
+    #[test]
+    fn every_other_escape_still_fails_the_wire() {
+        for bad in ["/etc/passwd", "../x.md", "a//b.md", "a\\b.md", "a/"] {
+            let json = serde_json::to_string(bad).unwrap();
+            assert!(
+                serde_json::from_str::<RelPath>(&json).is_err(),
+                "{bad} must not deserialise"
+            );
+        }
+    }
 
     #[test]
     fn rejects_every_escape_shape() {
