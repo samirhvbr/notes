@@ -24,6 +24,10 @@ milestone is reached when everything under it works. Do not read `0.3` here as
 
 ```text
 0.1  desktop editor        a genuinely usable local Markdown editor
+     0.1a  core            editor, write protocol, identity
+     0.1b  workspace       watcher, entry operations, preview, conflicts
+     0.1c  navigation      tabs, quick open, global search, palette, settings
+     0.1d  interface       the shell: rail, sidebar, tabs, note header, status bar
 0.2  index                 SQLite, global search, external-change detection
 0.3  Markdown depth        front matter, tags, links, backlinks, attachments
 0.4  mobile                iOS and Android against the same core
@@ -40,11 +44,18 @@ and one who stops after 0.3 has a good one.
 
 ## 0.1 — Desktop MVP
 
-> **Built.** Shipped across `0.3.0`–`0.11.x` as milestones 0.1a (editor and
-> write protocol), 0.1b (watcher, entry operations, preview, conflicts) and 0.1c
-> (tabs, quick open, global search, palette, settings, `en`/`pt-BR`). Packaged
-> for Linux: `.deb`, AppImage and the AUR `notes-bin`. macOS and Windows are
-> tested in CI and **not published** — [ADR-024](decisions.md).
+> **0.1a–0.1c built; 0.1d in progress.** Shipped across `0.3.0`–`0.11.x` as
+> 0.1a (editor and write protocol), 0.1b (watcher, entry operations, preview,
+> conflicts) and 0.1c (tabs, quick open, global search, palette, settings,
+> `en`/`pt-BR`). Packaged for Linux: `.deb`, AppImage and the AUR `notes-bin`;
+> macOS and Windows are tested in CI and **not published**
+> ([ADR-024](decisions.md)).
+>
+> **0.1d — Interface** was added to the scope on 08/09/2026
+> ([ADR-037](decisions.md)) and the desktop MVP is now `0.1a + 0.1b + 0.1c +
+> 0.1d`. The editor works; what it did not have was a way to reach it. Graph
+> view moved from "out of scope" to 0.3 in the same pass
+> ([ADR-038](decisions.md)).
 
 Linux, macOS, Windows.
 

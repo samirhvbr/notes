@@ -8,6 +8,61 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.1 - 0.1d opens with the two ADRs and the bug: you can change folder again
+
+Milestone 0.1d — Interface — enters the scope, and the desktop MVP becomes
+`0.1a + 0.1b + 0.1c + 0.1d`. Two ADRs, in the first commit as the milestone
+asks:
+
+**ADR-037.** The interface is a milestone, not a finishing pass. The reference
+is Obsidian's dark layout; the rule is that palette, spacing and structure are
+free and **no theme file, stylesheet or asset is copied — everything is
+rebuilt**. Icons are `lucide-react` (ISC). The twenty-five flows of 0.1b and
+0.1c are re-indexed into `ACCEPTANCE-0.1d.md` rather than ticked where they are:
+the steps move, the behaviour does not, and a flow whose steps no longer
+describe the window is not a flow anyone can walk.
+
+**ADR-038.** Graph view leaves §18's "out of scope until further order" and
+becomes 0.3, after backlinks — a graph is a rendering of a link relation, and
+backlinks are that relation. It is **not** part of 0.1d; the icon rail carries
+it disabled with its milestone in the tooltip, which is the honest way to show
+something that is coming.
+
+**And the defect.** Every command needed to change workspace has existed since
+0.1a — `workspace_open`, `workspace_create`, `workspace_recent`,
+`workspace_close` — and the only surface that reached them was the Welcome
+screen, which disappears the moment a folder is opened. After the first open
+there was **no way to change folder at all**. A command with no route to the
+user is a command that does not exist.
+
+The selector lives in the sidebar footer, in a scroll-proof row: it is the one
+control that has to be reachable at every moment, because it is how a user
+leaves a workspace they opened by mistake. Switching is `close` then `open`, in
+that order, so `close_workspace`'s `DirtyBuffers` refusal is **on** the path
+rather than beside it; a dirty buffer asks, by name, in the application's own
+modal — never `window.confirm`, which does nothing in a WebView.
+
+`tests/switch.rs` — six tests over a path nothing had ever exercised, because
+until now it was unreachable. They pin behaviour rather than a fix: a
+store-before-adopt was written into `open_workspace` and then **removed**, because
+the tests passed identically with and without it. `ARCHITECTURE.md` §4.1
+describes a two-second registry debounce that is not implemented, so there is
+nothing unwritten to lose — recorded as `DECISIONS-0.1d.md` D-01 rather than
+pre-fixed, and the day the debounce lands those tests start failing, which is
+the outcome to want.
+
+`Menu.tsx` is the one popup the workspace selector, the note header's `⋮` and
+the explorer's context menu will all be. Eleven tests, in a DOM, because focus
+is the subject: a menu that keeps focus leaves a keyboard user on `<body>` with
+no way back. `jsdom` and testing-library join the **dev** dependencies for it
+(D-02) — `vitest` stays on `node` by default and a file opts into a DOM on its
+first line.
+
+The three questions `.continue/0.1d-interface.md` §10 left open are answered by
+the rule and recorded: the editor column is a fixed maximum rather than a fifth
+setting (D-03), split is horizontal only in this milestone (D-04), and Welcome
+stays a screen rather than becoming an empty shell (D-05).
+
 ## 0.12.0 - artifacts on a minor bump, and a patch release that says why it is empty
 
 The owner's call on yesterday's cost: *"9 min e 105 MB por commit de doc não se

@@ -18,6 +18,14 @@ export default defineConfig({
       : undefined,
     watch: { ignored: ["**/src-tauri/**"] },
   },
+  test: {
+    // Per file, because the store tests are pure logic and want no DOM at all,
+    // while the menu tests are about focus — which only a DOM has. A file opts
+    // in with `// @vitest-environment jsdom` at the top.
+    environment: "node",
+    globals: false,
+    setupFiles: ["./vitest.setup.ts"],
+  },
   build: {
     target: ["es2021", "chrome100", "safari15"],
     sourcemap: !!process.env.TAURI_ENV_DEBUG,

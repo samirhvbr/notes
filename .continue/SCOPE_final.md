@@ -380,13 +380,44 @@ Aceite:
 - [ ] Busca global em `fixtures/large` entrega o primeiro resultado em <500ms e é cancelável
 - [ ] Reabrir o app restaura workspace, abas, aba ativa e cursor
 
-**MVP desktop = 0.1a + 0.1b + 0.1c.** Release para Debian, Arch, macOS e Windows.
+### 0.1d — Interface
+
+Escopo: a casca da aplicação. Referência de layout: **Obsidian dark**. Regra:
+paleta, espaçamento e estrutura são livres; arquivo de tema, CSS ou asset do
+Obsidian **não se copia — reconstrói**. Ícones: `lucide-react` (ISC).
+
+Estrutura, da esquerda para a direita:
+
+- **Faixa vertical de ícones**: arquivos, busca, graph (desabilitado, com
+  tooltip "0.3"); configurações embaixo.
+- **Barra lateral**: explorador com toolbar (nova nota, nova pasta, ordenar,
+  recolher tudo); no rodapé, o **seletor de workspace** — nome atual + chevron
+  abrindo menu com *Open folder…*, *Create workspace…*, recentes e *Close
+  workspace* (volta para a Welcome; respeita `DirtyBuffers`).
+- **Área central**: barra de abas (as abas do 0.1c, fechar, `+`, split);
+  cabeçalho da nota com voltar/avançar, título centralizado, alternar
+  Source/Preview, menu; editor em coluna centralizada de largura máxima ~700 px,
+  tipografia com H1 grande. Split abre painel à direita.
+- **Barra de estado**, canto inferior direito: os sete estados do §9, palavras,
+  caracteres. Backlinks é 0.3 — **não pôr contador falso**.
+- Fundo, superfícies e destaque num tom só de escuro com um acento; contraste AA
+  no texto.
+
+Aceite:
+- [ ] Trocar de workspace sem passar pela Welcome, pelo seletor no rodapé da
+      barra lateral, respeitando buffers sujos
+- [ ] Contraste AA no texto, verificado automaticamente
+- [ ] Menus navegáveis por teclado
+- [ ] Os 25 fluxos do 0.1b/0.1c repassados na interface nova: os passos mudam de
+      lugar, o comportamento não
+
+**MVP desktop = 0.1a + 0.1b + 0.1c + 0.1d.** Release para Debian, Arch, macOS e Windows.
 
 ### 0.2 — Índice e referências
 SQLite em app data, incremental, FTS5, recentes, outline, rename com revisão de links nos dois sentidos. Aceite: reindexar não altera notas nem ids; semânticas de busca não mudam por baixo.
 
 ### 0.3 — Conhecimento e agentes locais
-Front matter interpretado, tags (`#tag` e YAML, nunca de dentro de código), wiki links, backlinks, colar imagem → `attachments/` na raiz com nome não colidente, `notes-mcp`. Aceite: app e MCP gravando o mesmo arquivo não se sobrescrevem (teste com dois processos); MCP funciona com o app fechado.
+Front matter interpretado, tags (`#tag` e YAML, nunca de dentro de código), wiki links, backlinks, **graph view** (depois dos backlinks, que são o dado de que ele vive), colar imagem → `attachments/` na raiz com nome não colidente, `notes-mcp`. Aceite: app e MCP gravando o mesmo arquivo não se sobrescrevem (teste com dois processos); MCP funciona com o app fechado.
 
 ### 0.4 — Mobile utilizável (§14)
 ### 0.5 — Servidor e REST
@@ -395,7 +426,9 @@ Front matter interpretado, tags (`#tag` e YAML, nunca de dentro de código), wik
 
 ## 18. Fora de escopo até segunda ordem
 
-Colaboração em tempo real / CRDT · Live Preview / WYSIWYG · canvas · graph view · plugins e marketplace · temas além do dark · publicação web · chat de IA embutido · integração Git nativa · cloud oficial · multi-janela · orgs/equipes · app web · OCR · busca semântica por embeddings · E2EE na primeira versão remota.
+Colaboração em tempo real / CRDT · Live Preview / WYSIWYG · canvas · plugins e marketplace · temas além do dark · publicação web · chat de IA embutido · integração Git nativa · cloud oficial · multi-janela · orgs/equipes · app web · OCR · busca semântica por embeddings · E2EE na primeira versão remota.
+
+*Graph view saiu desta lista em 08/09/2026 e passou a ser 0.3, depois dos backlinks.*
 
 Recurso fora de escopo não entra como "melhoria incidental" de um agente. Entra por revisão deste documento.
 

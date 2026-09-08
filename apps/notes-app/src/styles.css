@@ -71,9 +71,15 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   width: 300px;
   flex: 0 0 auto;
   border-right: 1px solid var(--line);
-  overflow: auto;
-  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
+
+/* The tree scrolls; the workspace selector below it does not scroll away. It
+   is the one control that has to be reachable at every moment, because it is
+   how a user leaves a workspace they opened by mistake. */
+.side-scroll { flex: 1 1 auto; overflow: auto; padding: 12px; }
 
 .side h2 {
   font-size: 11px;
@@ -522,3 +528,107 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   color: var(--fg); font-size: 13px; margin-bottom: 8px;
 }
 .dialog.settings label.check input { width: auto; margin: 0; }
+
+
+/* ---------------------------------------------------------------- menus --- */
+/* One popup for the workspace selector, the note header's `⋮` and the
+   explorer's context menu. Positioned next to its trigger rather than
+   portalled: the trigger is always inside a panel that scrolls with it. */
+
+.menu {
+  position: absolute;
+  z-index: 40;
+  min-width: 240px;
+  max-width: 360px;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 45%);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover:not(:disabled),
+.menu-item:focus-visible {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border-color: transparent;
+}
+
+.menu-item:disabled { color: var(--fg-dim); cursor: default; }
+.menu-item.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bad) 20%, transparent);
+}
+
+.menu-icon { display: inline-flex; color: var(--fg-dim); flex: 0 0 auto; }
+.menu-label { flex: 1 1 auto; }
+.menu-hint {
+  flex: 0 1 auto;
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl; /* a long path is identified by its tail, not its head */
+  text-align: left;
+}
+
+.menu-sep {
+  margin: 4px 2px;
+  border-top: 1px solid var(--line);
+  padding-top: 4px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.menu-sep:not(:has(span)) { padding-top: 0; font-size: 0; }
+
+/* --------------------------------------------- the workspace selector --- */
+
+.ws-menu { position: relative; flex: 0 0 auto; border-top: 1px solid var(--line); }
+
+.ws-menu .menu {
+  /* Opens upward: it lives at the bottom of the sidebar. */
+  bottom: calc(100% + 4px);
+  left: 6px;
+  right: 6px;
+  min-width: 0;
+}
+
+.ws-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ws-trigger:hover { background: color-mix(in srgb, var(--fg) 6%, transparent); }
+.ws-chevron { color: var(--fg-dim); flex: 0 0 auto; }
+.ws-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}

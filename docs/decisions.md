@@ -1128,3 +1128,88 @@ second-guessing it.
 at `0.11.2` and cost the CI queue; or decide by which paths a release range
 touched, which trades nine minutes for a rule that has to be maintained and can
 be wrong in both directions.
+
+---
+
+## ADR-037 — Milestone 0.1d exists: the interface is a milestone, not a finishing pass
+
+**Status:** `ACCEPTED` · 08/09/2026 · owner's decision, recorded here ·
+amends `.continue/SCOPE_final.md` §17
+
+**Context.** 0.1a, 0.1b and 0.1c built a Markdown editor and its behaviour is
+tested on four platforms. What none of them built is an *interface*: the window
+is a tree, a text area and a status line, and the twenty-five interface flows in
+`ACCEPTANCE-0.1b.md` and `ACCEPTANCE-0.1c.md` had been waiting for a person to
+walk them.
+
+The owner installed the `0.11.11` `.deb`, opened it, and did not walk them —
+because the interface is about to change entirely and walking flows against a
+layout that is being replaced measures nothing. In the same pass they hit the
+concrete consequence of never having had an interface pass: **there is no way to
+change workspace without going back to the Welcome screen.** Every command
+exists in the core; nothing in the window reaches them.
+
+**Decision.** §17 gains **0.1d — Interface**, and the desktop MVP becomes
+`0.1a + 0.1b + 0.1c + 0.1d`. The layout reference is Obsidian's dark interface.
+Icons are `lucide-react` (ISC).
+
+**The copying rule, which is the part that matters legally and is stated in the
+scope rather than left to judgement:** palette, spacing and structure are free —
+they are ideas, and an interface layout is not a protected work. **No Obsidian
+theme file, stylesheet or asset is copied. Everything is rebuilt.** A CSS file
+is a work; the observation that a note editor reads better in a 700-pixel column
+is not.
+
+The twenty-five flows of 0.1b and 0.1c are **re-indexed into
+`ACCEPTANCE-0.1d.md`** rather than ticked where they are: the steps move in the
+interface, the behaviour does not, and a flow whose steps no longer describe the
+window is not a flow anyone can walk.
+
+**Consequences.** The MVP ships later, and it ships as something a person can
+use rather than something a test can prove. The workspace selector alone closes
+a defect that had no route to the user at all. The cost is a milestone that
+produces almost no core code and a great deal of frontend, at a point where the
+project's testing strength is in the core — which is why the automated half of
+0.1d is contrast, keyboard navigation and the standing dialog check, and why
+everything else is a flow with a person's name on it.
+
+**Alternative if you disagree.** Ship the MVP on 0.1c and treat the interface as
+polish inside 0.2. That is what "finishing pass" usually means and it is why so
+many applications never get one: there is always an index to build.
+
+---
+
+## ADR-038 — Graph view leaves "out of scope" and becomes 0.3, after backlinks
+
+**Status:** `ACCEPTED` · 08/09/2026 · owner's decision, recorded here ·
+amends `.continue/SCOPE_final.md` §18
+
+**Context.** §18 listed graph view among the features that do not enter "until
+further order", beside canvas, plugins and a marketplace. The owner has given
+that order.
+
+**Decision.** Graph view moves out of §18 and into **0.3**, explicitly *after*
+backlinks. **It is not part of 0.1d.** The icon rail 0.1d builds carries a graph
+entry that is **disabled, with a tooltip naming the milestone** — which is the
+honest way to show a thing that is coming: visible, inert, and dated.
+
+**Why after backlinks and not before.** A graph is a rendering of a link
+relation; backlinks are that relation. Building the view first means inventing a
+data source for it, and then rebuilding it when 0.3 produces the real one. The
+ordering is not a preference about interest, it is which of the two can exist
+without the other.
+
+**Consequences.** §18 stops being the list of things that will never happen and
+becomes the list of things that have not been ordered yet, which is what it
+always said it was — *"Recurso fora de escopo não entra como 'melhoria
+incidental' de um agente. Entra por revisão deste documento."* This is that
+revision, made by the owner.
+
+A disabled control in the interface from 0.1d onward is a promise with a date on
+it. If 0.3 moves, the tooltip is what has to be corrected — it is a string, and
+it is a key like every other.
+
+**Alternative if you disagree.** Leave graph view out of §18 *and* out of the
+interface, and add it whenever it arrives. That avoids a disabled control
+carrying a promise, at the cost of an icon rail that has to be relaid out later
+and a user who cannot see the shape of what is coming.

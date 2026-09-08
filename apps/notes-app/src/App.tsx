@@ -5,6 +5,7 @@ import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
 import { Dialog } from "./app/Dialog";
 import { Tabs } from "./app/Tabs";
+import { WorkspaceMenu } from "./app/WorkspaceMenu";
 import { Palette, type Command, type PaletteMode } from "./app/Palette";
 import { SettingsPanel } from "./app/Settings";
 import { SearchPanel } from "./search/SearchPanel";
@@ -221,7 +222,13 @@ export default function App() {
 
       <div className="body">
         <aside className="side">
-          <Tree />
+          <div className="side-scroll">
+            <Tree />
+          </div>
+          {/* The sidebar footer, which is where changing workspace lives from
+              0.1d on. Before it, the only route was the Welcome screen — and
+              the Welcome screen is gone the moment a folder is open. */}
+          <WorkspaceMenu />
         </aside>
         {searching && <SearchPanel onClose={() => setSearching(false)} />}
         <main className="main">
