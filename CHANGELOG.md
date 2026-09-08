@@ -8,6 +8,47 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.0 - milestone 0.1d ships: the interface, with twenty-six boxes nobody has ticked
+
+The minor the milestone asks for, so `build.yml` produces a `.deb`, an AppImage,
+a tarball and the AUR package (ADR-036). `.continue/0.1d-interface.md` §9: the
+owner installs it and walks everything at once — the ten areas of this milestone
+and the twenty-five flows of 0.1b and 0.1c, re-indexed into the interface that
+now exists.
+
+**What is on screen that was not before**
+
+| | |
+|---|---|
+| A rail | Files, Search, Graph (disabled, tooltip `0.3`), Settings at the foot. The active icon collapses the sidebar |
+| A sidebar | Explorer toolbar — new note, new folder, sort, collapse all — the tree, and **the workspace selector** pinned below the scroll |
+| A tab bar | The 0.1c tabs, with a background on the active one, `+`, and the split toggle |
+| A note header | Back/forward, the title without `.md`, Source ↔ Preview, `⋮` |
+| A column | 700 px, centred, the same on both sides of a split, with the same font and rhythm |
+| A divider | Draggable, **and focusable, and arrow-movable** |
+| A status bar | The seven states, words, characters — and nothing else |
+
+**And the defect that started it.** Every command needed to change workspace has
+existed since 0.1a; the only surface reaching them was the Welcome screen, which
+disappears the moment a folder is opened. After the first open there was no way
+to change folder at all.
+
+**What was decided, and where.** Two ADRs for the scope change — 0.1d exists
+(ADR-037), graph view leaves §18 for 0.3 after backlinks (ADR-038) — and seven
+calls in `DECISIONS-0.1d.md`, including the three questions the milestone left
+open by name: the column is a fixed maximum rather than a fifth setting, split
+is horizontal only, and Welcome stays a screen.
+
+**What the machine holds, and what it does not.** Eleven DOM tests on the menu's
+keyboard path, six core tests on switching workspace, and a contrast script over
+42 pairs that fails the build if any colour is written outside `:root`. That is
+less than a fifth of `ACCEPTANCE-0.1d.md`, and the document says so. The rest is
+the owner's, twice — once on this `.deb` and once on the next one.
+
+The one criterion no test will ever hold is written down too: *"Alguém que usa
+Obsidian todo dia abre o app e encontra tudo sem pensar. Se precisar procurar
+onde troca de pasta, o marco não fechou."*
+
 ## 0.12.5 - the editor is set in the body font, because the reading was jumping
 
 Two things the milestone's own acceptance asks for that the build did not do,
