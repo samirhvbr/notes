@@ -8,6 +8,54 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.10.1 - the dmabuf rule required Wayland, and the failure never did
+
+The window that disappeared on *Open Folder* was found, and it was not the file
+chooser. Run without the environment variable that had been masking it, on
+Debian 13 / X11 / NVIDIA:
+
+```
+[notes] dmabuf: not needed — session is not wayland
+src/nv_gbm.c:288: GBM-DRV error (nv_gbm_create_device_native): …failed (ret=-1)
+KMS: DRM_IOCTL_MODE_CREATE_DUMB failed: Permission denied
+Failed to create GBM buffer of size 1100x720: Permission denied
+[notes] window main: close requested
+[notes] window main: destroyed
+```
+
+**The workaround declined to apply, and one line later the reason it exists
+happened.** WebKitGTK has used the DMA-BUF renderer on **X11 since 2.42**; the
+fault is in NVIDIA's GBM, not in a compositor, so requiring Wayland was checking
+the wrong thing. `decide` no longer takes the display server at all: on Linux,
+the proprietary NVIDIA driver is the whole condition.
+
+`nouveau` does **not** count, and the function says how it is told apart rather
+than matching a name: `/proc/driver/nvidia/version` is created by the
+proprietary kernel module and by nothing else, `/sys/module/nvidia/` is that
+module's own sysfs directory while nouveau's is `nouveau`, and `nvidia-smi` is a
+weaker hint that nouveau never ships. Nouveau's GBM works, and turning the
+renderer off there would cost compositing performance for nothing. It is reported
+in the diagnostics beside the proprietary flag, so the panel shows which one is
+loaded.
+
+The six tests become nine, and the one that mattered flipped: *"skips X11 even
+with NVIDIA"* — an assertion of the bug — is now **"applies on X11 with
+NVIDIA"**. `session_kind()` keeps a test of its own because the diagnostics still
+report it; it just no longer decides anything.
+
+Verified on the machine that produced the failure, without the variable:
+`dmabuf: applied — proprietary nvidia driver detected`, no GBM error, and the
+window renders.
+
+**Two of this repository's own claims were wrong and are corrected by it.** The
+instrumentation added at `0.9.5` is what named the event — `close requested` then
+`destroyed` — and D-20's reading of the evidence, that a GTK file chooser was
+taking its parent down, was a plausible mechanism built on a false premise: the
+run that produced it had the variable set, so the workaround never ran and the
+comparison was never made. And `docs/SPIKE-0.0.md` recorded *"nvidia false"* for
+this machine, which has a GTX 1060 with the proprietary modules loaded — that
+line was written from expectation rather than from a run.
+
 ## 0.10.0 - milestone 0.1c ships, and the MVP desktop is complete
 
 `0.1a + 0.1b + 0.1c` is the desktop MVP of `SCOPE_final.md` §17.

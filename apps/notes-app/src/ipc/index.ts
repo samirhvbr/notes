@@ -61,7 +61,10 @@ export interface EnvReport {
   arch: string;
   tauriVersion: string;
   session: string;
+  /** The proprietary driver — the one the dmabuf workaround exists for. */
   nvidia: boolean;
+  /** Reported, and deliberately not a trigger: nouveau's GBM works. */
+  nouveau: boolean;
   dmabufApplied: boolean;
   dmabufExplanation: string;
   dataDir: string;
