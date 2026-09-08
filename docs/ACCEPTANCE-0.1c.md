@@ -23,7 +23,7 @@ a scan (`ignore` + `regex`) and that FTS5 takes over word search at 0.2, and
 | # | Criterion | Verdict |
 |---|---|---|
 | 1 | First result in `fixtures/large` in <500 ms, and cancellable | **met** — measured |
-| 2 | Reopening restores workspace, tabs, active tab and cursor | *in progress* |
+| 2 | Reopening restores workspace, tabs, active tab and cursor | **met in the core and the store** — the visible half is C10, unwalked |
 
 ---
 
@@ -60,7 +60,32 @@ nothing, only notes are searched, the ignore list is honoured, and — scope
 
 ## 2. Reopening restores workspace, tabs, active tab and cursor
 
-*In progress.*
+**Automated on both sides of the IPC**, because the criterion spans both.
+
+`notes-core`, `tests/session.rs` — five tests. Tabs, the active tab and the
+cursor survive a restart through a *different* `WorkspaceService` over the same
+data directory; a note keeps its `NoteId` across that restart, which is what lets
+a tab find it again; an unreadable session starts empty rather than refusing to
+open the workspace; a session written by a newer build costs an empty session
+rather than a read-only workspace, because session state is resettable and the
+registry is not; and saving a session **touches nothing in the user's folder**.
+
+`apps/notes-app`, `src/stores/tabs.test.ts` — twenty tests over the store that
+puts them back. Opening, activating, closing to the right then to the left, the
+cursor remembered per tab and handed to the editor when it mounts, the session
+round-trip in its own shape with the other stores' fields preserved, a tab whose
+note is gone dropped rather than left failing on every click — and the two that
+matter most, because a tab strip is the likeliest place to lose a buffer:
+**leaving a dirty note flushes it**, and **leaving a note in conflict writes its
+draft instead of saving**.
+
+Cursor restoration is ordered, not incidental: the position is applied *after*
+the editor mounts the document, and reports from a mounting editor are ignored
+while a restore is in flight — otherwise the caret at 1:1 overwrites the one
+being restored. A test asserts exactly that.
+
+**What no test covers** is that the restored caret is where the user left it *on
+screen*. That is C10.
 
 ---
 
@@ -73,6 +98,13 @@ separately, and it exists from the first commit rather than the last.
 
 **Nothing below is ticked.** A row becomes `verified` only after the owner has
 walked it and said so.
+
+> **What a screenshot showed, which is not a tick.** The application was started
+> against a seeded session of two tabs with `view_mode: split`. It came up with
+> both tabs present, the active one marked, its note loaded, Split restored and
+> the preview rendering. That is evidence for part of **C10** and it is not C10:
+> the caret position is not visible in a screenshot, and nobody has clicked
+> anything.
 
 | # | Flow | Expected | Verified |
 |---|---|---|---|

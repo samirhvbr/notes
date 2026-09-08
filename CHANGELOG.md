@@ -8,6 +8,61 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.10.0 - milestone 0.1c ships, and the MVP desktop is complete
+
+`0.1a + 0.1b + 0.1c` is the desktop MVP of `SCOPE_final.md` §17.
+
+**Both criteria are met, and both were measured rather than asserted.** The first
+result over 10 000 notes and 197 MiB arrives in **11.4 ms** against a ceiling of
+500 ms, and cancelling returns in **650 ns**. The restart criterion is automated
+on both sides of the IPC, because it spans both: five tests in `notes-core` prove
+tabs, the active tab and the cursor survive a restart through a *different*
+service over the same data directory, and twenty in the store prove it puts them
+back.
+
+Three decisions are promoted to ADRs:
+
+**ADR-030** — tabs are a list *beside* the editor, not a second document model.
+The editor holds one loaded document and all of 0.1a and 0.1b is written against
+that: the write protocol, the stale-save guard, the draft rules, the conflict
+state. Making it hold a map to gain a tab strip would put every one of those back
+in play for a navigation feature, when two notes are never visible at once. The
+cost is stated: switching tabs re-reads from disk, and the moment two documents
+must be visible the decision is to be revisited rather than worked around.
+
+**ADR-031** — global search is a scan the core owns and the frontend **polls**,
+the same way it polls reconciliation. `ARCHITECTURE.md` §7.2 had sketched events;
+two delivery mechanisms for two streams of the same kind is one more than this
+application needs. And the scanner does not retire when FTS5 arrives: §10
+requires literal, words and regex to keep their names, and the index only takes
+over *words*.
+
+**ADR-032** — quick open matches a cached path list that the tree invalidates.
+Walking 10 000 notes is fine once and ruinous per keystroke; a stale list offers
+a note that is not there, so every create, rename, move, duplicate, delete and
+reconciliation tick drops it. Coarse on purpose.
+
+**`notes-index`, SQLite and the `registry.db` move are not here**, and that was a
+stop rather than a preference. The instruction that opened the milestone asked
+for them; §17 puts them at 0.2, §10 says the 0.1c search is a scan and that FTS5
+takes over word search at 0.2, and **ADR-015 is `ACTIVE`** saying the registry
+moves at 0.2. Building them would have contradicted an ACTIVE ADR and made this
+milestone's own search criterion untestable as written. `DECISIONS-0.1c.md` D-01
+records it with the alternative: an ADR superseding ADR-015 and an edit to the
+scope, in that order.
+
+One gap the acceptance document found before a user could: **C8 says clicking a
+search hit opens the note *at that line*, and the panel only opened the note.**
+Writing the row first is what surfaced it. `openAt` now sets the target before
+the note opens — so a fresh view mounts on it — and bumps a counter for the case
+where the note is already on screen and the view will not rebuild.
+
+`ACCEPTANCE-0.1c.md` has existed since the milestone's first commit with its
+thirteen interface rows, **and not one of them is ticked.** A screenshot showed
+tabs, the active tab, the workspace and Split all restored from a seeded session;
+that is written down as evidence and explicitly not as a tick, because a caret
+position is not visible in a screenshot and nobody has clicked anything.
+
 ## 0.9.11 - tabs, quick open, workspace search, the command palette and settings
 
 The interface half of milestone 0.1c.

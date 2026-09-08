@@ -821,3 +821,97 @@ capability, and granting a permission is the owner's act, written into the
 capability file with its reason — not applied by an agent on the way past
 (CLAUDE.md golden rule 7). The change is two lines and is written out in
 [DECISIONS-0.1b.md](DECISIONS-0.1b.md) D-06 for whoever makes it.
+
+---
+
+## ADR-030 — Tabs are a list beside the editor, not a second document model
+
+**Status:** `ACCEPTED` · 08/09/2026
+
+**Context.** Milestone 0.1c adds tabs with restoration. The editor store holds
+exactly one loaded document, and everything in 0.1a and 0.1b is written against
+that: the write protocol, `buffer_version` and the stale-save guard, the draft
+rules, the conflict state, the reload-from-disk path. Making it hold a map of
+documents to gain a tab strip would put every one of those back in play for what
+is, at 0.1c, a navigation feature — two notes are never visible at the same time.
+
+**Decision.** A separate store owns the **list**; the editor keeps owning the
+**document**. A tab carries only what has to survive a restart — path, `NoteId`,
+cursor, scroll, pinned — and the buffer stays where it was. Leaving a tab is not
+a new rule: a dirty note is flushed and a note in conflict writes its draft,
+which is what `ARCHITECTURE.md` §5 already says happens when a buffer stops being
+looked at.
+
+The cursor is handed to the editor **after** it mounts the document, because a
+position in a document that does not exist yet means nothing; reports from a
+freshly mounting editor are suppressed while a restore is in flight, or the
+caret at 1:1 would overwrite the one being restored.
+
+**Consequences.** Switching tabs re-reads the note from disk rather than swapping
+an in-memory buffer, which is a round trip the user can feel on a very large
+note — accepted, because it means there is exactly one place where a buffer
+exists and therefore exactly one place where it can be lost. The moment two
+documents must be **visible** at once — a split of two notes, not of one note's
+source and preview — this decision is the one to revisit, and it should be
+revisited rather than worked around.
+
+---
+
+## ADR-031 — Global search is a scan the core owns, polled like reconciliation
+
+**Status:** `ACCEPTED` · 08/09/2026
+
+**Context.** Scope §10 puts a workspace-wide search at 0.1c and the FTS5 index at
+0.2, and requires the first result in under 500 ms on a 10 000-note workspace
+with the search cancellable. `ARCHITECTURE.md` §7.2 sketched `search:result` and
+`search:done` as core-to-frontend events; the reconciliation built at 0.1b uses
+polling instead, and two delivery mechanisms for two streams of the same kind is
+one more than the application needs.
+
+**Decision.** The core walks the workspace with `ignore` and matches with
+`regex`, in a background thread, pushing hits as they are found. The frontend
+**polls** — `search_start`, `search_poll`, `search_cancel` — exactly as it polls
+reconciliation. Every worker reads the cancel flag before each file, so
+cancelling is bounded by one file rather than by the workspace.
+
+**This scanner does not go away when FTS5 arrives.** §10 requires the three
+semantics — literal, words, regex — to keep their names and not swap underneath
+the user; the index takes over *words*, and literal and regex remain what the
+scan is for.
+
+**Consequences.** Measured at 11.4 ms to the first result and 650 ns to cancel
+over 197 MiB, which is the criterion met by two orders of magnitude. Polling adds
+a latency floor of one interval, which is invisible against a walk and is the
+price of one delivery mechanism instead of two. The core carries a background
+thread and a cancellation flag it did not have; a search left running by a
+closed panel is prevented by cancelling on drop rather than by asking every
+caller to remember.
+
+---
+
+## ADR-032 — Quick open matches a cached path list, and the tree invalidates it
+
+**Status:** `ACCEPTED` · 08/09/2026
+
+**Context.** `Ctrl+P` has to answer on every keystroke. Walking a 10 000-note
+workspace takes tens of milliseconds — fine once, ruinous per character — and
+reading files to match a *name* would be work for nothing.
+
+**Decision.** The service caches the workspace's note paths, built on first use,
+and matches them in memory. It reads no file. **Every operation that changes the
+shape of the tree drops the cache** — create, rename, move, duplicate, delete,
+and any reconciliation tick, since a file that appeared or vanished outside the
+application changes the tree as surely as one the application renamed.
+
+Scoring is deliberately small and explainable rather than clever: a subsequence
+match, a bonus for consecutive characters and for landing at the start of a path
+segment, and the file name ranked ahead of the directory, because `Ctrl+P` is how
+someone reaches for a file they can name.
+
+**Consequences.** The first `Ctrl+P` after opening a workspace pays for the walk;
+every later one is a filter over memory. Invalidating on every reconciliation
+tick is coarse — a tick that changed nothing still drops the cache — and that is
+chosen over tracking which paths moved, because a stale quick-open list offers a
+note that is not there, which is worse than rebuilding a list. The scoring will
+disagree with someone's expectation eventually; it is small enough to read and
+change, which is the property that matters.

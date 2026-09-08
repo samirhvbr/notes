@@ -37,6 +37,12 @@ interface TabsState {
   restoring: boolean;
 
   openPath: (path: RelPath) => Promise<void>;
+  /** Open a note **at a position** — what clicking a search hit means. */
+  openAt: (path: RelPath, line: number, col: number) => Promise<void>;
+  /** Bumped when a jump is requested into a note that is already mounted, so
+   *  the editor moves the caret instead of waiting for a rebuild that will not
+   *  happen. */
+  gotoRev: number;
   activate: (noteId: NoteId) => Promise<void>;
   close: (noteId: NoteId) => Promise<void>;
   closeActive: () => Promise<void>;
@@ -56,6 +62,7 @@ export const useTabs = create<TabsState>((set, get) => ({
   tabs: [],
   activeId: null,
   restoring: false,
+  gotoRev: 0,
 
   reset() {
     if (persistTimer) clearTimeout(persistTimer);
@@ -78,6 +85,27 @@ export const useTabs = create<TabsState>((set, get) => ({
       activeId: doc.noteId,
     }));
     schedulePersist(get);
+  },
+
+  async openAt(path, line, col) {
+    const existing = get().tabs.find((t) => t.path === path);
+    if (existing) {
+      // Set the target first: if the editor rebuilds it reads this, and if it
+      // does not, `gotoRev` tells it to move.
+      set((s) => ({
+        tabs: s.tabs.map((t) => (t.noteId === existing.noteId ? { ...t, line, col } : t)),
+      }));
+      await get().activate(existing.noteId);
+      set((s) => ({ gotoRev: s.gotoRev + 1 }));
+      return;
+    }
+    await get().openPath(path);
+    const doc = useEditor.getState().doc;
+    if (!doc || doc.path !== path) return;
+    set((s) => ({
+      tabs: s.tabs.map((t) => (t.noteId === doc.noteId ? { ...t, line, col } : t)),
+      gotoRev: s.gotoRev + 1,
+    }));
   },
 
   async activate(noteId) {

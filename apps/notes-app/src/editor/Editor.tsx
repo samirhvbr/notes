@@ -118,6 +118,21 @@ export function Editor() {
     // there is no way to change them on a live view without rebuilding it.
   }, [key === null ? null : key.split(":")[0], readOnly, lineNumbersOn, wrapOn, tabSize, fontSize]);
 
+  // A jump into the note already on screen: the view will not rebuild, so the
+  // caret is moved directly. Clicking a search hit is the case (C8).
+  const gotoRev = useTabs((s) => s.gotoRev);
+  useEffect(() => {
+    if (!gotoRev) return;
+    const v = view.current;
+    const want = pendingCursor(noteIdRef.current);
+    if (!v || !want) return;
+    const lines = v.state.doc.lines;
+    const line = v.state.doc.line(Math.min(Math.max(want.line, 1), lines));
+    const pos = Math.min(line.from + Math.max(want.col - 1, 0), line.to);
+    v.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    v.focus();
+  }, [gotoRev]);
+
   return <EditorBody doc={doc} host={host} view={view} externalRev={doc?.externalRev ?? 0} />;
 }
 

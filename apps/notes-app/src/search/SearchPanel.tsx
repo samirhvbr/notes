@@ -27,7 +27,7 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const idRef = useRef<SearchId | null>(null);
   const input = useRef<HTMLInputElement | null>(null);
-  const openPath = useTabs((s) => s.openPath);
+  const openAt = useTabs((s) => s.openAt);
   const doc = useEditor((s) => s.doc);
   const dirty = !!doc && doc.bufferVersion !== doc.savedVersion;
 
@@ -168,7 +168,7 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
           <li key={`${h.path}:${h.line}:${h.col}:${i}`}>
             <button
               className="row"
-              onClick={() => void openPath(h.path)}
+              onClick={() => void openAt(h.path, h.line, h.col)}
               title={`${h.path}:${h.line}`}
             >
               <span className="where">
