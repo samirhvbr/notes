@@ -212,6 +212,78 @@ costs about as much as 5 MiB of prose. A note of that shape re-renders in about
 Nothing in 0.1b needs that faster; a note that large is the thing to measure
 again if anyone complains.
 
+---
+
+## Verified in the running app
+
+Everything above is a test of `notes-core`, and that is the hole this milestone
+exposed: **six flows shipped dead behind a dialog the WebView does not have, and
+every criterion was green.** A criterion satisfied in the core says nothing about
+the interface, so this section exists and is separate.
+
+The application was launched on Debian 13 / X11 with the Vite server running:
+
+```bash
+cd apps/notes-app && npm run dev &      # or: npm run tauri dev
+NOTES_DATA_DIR=/tmp/nd ./target/debug/notes-app
+```
+
+### Verified — observed on screen
+
+| # | Flow | How |
+|---|---|---|
+| V1 | The application starts and paints the Welcome screen | Fresh `NOTES_DATA_DIR`; title, subtitle and both buttons render |
+| V2 | The last workspace is restored on launch, with no dialog | `workspaces.json` seeded with `last_workspace`; the tree, the editor and the status bar came up on their own |
+| V3 | The tree lists a workspace and marks notes from non-notes | Directories, `.md` files and the ignored entries behaved as the core says |
+| V4 | Opening a note from the sidebar loads it into CodeMirror | Content, line numbers and syntax highlighting present |
+| V5 | **Split renders the preview beside the source** | The heading rendered as a heading and the paragraph as a paragraph, from `notes-markdown` through the IPC |
+| V6 | The status bar reports `✓ saved` after a clean open | With the note's path beside it and the workspace name at the right |
+
+### Not verified — the flows that need a person
+
+**None of the twelve steps below has been walked**, and the reason is a
+limitation of the machine rather than a judgement about the code: this window
+manager refuses to raise the application window (`xdotool windowactivate`
+returns `_NET_ACTIVE_WINDOW failed`; `windowraise` and `wmctrl -a` do nothing),
+and WebKit does not act on synthetic clicks or keys delivered to an unfocused
+window. The window can be photographed and cannot be driven.
+
+Walk them with the application in front of you. **A box left unticked is a flow
+nobody has seen work.**
+
+| # | Step | Expected |
+|---|---|---|
+| U1 | *New note* → type `nota de teste` → **Create** | The modal appears, the note is created and opens; `Cancel` and `Escape` each leave nothing behind |
+| U2 | *New note* → leave the field empty → **Create** | Refused **in the dialog**, with "A name is required."; the core is never called |
+| U3 | *New folder* → type `pasta` → **Create** | The folder appears in the tree |
+| U4 | Welcome → *Create Workspace…* → pick a parent → name it | Native picker for the parent, the application's own modal for the name |
+| U5 | Right-click a note → *Rename…* → change the name | The tab keeps its cursor and identity; the sidebar shows the new name |
+| U6 | Right-click a note → *Move to…* → type a folder | The note moves; an **empty field means the workspace root** and must not be read as a cancellation |
+| U7 | Right-click a note → *Delete…* | A **destructive** confirm; on cancel nothing happens; on confirm the status line says *trashed* or *permanent* and which |
+| U8 | `Escape` on any of the above | Cancels, and focus returns to the control that opened it |
+| U9 | *Source* / *Preview* / *Split* | Three modes; `Ctrl+E` cycles |
+| U10 | Edit a note in another editor while it is open and dirty here | Conflict banner, autosave suspended, and the **compare screen** shows both versions |
+| U11 | Resolve the conflict three ways | *Keep mine*, *use the disk*, *save as a copy* — the version not chosen lands in `conflicts/` |
+| U12 | `Ctrl+F` → search and replace inside the note | Matches highlighted, replace applies, `Escape` closes |
+
+### What is machine-checked instead
+
+`src/app/dialog.test.ts` covers the contract those six flows depend on — that a
+request resolves, that cancelling resolves `null` for text and `false` for a
+confirm, that the **empty string survives as an answer** rather than collapsing
+into a cancellation (U6 depends on exactly that), that the validator refuses
+before the core is asked, and that a second request cancels the first instead of
+stacking, so no caller is left awaiting a promise nobody will settle.
+
+That is the part of this hole a machine can close. It does not replace U1–U12: a
+dialog that resolves correctly and never renders passes every one of those tests.
+
+`tools/no-blocking-dialogs.sh` is the other half — it fails the build if a
+browser script dialog returns to the frontend, in `npm run lint`, `npm run
+build`, `tools/check.sh` and CI.
+
+---
+
 ## Not verified
 
 - **The window has never been launched by whoever wrote this milestone.** The

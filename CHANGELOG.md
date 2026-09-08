@@ -8,6 +8,42 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.8 - what the acceptance document could not see: the interface
+
+Every 0.1b criterion is an assertion about `notes-core`, and all five were met
+while **six flows of the same milestone were dead** behind a dialog the WebView
+does not have. A criterion satisfied in the core says nothing about the
+interface. `ACCEPTANCE-0.1b.md` now has a section that says so and keeps the two
+apart.
+
+**Six things are marked verified**, because they were watched on screen on
+Debian 13 / X11: the Welcome screen paints, the last workspace restores with no
+dialog at all, the tree lists and marks notes from non-notes, a note opens into
+CodeMirror with highlighting, **Split renders the preview beside the source** —
+`notes-markdown` through the IPC, doing its job — and the status bar reports
+`✓ saved`.
+
+**Twelve are marked not verified, and none is ticked.** The six dialog flows, the
+three view modes, the conflict compare screen, the three resolutions and in-file
+search. The reason is the machine, not a judgement about the code: this window
+manager will not raise the application window — `xdotool windowactivate` returns
+`_NET_ACTIVE_WINDOW failed`, and `windowraise` and `wmctrl -a` do nothing — and
+WebKit ignores synthetic input delivered to an unfocused window. **The window can
+be photographed and cannot be driven.** Each step is written out so a person can
+walk it, and an unticked box means a flow nobody has seen work.
+
+`src/app/dialog.test.ts` closes the part a machine can: eleven tests over the
+contract those flows depend on. That a request resolves at all; that cancelling
+gives `null` for text and `false` for a confirm; that **the empty string survives
+as an answer** instead of collapsing into a cancellation, which is what *move to
+the workspace root* is; that the validator refuses before the core is asked; and
+that a second request cancels the first rather than stacking, so no caller is
+left awaiting a promise nobody settles.
+
+Said plainly in the document, because it is the honest limit: a dialog that
+resolves correctly and never renders passes every one of those tests. The
+machine-checkable half is checked; the other half needs eyes.
+
 ## 0.9.7 - the other five checkouts the Dependabot PR could not have seen
 
 `#1` was opened at 18:42 on 07/09 and `ci.yml` was written at `0.7.0`, two hours
