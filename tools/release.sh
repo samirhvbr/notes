@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# repodocs:tool — generated from samirhvbr/repodocs and regenerated in place.
+# A copy without this line is the repository's own and is never overwritten.
 # release.sh — every version in version.md gets a git tag named after it and a
 # published GitHub Release.
 #
