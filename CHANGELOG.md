@@ -8,6 +8,29 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.10 - the churn test measured the runner, not the rule
+
+`an_index_that_is_still_building_is_not_restarted_by_a_change` was green here
+and red on Ubuntu, Windows and Arch — and this time the code was right and the
+test was too big.
+
+It is the one test whose **main thread competes with the walk for the disk**: it
+creates a note per iteration precisely to keep invalidating. On a two-core
+runner with four other tests building corpora beside it, a 7 200-directory tree
+means the walk gets no I/O and the assertion fires on a runner's contention
+rather than on a restart. The evidence is in the failure itself —
+`indexed: 2398, building: true` after 1 632 changes: climbing steadily, which is
+exactly not what a restart looks like.
+
+The corpus drops to 120 repositories and the ceiling rises to two minutes. The
+property is size-independent, and both directions are re-verified at the new
+size: 1.5 s green with the rule, and with the old rule put back,
+`indexed: 0, building: true` after 6 606 changes and the full two minutes.
+
+Two stale index lines went with it: `docs/README.md` now describes the runbook's
+release section, and `.continue/README.md` no longer says the repository is at
+`0.1.0`.
+
 ## 0.11.9 - the deep fixture becomes a CI criterion, not a local measurement
 
 The criteria added at 0.11.0 build their own corpus so they can run on every

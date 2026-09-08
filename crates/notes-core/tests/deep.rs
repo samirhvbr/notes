@@ -491,13 +491,19 @@ fn where_the_time_goes_on_a_real_folder() {
 /// **while the churn is still going**.
 #[test]
 fn an_index_that_is_still_building_is_not_restarted_by_a_change() {
-    let tree = DeepTree::build(400);
+    // Smaller than the other criteria on purpose. The property is
+    // size-independent — under the old rule this fails at any size, because the
+    // churn always outpaces the walk — and this is the one test whose *main
+    // thread* competes with the walk for the disk. On a two-core runner with
+    // four other tests building corpora beside it, a larger tree measures the
+    // runner's I/O rather than the rule.
+    let tree = DeepTree::build(120);
     let (mut svc, _data) = opened(tree.path());
 
     let first = svc.quick_open("readme", 10).unwrap();
     assert!(first.building, "the walk is still going at this size");
 
-    let deadline = Instant::now() + Duration::from_secs(30);
+    let deadline = Instant::now() + Duration::from_secs(120);
     let mut last = first;
     let mut ticks = 0;
     while Instant::now() < deadline {
@@ -524,7 +530,7 @@ fn an_index_that_is_still_building_is_not_restarted_by_a_change() {
          {last:?} after {ticks} changes"
     );
     assert!(
-        last.indexed >= 400 * 8,
+        last.indexed >= 120 * 8,
         "and it indexed the whole workspace: {}",
         last.indexed
     );
