@@ -5,6 +5,8 @@ import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
+import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { useEditor } from "../stores/editor";
 import { pendingCursor, useTabs } from "../stores/tabs";
 import { useSettings } from "../stores/settings";
@@ -92,6 +94,7 @@ export function Editor() {
           editRef.current(u.state.doc.toString());
         }),
         theme,
+        syntaxHighlighting(highlight),
         EditorView.theme({ "&": { fontSize: `${fontSize}px` } }),
       ],
     });
@@ -183,19 +186,86 @@ function EditorBody({
   return <div className="editor" ref={host} />;
 }
 
+/**
+ * The editor's look (`.continue/0.1d-interface.md` §4.3 and §5).
+ *
+ * **Colours come from the CSS custom properties, not from hex here.** They were
+ * hard-coded, which put four of them outside `tools/contrast.sh`'s reach — and a
+ * checker that reads `:root` cannot see a colour written in a TypeScript object
+ * (`DECISIONS-0.1d.md` D-07). `var()` resolves against the document, so the
+ * editor now moves with the palette rather than beside it.
+ *
+ * The **column** is here rather than in the stylesheet because CodeMirror owns
+ * the scroller: centring `.cm-content` with a `max-width` keeps the scrollbar
+ * at the window's edge, where it belongs, instead of at the column's.
+ *
+ * The editor stays a plain-text editor. Markdown syntax is highlighted, not
+ * replaced: Live Preview is §18 and this is not a step towards it.
+ */
 const theme = EditorView.theme(
   {
-    "&": { height: "100%", fontSize: "14px" },
+    "&": { height: "100%", backgroundColor: "var(--bg)", color: "var(--fg)" },
     ".cm-scroller": {
       fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      lineHeight: "1.65",
+      lineHeight: "1.7",
     },
-    ".cm-content": { caretColor: "#e6e6e6", padding: "12px 0" },
-    "&.cm-focused .cm-cursor": { borderLeftColor: "#e6e6e6" },
-    ".cm-gutters": { backgroundColor: "transparent", color: "#4a4a52", border: "none" },
-    ".cm-activeLine": { backgroundColor: "#ffffff08" },
-    ".cm-activeLineGutter": { backgroundColor: "transparent" },
-    ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": { backgroundColor: "#2a3350" },
+    ".cm-content": {
+      caretColor: "var(--fg)",
+      padding: "28px 0 40vh",
+      // The centred column, with margins that grow with the window (D-03).
+      // The bottom padding is deliberate: it lets the last line of a note be
+      // scrolled to the middle of the screen instead of sitting on the floor.
+      maxWidth: "var(--column)",
+      marginInline: "auto",
+      width: "100%",
+    },
+    "&.cm-focused .cm-cursor": { borderLeftColor: "var(--accent)", borderLeftWidth: "2px" },
+    ".cm-gutters": {
+      backgroundColor: "transparent",
+      color: "var(--disabled)",
+      border: "none",
+    },
+    ".cm-activeLine": { backgroundColor: "var(--hover-soft)" },
+    ".cm-activeLineGutter": { backgroundColor: "transparent", color: "var(--fg-dim)" },
+    ".cm-selectionBackground, &.cm-focused .cm-selectionBackground": {
+      backgroundColor: "var(--selected)",
+    },
+    // Markdown structure, at the weights §5 asks for: a heading is a heading
+    // before it is read.
+    ".cm-line": { paddingInline: "4px" },
   },
   { dark: true },
+);
+
+/**
+ * Markdown, highlighted rather than replaced.
+ *
+ * `.continue/0.1d-interface.md` §4.3 asks for a large, heavy H1 and code on its
+ * own ground. That is highlighting: the `#` stays on screen, the text stays
+ * plain, and nothing is hidden or substituted. Hiding the syntax is Live
+ * Preview, which is §18 and is not what a bigger heading is a step towards.
+ *
+ * Sizes are `em`, so they scale with the font size the settings panel controls
+ * instead of ignoring it.
+ */
+const highlight = HighlightStyle.define(
+  [
+    { tag: tags.heading1, fontSize: "1.9em", fontWeight: "700", lineHeight: "1.3" },
+    { tag: tags.heading2, fontSize: "1.5em", fontWeight: "700", lineHeight: "1.35" },
+    { tag: tags.heading3, fontSize: "1.25em", fontWeight: "600" },
+    { tag: [tags.heading4, tags.heading5, tags.heading6], fontWeight: "600" },
+    { tag: tags.strong, fontWeight: "700", color: "var(--fg)" },
+    { tag: tags.emphasis, fontStyle: "italic" },
+    { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--fg-dim)" },
+    { tag: tags.link, color: "var(--accent)" },
+    { tag: tags.url, color: "var(--accent)" },
+    { tag: [tags.monospace, tags.literal], color: "var(--good)" },
+    { tag: tags.quote, color: "var(--fg-dim)", fontStyle: "italic" },
+    { tag: tags.list, color: "var(--accent)" },
+    // The punctuation Markdown is made of — `#`, `*`, backticks. Dimmed rather
+    // than removed: it is what the user typed and it is what they will edit.
+    { tag: tags.processingInstruction, color: "var(--disabled)" },
+    { tag: tags.contentSeparator, color: "var(--disabled)" },
+  ],
+  { themeType: "dark" },
 );

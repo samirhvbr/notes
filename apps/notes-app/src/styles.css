@@ -319,9 +319,24 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .panes > * { min-width: 0; }
 .pane-source .editor,
 .pane-preview .preview-pane { flex: 1 1 100%; }
-.pane-split .editor,
-.pane-split .preview-pane { flex: 1 1 50%; }
-.pane-split .preview-pane { border-left: 1px solid var(--line); }
+/* `--split` is the left pane's share, moved by dragging the divider (D-04:
+   horizontal only, two panes). */
+.pane-split .editor { flex: 0 0 var(--split, 50%); }
+.pane-split .preview-pane { flex: 1 1 auto; }
+
+/* The divider is a real control: it has a role, it takes focus, and the arrow
+   keys move it. A drag handle reachable only by mouse is a control half the
+   users of this application cannot operate. */
+.divider {
+  flex: 0 0 auto;
+  width: 5px;
+  cursor: col-resize;
+  background: var(--line);
+  border: 0;
+  padding: 0;
+}
+.divider:hover, .divider:focus-visible { background: var(--accent); }
+.pane-source .divider, .pane-preview .divider { display: none; }
 
 .preview-pane { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
@@ -331,15 +346,20 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .preview {
   flex: 1 1 auto;
   overflow: auto;
-  padding: 16px 24px 48px;
-  line-height: 1.65;
+  /* The same column and the same rhythm as the editor, so switching between
+     them does not move the text under the reader's eye (§4.3). The horizontal
+     padding is on the inner column, not on the scroller, so the scrollbar stays
+     at the pane's edge in both. */
+  padding: 28px 24px 40vh;
+  line-height: 1.7;
 }
+.preview > * { max-width: var(--column); margin-inline: auto; }
 .preview > :first-child { margin-top: 0; }
 .preview h1, .preview h2, .preview h3,
-.preview h4, .preview h5, .preview h6 { line-height: 1.25; margin: 1.4em 0 0.5em; }
-.preview h1 { font-size: 1.7em; }
-.preview h2 { font-size: 1.4em; border-bottom: 1px solid var(--line); padding-bottom: 0.2em; }
-.preview h3 { font-size: 1.18em; }
+.preview h4, .preview h5, .preview h6 { line-height: 1.3; margin: 1.4em auto 0.5em; }
+.preview h1 { font-size: 1.9em; font-weight: 700; }
+.preview h2 { font-size: 1.5em; font-weight: 700; border-bottom: 1px solid var(--line); padding-bottom: 0.2em; }
+.preview h3 { font-size: 1.25em; font-weight: 600; }
 .preview a { color: var(--accent); }
 .preview img { max-width: 100%; height: auto; border-radius: 4px; }
 .preview code {

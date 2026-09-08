@@ -166,5 +166,6 @@
   "status.chars": "{count} characters",
   "settings.diagnostics": "Diagnostics",
   "settings.diag.platform": "Platform",
-  "settings.diag.dmabuf": "WebKit DMA-BUF renderer"
+  "settings.diag.dmabuf": "WebKit DMA-BUF renderer",
+  "split.divider": "Resize the split"
 }

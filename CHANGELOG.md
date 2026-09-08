@@ -8,6 +8,46 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.3 - the column, the type, and a divider you can move with the keyboard
+
+Step 3 of 0.1d (`.continue/0.1d-interface.md` §6, §4.3, §5).
+
+**The column.** Both panes now lay their content out in a centred column of
+`--column` (700 px, D-03) with margins that grow with the window. In the editor
+it is on `.cm-content` rather than on the scroller, and in the preview on the
+children rather than on the container — in both cases so the **scrollbar stays
+at the pane's edge** instead of sliding in to the column's. Line height, top
+padding and heading scale are the same on both sides, which is what §4.3 means
+by the reading not jumping when you switch.
+
+Both also carry 40vh of bottom padding, so the last line of a note can be
+scrolled to the middle of the screen instead of sitting on the floor.
+
+**The type.** Markdown is now highlighted: H1 at 1.9em and 700, H2 at 1.5,
+bold actually bold, code and links on the accent and the good colour, and the
+punctuation Markdown is made of — `#`, `*`, backticks — dimmed rather than
+removed. Sizes are `em`, so they scale with the font size the settings panel
+controls instead of ignoring it. The syntax stays on screen: hiding it is Live
+Preview, which is §18, and a bigger heading is not a step towards it.
+
+**The editor's colours came off hard-coded hex and onto the tokens.** Four of
+them — caret, gutter, active line, selection — were written in a TypeScript
+object, which is exactly the blind spot `tools/contrast.sh` was given a guard
+for one commit ago: the guard reads the stylesheet and could never have seen
+them.
+
+**The divider** is a `role="separator"` with a value, not a `<div>` with a
+mousedown. It takes focus, the arrows move it two points at a time, `Home` and
+`End` go to the limits, `Enter` and a double click even it up, and it reports
+its position so a screen reader says something better than "5 pixels wide". A
+drag handle reachable only by mouse is a control half the people using this
+application cannot operate.
+
+The drag listens on the document rather than on the handle — a fast drag leaves
+a 5-pixel target behind long before the button comes up — and writes a CSS
+custom property instead of React state, so a drag costs one style write per
+mouse move rather than a re-render of a pane containing CodeMirror.
+
 ## 0.12.2 - the shell: a rail, a real sidebar, a note header, and a contrast check that found a bug in my own palette
 
 Step 2 of 0.1d (`.continue/0.1d-interface.md` §6). Everything in its place;

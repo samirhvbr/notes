@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Editor } from "./editor/Editor";
 import { Tree } from "./explorer/Tree";
 import { StatusBar, errorText } from "./app/StatusBar";
@@ -7,6 +7,7 @@ import { Dialog } from "./app/Dialog";
 import { Tabs } from "./app/Tabs";
 import { Rail } from "./app/Rail";
 import { NoteHeader } from "./app/NoteHeader";
+import { Divider } from "./app/Divider";
 import { ExplorerToolbar } from "./explorer/ExplorerToolbar";
 import { WorkspaceMenu } from "./app/WorkspaceMenu";
 import { Palette, type Command, type PaletteMode } from "./app/Palette";
@@ -50,6 +51,7 @@ export default function App() {
   const degraded = useSync((s) => s.degraded);
   const watch = useSync((s) => s.watch);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const panes = useRef<HTMLDivElement | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const applySettings = useSettings((s) => s.apply);
   const loadSettings = useSettings((s) => s.load);
@@ -292,11 +294,12 @@ export default function App() {
           {comparing && doc?.conflict ? (
             <Compare />
           ) : (
-            <div className={`panes pane-${view}`}>
+            <div className={`panes pane-${view}`} ref={panes}>
               {/* With no note open there is nothing to preview, so the editor's
                   own empty state is what the pane shows — a blank Preview pane
                   would say less than "open a note from the sidebar". */}
               {(view !== "preview" || !doc) && <Editor />}
+              {view === "split" && doc && <Divider panes={panes} />}
               {view !== "source" && doc && <Preview />}
             </div>
           )}
