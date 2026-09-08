@@ -331,6 +331,15 @@ impl FileSystem for LocalFs {
         let abs = self.resolve(path)?;
         Self::stat_at(&abs)
     }
+
+    fn watch(&self) -> crate::Watch {
+        if !self.caps.watch {
+            return crate::Watch::none(crate::Degraded::Unsupported(
+                "this backend reports no watch capability".into(),
+            ));
+        }
+        crate::watch::watch(&self.root)
+    }
 }
 
 fn mtime_ns(meta: &fs::Metadata) -> i128 {

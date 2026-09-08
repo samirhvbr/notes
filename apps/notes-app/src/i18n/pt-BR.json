@@ -80,5 +80,6 @@
   "tree.delete.confirm": "Excluir {name}?",
   "tree.delete.trashed": "{name} foi para a lixeira, então dá para trazer de volta.",
   "tree.delete.permanent": "{name} foi excluído em definitivo — este sistema de arquivos não tem lixeira.",
-  "notice.dismiss": "Fechar"
+  "notice.dismiss": "Fechar",
+  "watch.degraded": "Mudanças feitas por outros programas aparecem a cada poucos segundos, não na hora: {reason}"
 }

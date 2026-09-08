@@ -197,6 +197,56 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.8.5 - the watcher, reconciliation, and identity that survives an external rename
+
+`ARCHITECTURE.md` §8 and §9 in code, and the last three 0.1b criteria that can
+be asserted without a window.
+
+**`stat`, then hash. Everything else is a hint.** A watcher event, a window
+regaining focus, a tab switch and the 5 s poll all arrive at the same function
+as *these paths may have moved, go and look*. Nothing believes an event; size
+and mtime alone never conclude anything (scope §12), and reconciliation never
+writes.
+
+**The self-write filter is armed before the write, not after.** Otherwise there
+is a window exactly as long as the write in which the application's own autosave
+comes back as an external change. It is consumed on its first match and expires
+after two seconds, so **someone else writing the same bytes right afterwards is
+still seen** — there is a test named after that, because it is the half that is
+easy to get wrong.
+
+**Identity correlation is driven from what vanished.** §9 phrases it as
+*"appeared := disk paths not in registry"*, which here is nearly every file —
+the registry is lazy. Driving it from the vanished side computes the same answer
+and costs nothing on every tick but one. Rule 1 is a unique native id, rule 2 a
+unique non-empty hash — **a zero-byte file is never correlated**, because every
+empty file has the same digest — and rule 3 is a new identity, because
+re-identifying a note is cheaper than attaching one to the wrong history.
+
+**Two design defects the tests found before the push.** A full scan reported
+every note nobody had opened as `Created`, which on a real workspace means
+announcing a thousand creations each time the window regains focus, and which
+blew the hash budget with events that were not changes; `Created` is now a
+hinted-path signal only (D-13). And the editor could not accept a reload at all:
+the CodeMirror view is keyed on the note id, so replacing `doc.text` did nothing.
+It now takes the new text in **one transaction** with the selection clamped and
+kept — rebuilding the view would throw away the undo history and put the caret
+at the top of a note the user was reading half-way down — and the transaction is
+annotated so the update listener does not mark the buffer dirty and autosave
+text the user never typed.
+
+**Not being able to watch is a state of the workspace, not a failure.**
+`watch()` returns a `Watch` with a `degraded` reason rather than an `Err`: a
+network mount, a SAF tree and a kernel out of inotify watches all mean *poll
+instead and say why*, and the inotify case says it with the `sysctl` that raises
+the limit. The interface shows the reason and keeps working.
+
+The hash budget is 50 files per tick with the rest queued, and a test asserts
+the queue drains and that every change is reported **exactly once** — a budget
+that silently dropped work would be worse than no budget.
+
+`notify` 8.x, not the 9 release candidate, and the debouncer is ours (D-12).
+
 ## 0.8.4 - rename, move, duplicate and delete, and the identity that survives them
 
 The four entry operations of 0.1b, and the criterion they exist to satisfy:

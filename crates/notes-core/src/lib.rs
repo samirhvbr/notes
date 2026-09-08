@@ -11,6 +11,7 @@ pub mod ignore;
 mod lock;
 pub mod paths;
 pub mod preview;
+pub mod reconcile;
 pub mod registry;
 pub mod settings;
 mod state;
@@ -30,6 +31,7 @@ pub use conflicts::{ConflictChoice, ConflictSnapshot, Conflicts, Side};
 pub use drafts::{DraftInfo, DraftReason};
 pub use notes_fs::DeleteOutcome;
 pub use preview::{Asset, Document, Rendered};
+pub use reconcile::{ChangeKind, ConflictKind, CoreEvent, Reconciled};
 pub use registry::{Registry, WorkspaceEntry, WorkspacesIndex};
 pub use settings::{Session, Settings, Tab};
 
@@ -121,6 +123,28 @@ pub enum DraftChoice {
     Discard,
 }
 
+impl Open {
+    /// Arm a self-write expectation from a `&self` path — the write protocol
+    /// holds an immutable borrow while it works, and the expectation has to be
+    /// armed before the bytes land.
+    fn arm(&self, path: &RelPath, hash: notes_model::ContentHash) {
+        if let Ok(mut r) = self.recon.lock() {
+            r.arm(path, hash);
+        }
+    }
+    fn consume_self_write(&self, path: &RelPath, hash: &notes_model::ContentHash) -> bool {
+        self.recon
+            .lock()
+            .map(|mut r| r.consume(path, hash))
+            .unwrap_or(false)
+    }
+    fn queue(&self, path: RelPath) {
+        if let Ok(mut r) = self.recon.lock() {
+            r.queued.insert(path);
+        }
+    }
+}
+
 struct Open {
     id: WorkspaceId,
     fs: LocalFs,
@@ -129,6 +153,11 @@ struct Open {
     read_only: bool,
     extra_ignore: Vec<String>,
     suspended: BTreeSet<NoteId>,
+    /// What reconciliation remembers between ticks: the self-write
+    /// expectations, and the paths the hash budget deferred.
+    recon: std::sync::Mutex<reconcile::Recon>,
+    /// The running watch, when the backend has one.
+    watch: Option<notes_fs::Watch>,
 }
 
 pub struct WorkspaceService {
@@ -314,6 +343,8 @@ impl WorkspaceService {
             read_only,
             extra_ignore,
             suspended: BTreeSet::new(),
+            recon: std::sync::Mutex::new(reconcile::Recon::default()),
+            watch: None,
         });
 
         Ok(WorkspaceInfo {
@@ -489,6 +520,9 @@ impl WorkspaceService {
             // criterion is "disco cheio / permissão negada → erro visível,
             // buffer recuperável ao reabrir", and propagating `Err` here would
             // skip the draft that makes the buffer recoverable.
+            // Armed before the write: the watcher event this causes must not
+            // come back as news (`ARCHITECTURE.md` §8).
+            open.arm(&path, new_hash.clone());
             let written = match open.fs.write_atomic(&path, &profile_bytes, Some(base_rev)) {
                 Ok(w) => w,
                 Err(CoreError::Io { kind, .. }) => {
@@ -795,6 +829,7 @@ impl WorkspaceService {
         match kind {
             notes_model::EntryKind::File => {
                 let bytes = self.open()?.fs.read(path)?;
+                self.open()?.arm(&to, notes_fs::hash(&bytes));
                 self.open()?.fs.create_new(&to, &bytes)?;
             }
             notes_model::EntryKind::Dir => self.copy_tree(path, &to)?,
@@ -828,6 +863,7 @@ impl WorkspaceService {
                 notes_model::EntryKind::Dir => self.copy_tree(&e.path, &target)?,
                 notes_model::EntryKind::File => {
                     let bytes = open.fs.read(&e.path)?;
+                    open.arm(&target, notes_fs::hash(&bytes));
                     open.fs.create_new(&target, &bytes)?;
                 }
                 // Skipped rather than refused: one link inside a folder is not a
@@ -990,6 +1026,7 @@ impl WorkspaceService {
                     // answered. Everything they are overwriting is in
                     // `conflicts/` one line above.
                     let encoded = profile.encode(text);
+                    open.arm(&path, notes_fs::hash(&encoded));
                     match open.fs.write_atomic(&path, &encoded, None) {
                         Ok(_) => {}
                         Err(CoreError::Io {
@@ -1027,7 +1064,9 @@ impl WorkspaceService {
 
                 ConflictChoice::SaveAsCopy => {
                     let copy = self.copy_name(&path)?;
-                    open.fs.create_new(&copy, &profile.encode(text))?;
+                    let bytes = profile.encode(text);
+                    open.arm(&copy, notes_fs::hash(&bytes));
+                    open.fs.create_new(&copy, &bytes)?;
                     Ok(Resolution::Reopen(copy))
                 }
             }
@@ -1180,7 +1219,9 @@ impl WorkspaceService {
                 final_newline: flat.ends_with('\n'),
                 ..profile
             };
-            open.fs.write_atomic(&path, &target.encode(&flat), None)?;
+            let converted = target.encode(&flat);
+            open.arm(&path, notes_fs::hash(&converted));
+            open.fs.write_atomic(&path, &converted, None)?;
             Ok(())
         })??;
 
@@ -1203,6 +1244,7 @@ impl WorkspaceService {
         };
         let path = dir.join(&name)?;
         self.check_name(&name, &path)?;
+        self.open()?.arm(&path, notes_fs::hash(b""));
         self.open()?.fs.create_new(&path, b"")?;
         Ok(Entry {
             name,

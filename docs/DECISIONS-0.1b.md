@@ -314,3 +314,60 @@ one is true.
 unavailable and make the user confirm a permanent one. It is defensible and it
 is more clicks on every removable drive; the sentence above is the cheaper way
 to keep the same promise.
+
+---
+
+## D-12 — The debouncer is ours; `notify` 8, not the 9 release candidate
+
+**Decided.** `notes-fs/src/watch.rs` wraps `notify` 8.x with a 200 ms debouncer
+of about forty lines. `notify-debouncer-full` is not a dependency, and `notify`
+9 (a release candidate) is not either.
+
+**Gap closed.** `ARCHITECTURE.md` §8's first pipeline stage.
+
+**Why not the release candidate.** This is the component that tells the
+application a file it is holding has changed underneath it. Its behaviour on a
+backend nobody here can test — FSEvents, `ReadDirectoryChangesW` — is the wrong
+thing to be finding out from a user's bug report.
+
+**Why our own debouncer.** It is forty lines and it feeds a self-write filter
+that is ours anyway. The whole job is *collapse a burst into a set of paths that
+may have changed*; every decision after that is the reconciler's, and the module
+is explicitly allowed to over-report because the reconciler `stat`s and hashes
+before it believes anything. A dependency here would add a second opinion about
+event semantics with no second benefit.
+
+**Alternative if you disagree.** `notify-debouncer-full` replaces `watch.rs`'s
+thread and gives rename pairing for free — which §8 lists as a normalisation
+step this implementation does not do, because identity correlation (§9) answers
+the same question from the disk rather than from the event stream, and does it
+correctly when the event is missed.
+
+---
+
+## D-13 — A full scan does not announce files nobody has opened
+
+**Decided.** `ChangeKind::Created` is emitted only for a **hinted** path — one
+the watcher just reported. A full scan reports modifications, removals and
+correlated moves, and says nothing about a file that is merely absent from the
+registry.
+
+**Gap closed.** `ARCHITECTURE.md` §8's table says `Removed / Created → identity
+correlation, then registry update`, written against a registry that knows every
+file. This one does not: it is populated when a note is **opened**
+(`DECISIONS-0.1a.md` D-09), so on a full scan every note the user has never
+opened is "unknown".
+
+**What it fixed.** The first run of `tests/reconcile.rs` reported the entire
+fixture workspace as `Created` on every scan, and blew the hash budget with
+events that were not changes. Announcing a thousand creations each time a window
+regains focus is worse than saying nothing.
+
+**Nothing is lost.** A scan re-lists the tree anyway, which is what the sidebar
+needs; and a file that appeared as half of a rename is found by correlation,
+which walks the tree for exactly that.
+
+**Alternative if you disagree.** Keep a set of paths reconciliation has seen —
+a second registry, persisted, with its own staleness — and diff against it. It
+buys "a file appeared while the app was closed" as an event rather than as a
+listing, which nothing currently needs.

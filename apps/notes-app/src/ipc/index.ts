@@ -15,7 +15,11 @@ import type { DraftReason } from "./generated/DraftReason";
 import type { ConflictChoice } from "./generated/ConflictChoice";
 import type { ConflictSnapshot } from "./generated/ConflictSnapshot";
 import type { Conflicts } from "./generated/Conflicts";
+import type { ChangeKind } from "./generated/ChangeKind";
+import type { ConflictKind } from "./generated/ConflictKind";
+import type { CoreEvent } from "./generated/CoreEvent";
 import type { DeleteKind } from "./generated/DeleteKind";
+import type { Reconciled } from "./generated/Reconciled";
 import type { Deleted } from "./generated/Deleted";
 import type { Document } from "./generated/Document";
 import type { Eol } from "./generated/Eol";
@@ -36,10 +40,11 @@ import type { WorkspaceInfo } from "./generated/WorkspaceInfo";
 import type { WorkspaceEntry } from "./generated/WorkspaceEntry";
 
 export type {
-  BaseRev, ConflictChoice, ConflictSnapshot, Conflicts, CoreError, DeleteKind,
-  Deleted, DocStatus, DraftChoice, DraftInfo, DraftReason, Document, Entry, Eol,
-  Heading, Link, LinkKind, NoteId, OpenedNote, RelPath, Rendered, SaveResult,
-  Session, Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
+  BaseRev, ChangeKind, ConflictChoice, ConflictKind, ConflictSnapshot,
+  Conflicts, CoreError, CoreEvent, DeleteKind, Deleted, DocStatus, DraftChoice,
+  DraftInfo, DraftReason, Document, Entry, Eol, Heading, Link, LinkKind, NoteId,
+  OpenedNote, Reconciled, RelPath, Rendered, SaveResult, Session, Settings,
+  Span, Task, WorkspaceInfo, WorkspaceEntry,
 };
 
 /** Diagnostics, and the only shape here that is not generated. */
@@ -156,6 +161,24 @@ export const markdownTrustSet = (
   rawHtml: boolean | null,
   remoteImages: boolean | null,
 ) => invoke<void>("markdown_trust_set", { rawHtml, remoteImages });
+
+/**
+ * Start watching the workspace. `null` means the platform is watching; a string
+ * is why it is not, and is shown rather than swallowed — the inotify limit comes
+ * back with the `sysctl` that raises it.
+ */
+export const watchStart = () => invoke<string | null>("watch_start");
+
+/**
+ * One watcher-driven tick. **The dirty list comes from here**, because the
+ * buffers live in this process and the core does not hold them.
+ */
+export const reconcileTick = (dirty: NoteId[]) =>
+  invoke<Reconciled>("reconcile_tick", { dirty });
+
+/** A full scan: window focus, tab switch, manual refresh. */
+export const reconcileAll = (dirty: NoteId[]) =>
+  invoke<Reconciled>("reconcile_all", { dirty });
 
 /** Rename in place, keeping the `NoteId` — the tab and its cursor survive. */
 export const entryRename = (path: RelPath, newName: string) =>

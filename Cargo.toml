@@ -27,6 +27,13 @@ ammonia = "4"
 # fallback to a permanent delete; the crate is what makes the promise keepable
 # and `DeleteOutcome` is what keeps the honesty.
 trash = "5"
+# The watcher. A stable 8.x rather than the 9 release candidate: this is the
+# component that tells the application a file it is holding has changed
+# underneath it, and a candidate's behaviour on a backend we cannot test here —
+# FSEvents, ReadDirectoryChangesW — is the wrong thing to be finding out from a
+# user. `ARCHITECTURE.md` §8's debouncer is written here rather than pulled in,
+# because the self-write filter it feeds is ours anyway.
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

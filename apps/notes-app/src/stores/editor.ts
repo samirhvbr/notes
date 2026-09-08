@@ -21,6 +21,11 @@ export interface OpenDoc {
   bufferVersion: number;
   savedVersion: number;
   status: DocStatus;
+  /** Bumped when the text was replaced from **outside** the editor — a reload
+   *  after an external change. The editor watches it to swap the document
+   *  while keeping the cursor and the undo history; ordinary typing never
+   *  touches it. */
+  externalRev: number;
   conflict: BaseRev | null;
   draft: DraftInfo | null;
   lastError: CoreError | null;
@@ -40,6 +45,12 @@ interface EditorState {
   resolveConflict: (choice: ConflictChoice) => Promise<void>;
   /** Rewrite this note's line endings, because the user asked. */
   convertEol: (eol: Eol) => Promise<void>;
+  /** Take what is on disk into a **clean** buffer, keeping the cursor.
+   *  Scope §12: *"disco mudou, buffer limpo → recarrega, preserva cursor."* */
+  reloadFromDisk: () => Promise<void>;
+  /** The core has suspended autosave for this note. Persist the buffer — the
+   *  core cannot, because it does not hold it (DECISIONS-0.1a.md D-11). */
+  enterConflict: () => Promise<void>;
   /** Follow a rename or a move the application performed.
    *
    *  The `NoteId` did not change — the core updated the registry directly and
@@ -65,6 +76,7 @@ function fromOpened(o: OpenedNote): OpenDoc {
     readOnly: o.read_only,
     bufferVersion: 0,
     savedVersion: 0,
+    externalRev: 0,
     status: o.read_only ? "read_only" : "saved",
     conflict: null,
     draft: o.draft,
@@ -191,6 +203,34 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!doc) return;
     if (debounce) clearTimeout(debounce);
     set({ doc: fromOpened(await ipc.noteConvertEol(doc.noteId, eol)) });
+  },
+
+  async reloadFromDisk() {
+    const doc = get().doc;
+    if (!doc) return;
+    // Only a clean buffer is replaced. A dirty one is a conflict, and the core
+    // has already said so by sending a different event.
+    if (doc.bufferVersion !== doc.savedVersion) return;
+    try {
+      const fresh = await ipc.noteReload(doc.noteId);
+      set({
+        doc: {
+          ...fromOpened(fresh),
+          externalRev: doc.externalRev + 1,
+          draft: doc.draft,
+        },
+      });
+    } catch (e) {
+      set((s) => ({ doc: s.doc && { ...s.doc, lastError: ipc.asCoreError(e) } }));
+    }
+  },
+
+  async enterConflict() {
+    const doc = get().doc;
+    if (!doc || doc.conflict) return;
+    if (debounce) clearTimeout(debounce);
+    set({ doc: { ...doc, conflict: doc.baseRev, status: "conflict" } });
+    await get().keepDraft("conflict");
   },
 
   repath(from, to) {

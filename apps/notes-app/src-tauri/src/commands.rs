@@ -10,7 +10,8 @@ use std::sync::Mutex;
 
 use notes_core::{
     ConflictChoice, Conflicts, Deleted, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote,
-    Rendered, SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
+    Reconciled, Rendered, SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo,
+    WorkspaceService,
 };
 use notes_model::{BaseRev, CoreError, Entry, NoteId, RelPath};
 use serde::Serialize;
@@ -251,6 +252,30 @@ pub fn markdown_trust_set(
     remote_images: Option<bool>,
 ) -> R<()> {
     svc(&app)?.set_markdown_trust(raw_html, remote_images)
+}
+
+// ---- reconciliation ----------------------------------------------------
+
+/// Start watching the open workspace. Returns the reason when the platform
+/// cannot, so the interface can say why it is polling instead — the inotify
+/// limit comes back with the `sysctl` that raises it.
+#[tauri::command]
+pub fn watch_start(app: State<'_, App>) -> R<Option<String>> {
+    svc(&app)?.start_watch()
+}
+
+/// One watcher-driven tick. **The frontend passes which notes are dirty**,
+/// because the core does not hold buffers and cannot know
+/// (`docs/DECISIONS-0.1a.md` D-11).
+#[tauri::command]
+pub fn reconcile_tick(app: State<'_, App>, dirty: Vec<NoteId>) -> R<Reconciled> {
+    svc(&app)?.tick(&dirty)
+}
+
+/// A full scan: window focus, tab switch, manual refresh.
+#[tauri::command]
+pub fn reconcile_all(app: State<'_, App>, dirty: Vec<NoteId>) -> R<Reconciled> {
+    svc(&app)?.reconcile_all(&dirty)
 }
 
 // ---- entries -----------------------------------------------------------

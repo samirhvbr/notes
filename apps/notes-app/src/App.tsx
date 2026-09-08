@@ -8,6 +8,7 @@ import { Compare } from "./conflict/Compare";
 import { t } from "./i18n";
 import * as ipc from "./ipc";
 import { useEditor } from "./stores/editor";
+import { useSync } from "./stores/sync";
 import { useUi, type ViewMode } from "./stores/ui";
 import { useWorkspace } from "./stores/workspace";
 
@@ -33,6 +34,9 @@ export default function App() {
   const comparing = useUi((s) => s.comparing);
   const setComparing = useUi((s) => s.setComparing);
   const hydrateUi = useUi((s) => s.hydrate);
+  const startSync = useSync((s) => s.start);
+  const stopSync = useSync((s) => s.stop);
+  const degraded = useSync((s) => s.degraded);
   const [env, setEnv] = useState<ipc.EnvReport | null>(null);
 
   useEffect(() => {
@@ -46,6 +50,14 @@ export default function App() {
   useEffect(() => {
     if (info) void hydrateUi();
   }, [info, hydrateUi]);
+
+  // The watcher and the reconciliation clocks belong to a workspace, and stop
+  // with it.
+  useEffect(() => {
+    if (!info) return;
+    void startSync();
+    return () => stopSync();
+  }, [info, startSync, stopSync]);
 
   // Ctrl/Cmd+S forces a flush; the app never depends on it to save.
   // Ctrl/Cmd+E cycles Source → Preview → Split (scope §9).
@@ -161,6 +173,14 @@ export default function App() {
               <span>{t("readonly.mixed_eol")}</span>
               <button onClick={() => convertEol("Lf").catch(fail)}>{t("eol.toLf")}</button>
               <button onClick={() => convertEol("CrLf").catch(fail)}>{t("eol.toCrLf")}</button>
+            </div>
+          )}
+          {/* Not being able to watch is a state of the workspace, not a
+              failure: the app polls instead and says why, and the inotify limit
+              arrives with the sysctl that raises it (ARCHITECTURE.md §8). */}
+          {degraded && (
+            <div className="banner">
+              <span>{t("watch.degraded", { reason: degraded })}</span>
             </div>
           )}
           {wsError && <div className="banner warn">{errorText(wsError)}</div>}

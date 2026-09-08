@@ -12,9 +12,11 @@
 
 mod local;
 mod probe;
+pub mod watch;
 
 pub use local::LocalFs;
 pub use probe::probe_case_insensitive;
+pub use watch::{Degraded, Watch};
 
 use notes_model::{BaseRev, Caps, ContentHash, CoreError, Entry, RelPath, Stat};
 
@@ -70,13 +72,15 @@ pub trait FileSystem: Send + Sync {
     fn delete(&self, path: &RelPath) -> Result<DeleteOutcome>;
     fn stat(&self, path: &RelPath) -> Result<Stat>;
 
-    /// `Err(Unsupported)` until the watcher lands at 0.1b. The method exists now
-    /// so that `notes-core` is written against a filesystem that may not have
-    /// one — which is the mobile case, not a hypothetical.
-    fn watch(&self) -> Result<()> {
-        Err(CoreError::Unsupported {
-            cap: "watch".into(),
-        })
+    /// Start watching the root, recursively.
+    ///
+    /// **Not being able to watch is a state of the workspace, not a failure of
+    /// this call**, which is why the returned [`Watch`] carries a `degraded`
+    /// reason instead of this returning `Err`: a network mount, a SAF tree
+    /// `[0.4]` and a kernel out of inotify watches all mean *poll instead and
+    /// say why*, and none of them should stop a workspace opening.
+    fn watch(&self) -> Watch {
+        Watch::none(Degraded::Unsupported("this backend has no watch".into()))
     }
 }
 
