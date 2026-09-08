@@ -45,7 +45,7 @@ step "byte preservation"    tools/byte-preservation.sh
 step "full disk (ENOSPC)"   tools/enospc.sh
 step "generated types"      bash -c '
   rm -rf apps/notes-app/src/ipc/generated
-  cargo test -p notes-model -p notes-core -p notes-markdown --quiet >/dev/null 2>&1
+  cargo test -p notes-model -p notes-core -p notes-markdown --lib --quiet >/dev/null 2>&1
   # Two questions, because one command answers only half of it: `git diff` sees
   # a changed file, and a type added by a new crate arrives *untracked*, which a
   # diff does not see at all.

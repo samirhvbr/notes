@@ -8,6 +8,29 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.9 - the contracts job ran a suite twice and threw away the reason it failed
+
+CI went red on `contracts` while `rust (ubuntu-latest)` — which runs the same
+tests properly, with system dependencies and a cache — went green. The failure
+was `notes-core --test reconcile`, and the log said nothing beyond *"test
+failed"*, because the step ends in `>/dev/null`. **A step that discards its
+output has thrown away exactly the thing that is worth having at the only moment
+it matters**, and I wrote that line.
+
+The output is kept now. And the step stops running the integration suites at all:
+its purpose is to regenerate the TypeScript and diff it, `#[ts(export)]` emits
+its writer as a **lib** test, so `--lib` still produces all fifty-one types.
+Running the integration tests there duplicated a job that already exists and
+bought nothing but a second chance to be flaky — which is what it spent.
+
+The `reconcile` suite passed eight consecutive runs locally, so what is fixed
+here is the duplication and the missing diagnostic, not the flake. If it is real
+it will now surface in the job built to run it, with output attached. The likely
+mechanism is written down rather than guessed at in silence: those tests assert
+against a self-write expectation with a **two-second wall-clock TTL**
+(`reconcile.rs`), and a cold, loaded runner is where a wall clock in a test first
+disagrees with the machine that wrote it.
+
 ## 0.9.8 - what the acceptance document could not see: the interface
 
 Every 0.1b criterion is an assertion about `notes-core`, and all five were met

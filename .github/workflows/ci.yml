@@ -35,10 +35,17 @@ jobs:
       - name: the generated TypeScript matches the Rust types
         run: |
           rm -rf apps/notes-app/src/ipc/generated
-          # Only the crates that export types. `--workspace` would build the
-          # Tauri app and need GTK and WebKit on a job whose whole point is that
-          # it does not.
-          cargo test -p notes-model -p notes-core -p notes-markdown --quiet >/dev/null
+          # Only the crates that export types, and only their `--lib` target.
+          # `--workspace` would build the Tauri app and need GTK and WebKit on a
+          # job whose whole point is that it does not; the integration suites are
+          # `rust (ubuntu-latest)`'s job, and running them a second time here
+          # bought nothing but a second chance to be flaky. `#[ts(export)]`
+          # generates its writer as a lib test, so `--lib` still emits all 51.
+          #
+          # The output is NOT discarded: this step failed once with `>/dev/null`
+          # and the log said only "test failed", which is the one moment the
+          # output is worth having.
+          cargo test -p notes-model -p notes-core -p notes-markdown --lib
           # Two questions, because one command answers only half of it: a diff
           # sees a changed file, and a type introduced by a new crate arrives
           # *untracked*, which a diff cannot see at all.
