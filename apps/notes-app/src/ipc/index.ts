@@ -12,6 +12,13 @@ import type { DocStatus } from "./generated/DocStatus";
 import type { DraftChoice } from "./generated/DraftChoice";
 import type { DraftInfo } from "./generated/DraftInfo";
 import type { DraftReason } from "./generated/DraftReason";
+import type { Document } from "./generated/Document";
+import type { Heading } from "./generated/Heading";
+import type { Link } from "./generated/Link";
+import type { LinkKind } from "./generated/LinkKind";
+import type { Rendered } from "./generated/Rendered";
+import type { Span } from "./generated/Span";
+import type { Task } from "./generated/Task";
 import type { Entry } from "./generated/Entry";
 import type { NoteId } from "./generated/NoteId";
 import type { OpenedNote } from "./generated/OpenedNote";
@@ -23,9 +30,9 @@ import type { WorkspaceInfo } from "./generated/WorkspaceInfo";
 import type { WorkspaceEntry } from "./generated/WorkspaceEntry";
 
 export type {
-  BaseRev, CoreError, DocStatus, DraftChoice, DraftInfo, DraftReason, Entry,
-  NoteId, OpenedNote, RelPath, SaveResult, Session, Settings, WorkspaceInfo,
-  WorkspaceEntry,
+  BaseRev, CoreError, DocStatus, DraftChoice, DraftInfo, DraftReason, Document,
+  Entry, Heading, Link, LinkKind, NoteId, OpenedNote, RelPath, Rendered,
+  SaveResult, Session, Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
 };
 
 /** Diagnostics, and the only shape here that is not generated. */
@@ -83,6 +90,28 @@ export const noteCreate = (dir: RelPath, name: string) =>
   invoke<Entry>("note_create", { dir, name });
 export const dirCreate = (dir: RelPath, name: string) =>
   invoke<Entry>("dir_create", { dir, name });
+
+/**
+ * Sanitized HTML for the buffer the editor is holding.
+ *
+ * The text is sent rather than read from disk because the preview follows what
+ * is being typed. **This is the whole of the preview IR** — no AST crosses, and
+ * there is no Markdown parser in this application's frontend
+ * (docs/ARCHITECTURE.md §10). `Rendered.html` is safe to assign to `innerHTML`
+ * for exactly that reason, and for no other.
+ */
+export const markdownRender = (path: RelPath, text: string) =>
+  invoke<Rendered>("markdown_render", { path, text });
+
+/** The outline, links and front-matter span, with no HTML rendered. */
+export const markdownOutline = (text: string) =>
+  invoke<Document>("markdown_outline", { text });
+
+/** Turn raw HTML or remote images on for *this* workspace. */
+export const markdownTrustSet = (
+  rawHtml: boolean | null,
+  remoteImages: boolean | null,
+) => invoke<void>("markdown_trust_set", { rawHtml, remoteImages });
 
 export const draftWrite = (
   noteId: NoteId,

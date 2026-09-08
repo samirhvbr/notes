@@ -197,7 +197,42 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
-## 0.8.0 - notes-markdown: the preview corpus, the sanitizer suite, and the crate that reads them
+## 0.8.1 - the preview IR crosses the IPC, and the measurement that says it may
+
+`markdown_render`, `markdown_outline` and `markdown_trust_set` are commands
+now, and `notes-asset://` is a registered scheme. That completes
+`docs/ARCHITECTURE.md` §10 in code: **sanitized HTML crosses for the preview, a
+slim `Document` crosses for the outline, and no AST crosses at all.**
+
+**The asset scheme is a second entry point into the workspace, and it resolves
+nothing itself.** The WebView has no filesystem capability, so a note that shows
+a picture cannot reach for the file; the preview writes
+`notes-asset://<workspace-id>/<relative/path.png>` and the handler in
+`src-tauri/src/asset.rs` hands the path to `notes-core`, which applies the same
+root jail as every command — the string check, then `notes-fs` re-resolving each
+segment and refusing a symlink. `tests/preview.rs` proves that with a symlink out
+of the root and asserts the file it pointed at is untouched. Only raster image
+types come back; a `.txt` and a `.md` are both `Unsupported`, so the preview
+cannot be used to read one note into another. Responses carry
+`default-src 'none'; sandbox` and `nosniff`, and a failure has an empty body —
+a message would say whether a path exists outside the root, and that is not a
+question the preview is entitled to ask.
+
+**Raw HTML and remote images are per workspace**, in the registry rather than in
+the global settings: trusting the notes in one folder says nothing about
+another, and the setting survives a restart because that is the only reason to
+persist it at all.
+
+**The serialisation cost was measured, not guessed** — `cargo test -p notes-core
+--test cost -- --ignored --nocapture`. Turning `Rendered` into JSON is **6–8%**
+of render-plus-serialise for anything of a size a person writes, and 18% for the
+5 MiB edge case; it is not where the time goes, and nothing was optimised for
+it. What the profile did show is that `ammonia`'s builder was being assembled
+per render: 0.385 ms → 0.293 ms for a 337-byte note once it is built once. That
+is a small number and it is stated small, because the point of measuring first
+is being able to say which numbers are real.
+
+## 0.8.0 - notes-markdown reads the two fixture corpora it was written against
 
 `fixtures/xss/` was committed at 0.1a with a README calling each file *"an
 assertion, not a sample"*, and nothing read it. This commit is the thing that

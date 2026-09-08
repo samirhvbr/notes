@@ -125,12 +125,13 @@ pub fn resolve_relative(base: &RelPath, dest: &str) -> Option<RelPath> {
     RelPath::parse(&segments.join("/")).ok()
 }
 
-/// Decode `%XX` in one path segment.
+/// Decode `%XX` in one path segment. Public because the `notes-asset://`
+/// handler in `src-tauri` has to undo exactly what the renderer wrote.
 ///
 /// A destination written `com%20espaco.md` names a file with a space in it, and
 /// the path that reaches `notes-fs` has to be the name on disk. Invalid escapes
 /// are left alone rather than dropped — a literal `%` in a filename is legal.
-fn percent_decode(s: &str) -> String {
+pub fn percent_decode(s: &str) -> String {
     if !s.contains('%') {
         return s.to_string();
     }

@@ -1,6 +1,7 @@
 //! The Tauri shell. Thin by rule (ADR-003): it wires commands to `notes-core`
 //! and holds no policy of its own.
 
+mod asset;
 mod commands;
 pub mod linux;
 
@@ -32,9 +33,17 @@ pub fn run() {
                 explanation: decision.explanation,
             },
         })
+        // The `notes-asset://` scheme, and the second entry point into the
+        // workspace (`docs/ARCHITECTURE.md` §10). It resolves nothing itself:
+        // the path goes to `notes-core`, which applies the same root jail as
+        // every command, and only image types come back.
+        .register_uri_scheme_protocol("notes-asset", asset::serve)
         .invoke_handler(tauri::generate_handler![
             commands::env_report,
             commands::workspace_open,
+            commands::markdown_render,
+            commands::markdown_outline,
+            commands::markdown_trust_set,
             commands::workspace_create,
             commands::workspace_restore_last,
             commands::workspace_recent,

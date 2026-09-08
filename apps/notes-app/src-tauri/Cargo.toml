@@ -17,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 notes-model = { workspace = true }
 notes-core = { workspace = true }
+notes-markdown = { workspace = true }
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"

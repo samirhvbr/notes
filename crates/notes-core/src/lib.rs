@@ -9,6 +9,7 @@ pub mod drafts;
 pub mod ignore;
 mod lock;
 pub mod paths;
+pub mod preview;
 pub mod registry;
 pub mod settings;
 mod state;
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 pub use drafts::{DraftInfo, DraftReason};
+pub use preview::{Asset, Document, Rendered};
 pub use registry::{Registry, WorkspaceEntry, WorkspacesIndex};
 pub use settings::{Session, Settings, Tab};
 
@@ -746,6 +748,11 @@ impl WorkspaceService {
         self.settings = s;
         Ok(())
     }
+}
+
+/// Persist the registry. One place, so every caller writes it the same way.
+pub(crate) fn store_registry(dir: &Path, registry: &Registry) -> Result<()> {
+    state::store(&paths::registry_file(dir), registry)
 }
 
 /// `.notes/config.json`'s `ignore` list, when the user has turned it on.

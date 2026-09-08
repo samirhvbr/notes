@@ -730,7 +730,26 @@ const TABLE_ALIGNMENTS: &[&str] = &[
     "text-align: right",
 ];
 
+/// The allowlist is built **once**.
+///
+/// Measured rather than assumed, which is also why the win is stated small:
+/// `notes-core`'s `tests/cost.rs` put a 337-byte note at **0.385 ms** with the
+/// builder rebuilt per call and **0.293 ms** with it cached — about 0.09 ms of
+/// `HashSet` construction per render, not the 0.3 ms the shape of the code
+/// suggested. The rest is `html5ever` parsing, which is the work itself.
+/// Everything the builder holds is `'static` and `clean` takes `&self`, so one
+/// of them serves every render; the change costs nothing and is kept on that
+/// basis rather than on the size of the number.
+fn builder() -> &'static ammonia::Builder<'static> {
+    static BUILDER: std::sync::OnceLock<ammonia::Builder<'static>> = std::sync::OnceLock::new();
+    BUILDER.get_or_init(build)
+}
+
 fn sanitize(raw: &str) -> String {
+    builder().clean(raw).to_string()
+}
+
+fn build() -> ammonia::Builder<'static> {
     let mut builder = ammonia::Builder::default();
     builder
         .tags(
@@ -875,7 +894,7 @@ fn sanitize(raw: &str) -> String {
             }
             _ => Some(value.into()),
         });
-    builder.clean(raw).to_string()
+    builder
 }
 
 #[cfg(test)]

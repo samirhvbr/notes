@@ -2199,6 +2199,7 @@ name = "notes-app"
 version = "0.0.0"
 dependencies = [
  "notes-core",
+ "notes-markdown",
  "notes-model",
  "serde",
  "serde_json",
@@ -2217,6 +2218,7 @@ dependencies = [
  "fd-lock",
  "libc",
  "notes-fs",
+ "notes-markdown",
  "notes-model",
  "serde",
  "serde_json",

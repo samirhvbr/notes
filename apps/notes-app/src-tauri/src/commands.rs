@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use notes_core::{
-    DraftChoice, DraftInfo, DraftReason, OpenedNote, SaveResult, Session, Settings, WorkspaceEntry,
-    WorkspaceInfo, WorkspaceService,
+    Document, DraftChoice, DraftInfo, DraftReason, OpenedNote, Rendered, SaveResult, Session,
+    Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
 };
 use notes_model::{BaseRev, CoreError, Entry, NoteId, RelPath};
 use serde::Serialize;
@@ -140,6 +140,36 @@ pub fn note_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> 
 #[tauri::command]
 pub fn dir_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> {
     svc(&app)?.create_dir(&dir, &name)
+}
+
+// ---- markdown ----------------------------------------------------------
+
+/// Sanitized HTML for the buffer the frontend is holding.
+///
+/// The text is sent rather than read from disk because the preview follows what
+/// is being typed; `path` only resolves relative links. **This is the whole of
+/// the preview IR** — no AST crosses (`docs/ARCHITECTURE.md` §10).
+#[tauri::command]
+pub fn markdown_render(app: State<'_, App>, path: RelPath, text: String) -> R<Rendered> {
+    svc(&app)?.render_markdown(&path, &text)
+}
+
+/// The outline, the links and the front-matter span, with no HTML rendered.
+/// Separate from `markdown_render` because the sidebar wants it while the
+/// preview pane is closed.
+#[tauri::command]
+pub fn markdown_outline(app: State<'_, App>, text: String) -> R<Document> {
+    svc(&app)?.outline(&text)
+}
+
+/// Turn raw HTML or remote images on for **this** workspace.
+#[tauri::command]
+pub fn markdown_trust_set(
+    app: State<'_, App>,
+    raw_html: Option<bool>,
+    remote_images: Option<bool>,
+) -> R<()> {
+    svc(&app)?.set_markdown_trust(raw_html, remote_images)
 }
 
 // ---- drafts ------------------------------------------------------------

@@ -38,6 +38,13 @@ pub struct WorkspaceSettings {
     pub autosave_ms: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub show_hidden: Option<bool>,
+    /// Render raw HTML in the preview. Per workspace on purpose: trusting the
+    /// notes in one folder says nothing about another (scope §8.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub raw_html: Option<bool>,
+    /// Fetch remote images. Same reasoning, and the same default: off.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote_images: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
