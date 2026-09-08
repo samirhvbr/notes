@@ -121,6 +121,22 @@ jobs:
       - run: tools/byte-preservation.sh
         shell: bash
 
+      # The one-second rule (ADR-034), against the corpus it was measured on
+      # rather than the smaller one the ordinary suite builds for itself.
+      # `fixtures/deep` is ~21 000 directories with a mode-000 directory and a
+      # symlink loop in it, and it is generated rather than committed (ADR-011).
+      #
+      # Linux only: the per-directory walk, the watch table and the unreadable
+      # count are inotify's (docs/DECISIONS-0.1c.md D-10), and this runner is
+      # the only one in the matrix that is not root — root reads a mode-000
+      # directory anyway, which is what the Arch job taught at 0.11.3.
+      - name: the one-second rule on ~21 000 directories
+        if: runner.os == 'Linux'
+        run: |
+          tools/gen-deep.sh
+          cargo test -p notes-core --test deep -- --ignored --nocapture \
+            where_the_time_goes_opening_a_workspace_full_of_directories
+
       # The full-disk criterion, on a filesystem that really is full — see
       # docs/DECISIONS-0.1b.md D-03. Linux only: the mechanism is a Linux one.
       #

@@ -8,6 +8,30 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.9 - the deep fixture becomes a CI criterion, not a local measurement
+
+The criteria added at 0.11.0 build their own corpus so they can run on every
+push; the 20 962-directory fixture the freeze was actually measured on was a
+local `--ignored` run and nothing enforced it. Generating it costs 2.8 s, so
+now CI does, on the Linux job, and the measurement is a criterion:
+
+- `open_workspace` + `list_dir` on 20 962 directories, **under a second**;
+- `start_watch` and the first `quick_open`, **under 100 ms each** — they cost
+  502.72 ms and 549.88 ms before ADR-034;
+- `quick_open` returns `Ok`, not `Err(PermissionDenied)`, with the mode-000
+  directory in place;
+- `degraded` stays `None` — one unreadable directory does not demote the
+  workspace to polling.
+
+Linux only, for the two reasons the rest of it is: the per-directory counters
+are inotify's (D-10), and it is the one runner in the matrix that is not root,
+which is what the Arch job taught at 0.11.3.
+
+The whole sequence on that fixture is now **1.59 ms**, against 1 053.73 ms
+before — and the "before" number had to be taken with the unreadable directory
+temporarily made readable, because with it in place there was nothing to
+measure: the run aborted in under a millisecond.
+
 ## 0.11.8 - the front door stops saying there is no application
 
 `README.md` said **"Documentation only — there is no application code in this

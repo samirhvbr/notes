@@ -76,6 +76,35 @@ fn where_the_time_goes_opening_a_workspace_full_of_directories() {
         "opening and listing took {}, over the one-second rule",
         ms(opened + listed)
     );
+
+    // And the two calls that used to break it. Before ADR-034 they cost
+    // 502.72 ms and 549.88 ms here, each inside a `#[tauri::command]` holding
+    // the service mutex — which is why the *tree* appeared to hang.
+    assert!(
+        watched.as_millis() < 100,
+        "start_watch took {} — it is walking the tree inline",
+        ms(watched)
+    );
+    assert!(
+        indexed.as_millis() < 100,
+        "the first quick_open took {} — it is walking the tree inline",
+        ms(indexed)
+    );
+
+    // The other bug this fixture found, which was not about time at all: with
+    // the mode-000 directory in place, `quick_open` returned
+    // `Err(Io { op: "read_dir", kind: PermissionDenied })` for the whole
+    // workspace, and the recursive watch add demoted it to polling.
+    let quick = quick.expect("one unreadable directory is not a reason to answer nothing");
+    assert!(
+        quick.building,
+        "the answer came from a partial index and said so: {quick:?}"
+    );
+    assert_eq!(
+        watch, None,
+        "one unreadable directory does not demote the workspace to polling"
+    );
+    let _ = top;
 }
 
 fn count_dirs(root: &Path) -> usize {

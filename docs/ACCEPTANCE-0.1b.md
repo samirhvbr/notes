@@ -213,16 +213,30 @@ back — restoring the inline walk fails the test with
 *"start_watch returned in 33.09 ms of a 58.45 ms walk over 7200 directories —
 it is walking the tree inline"*.
 
+**And the full fixture runs in CI too.** The Linux job generates
+`fixtures/deep` — 20 962 directories, the mode-000 directory and the symlink
+loop — and runs the measurement as a criterion:
+`open_workspace` + `list_dir` under a second, `start_watch` and the first
+`quick_open` each under 100 ms, `quick_open` returning `Ok` rather than
+`PermissionDenied`, and `degraded` staying `None`. It is Linux-only for the same
+two reasons the rest is: the counters are inotify's, and it is the one runner in
+the matrix that is not root.
+
 **Measured on the real shape**, `tools/gen-deep.sh` plus
 `cargo test -p notes-core --test deep -- --ignored --nocapture`, against
 **20 962 directories** with a mode-000 directory and a symlink loop in it:
 
 | Step | Before | After |
 |---|---|---|
-| `open_workspace` + list root | 1.13 ms | 1.13 ms |
-| `start_watch` | **502.72 ms**, inline, mutex held | under 1 ms, walk in the background |
-| first `quick_open` | **549.88 ms**, inline, mutex held | under 1 ms, partial answer |
+| `open_workspace` + list root | 1.13 ms | 1.22 ms |
+| `start_watch` | **502.72 ms**, inline, mutex held | 0.30 ms, walk in the background |
+| first `quick_open` | **549.88 ms**, inline, mutex held | 0.07 ms, partial answer |
+| everything | **1 053.73 ms** | **1.59 ms** |
 | with the unreadable directory in place | everything aborted; `quick_open` returned `Err(PermissionDenied)` | 1 directory counted, everything else served |
+
+The "before" column was measured with the unreadable directory temporarily made
+readable, because with it in place there was nothing to measure: the run aborted
+in under a millisecond.
 
 **And on the folder itself.** `fixtures/deep` is a reconstruction; `~/x` is the
 original, and `deep.rs::where_the_time_goes_on_a_real_folder` measures it
