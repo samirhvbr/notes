@@ -8,6 +8,47 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.4 - polish, and ACCEPTANCE-0.1d.md with the twenty-five flows re-indexed
+
+Steps 4 and 5 of 0.1d.
+
+**Polish.** One focus ring for every control, on `:focus-visible` so a mouse
+click leaves nothing behind and a `Tab` always does. Colour transitions at
+90 ms — short enough to read as a response rather than an animation, and only
+on colour, because nothing that moves the layout should be animated under a
+click that is on its way. `prefers-reduced-motion` turns all of it off: that is
+a preference the operating system already knows and the application has no
+business second-guessing. Scrollbars joined the palette. The Welcome screen —
+the first thing anyone sees and the piece with the least attention — got the
+same tokens and rhythm as the shell it leads into.
+
+The selected tree row moved from `color-mix(accent)` to `--selected`, because
+`color-mix()` resolves against whatever it lands on and its result is not a
+token the contrast script can read — and a selected row is the surface most
+likely to be carrying dim text.
+
+And the script gained the pair it was missing: **the accent is also a
+surface.** The primary button paints a label on it, and the accent had only
+ever been checked as a foreground. A colour is not safe because one of its two
+roles is.
+
+**`ACCEPTANCE-0.1d.md`.** Ten areas, none ticked, plus the one that cannot be
+automated — *"alguém que usa Obsidian todo dia abre o app e encontra tudo sem
+pensar"* — and an automated section that says plainly it holds less than a
+fifth of the rest.
+
+The **twenty-five flows of 0.1b and 0.1c are re-indexed into it**, each with a
+*was* and a *now*: `New note` moved from the top bar to the explorer toolbar,
+the entry menu is reachable by `⋮` as well as right-click, search moved into
+the sidebar, Settings is on the rail. The expectations are the originals word
+for word; only where you press changed. Both older documents now point at the
+new one and say why, because a flow whose steps describe a window that no
+longer exists cannot be walked — which is what ADR-037 said when it re-indexed
+them instead of ticking them where they were.
+
+They stay ☐ in all three until the walk on the `.deb`, and then until the
+walk on the one after it.
+
 ## 0.12.3 - the column, the type, and a divider you can move with the keyboard
 
 Step 3 of 0.1d (`.continue/0.1d-interface.md` §6, §4.3, §5).

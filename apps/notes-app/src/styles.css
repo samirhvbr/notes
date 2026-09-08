@@ -259,7 +259,10 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .tree { list-style: none; margin: 0; padding: 0; }
 .row-wrap { display: flex; align-items: center; position: relative; border-radius: 4px; }
 .row-wrap:hover { background: var(--hover-soft); }
-.row-wrap.on { background: var(--accent-soft); }
+/* `--selected`, not the accent wash: `color-mix()` resolves against whatever it
+   lands on, so its result is not a token `tools/contrast.sh` can read — and a
+   selected row is the surface most likely to carry dim text. */
+.row-wrap.on { background: var(--selected); box-shadow: inset 2px 0 0 var(--accent); }
 .row-wrap .menu { top: calc(100% + 2px); right: 4px; }
 .row-more {
   display: inline-flex; align-items: center; justify-content: center;
@@ -767,3 +770,63 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   white-space: nowrap;
   font-weight: 500;
 }
+
+
+/* ---------------------------------------------------------------- polish --- */
+/* Step 4 of `.continue/0.1d-interface.md` §6. Three things, and none of them
+   is decoration: a focus ring you cannot miss, a hover that says a thing is
+   pressable before you press it, and transitions short enough that nothing
+   waits for them. */
+
+/* One focus ring, everywhere, and it never depends on `:hover` having happened
+   first. `:focus-visible` rather than `:focus` so a mouse click does not leave
+   a ring behind — but a keyboard `Tab` always does. */
+:where(button, [role="menuitem"], [role="separator"], a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+/* Short enough to read as a response rather than as an animation. Nothing that
+   moves the layout is transitioned — only colour, which cannot make a click
+   land somewhere else. */
+.rail-btn, .icon-btn, .menu-item, .row-wrap, .ws-trigger, .tab, .divider {
+  transition: background-color 90ms ease, color 90ms ease;
+}
+
+/* Somebody who turns animation off gets none of it. This is a preference the
+   operating system already knows and the application has no business
+   second-guessing. */
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+/* The scrollbars, so they belong to the palette rather than to the platform's
+   default light grey on our dark ground. */
+* { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--disabled); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* The Welcome screen is the first thing anyone sees, and it had the least
+   attention. Same tokens, same rhythm as the shell it leads into (D-05). */
+.welcome { background: var(--bg); }
+.welcome h1 { font-size: 30px; letter-spacing: -0.01em; }
+.welcome .actions button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--bg-raised);
+}
+.welcome .actions button:first-child {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg-sunken);
+  font-weight: 600;
+}
+.welcome .recent button { display: flex; gap: 10px; align-items: baseline; }

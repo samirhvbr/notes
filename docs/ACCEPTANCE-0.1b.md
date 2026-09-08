@@ -383,6 +383,13 @@ window. The window can be photographed and cannot be driven.
 Walk them with the application in front of you. **A box left unticked is a flow
 nobody has seen work.**
 
+> **The steps below describe the 0.1a–0.1c window, which 0.1d replaced.** The
+> behaviour is unchanged and these expectations still stand; where you *press*
+> does not. Walk them from
+> [ACCEPTANCE-0.1d.md §3](ACCEPTANCE-0.1d.md), which carries the same twelve
+> rows with their steps rewritten for the interface that exists — and tick them
+> there, and here, only after the owner has walked them twice (ADR-037).
+
 | # | Step | Expected |
 |---|---|---|
 | U1 | *New note* → type `nota de teste` → **Create** | The modal appears, the note is created and opens; `Cancel` and `Escape` each leave nothing behind |

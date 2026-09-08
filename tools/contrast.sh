@@ -162,6 +162,11 @@ for fg, why in FOCUS:
     for bg in SURFACES:
         check(fg, bg, 3.0, why, "AA non-text")
 
+# The accent is also a **surface**: the primary button paints text on it. It was
+# only ever checked as a foreground, which is the shape of blind spot this
+# script exists to close — a colour is not safe because one of its two roles is.
+check("bg-sunken", "accent", 4.5, "the label on a primary button", "AA text")
+
 for bg in SURFACES:
     check_step("line", bg, LINE_STEP, "a divider nobody can see is not a divider", "step")
 

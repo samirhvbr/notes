@@ -152,6 +152,11 @@ separately, and it exists from the first commit rather than the last.
 **Nothing below is ticked.** A row becomes `verified` only after the owner has
 walked it and said so.
 
+> **The steps below describe the 0.1a–0.1c window, which 0.1d replaced.** The
+> expectations still stand; the steps moved. Walk them from
+> [ACCEPTANCE-0.1d.md §3](ACCEPTANCE-0.1d.md), which carries these thirteen rows
+> with their steps rewritten for the interface that exists (ADR-037).
+
 > **What a screenshot showed, which is not a tick.** The application was started
 > against a seeded session of two tabs with `view_mode: split`. It came up with
 > both tabs present, the active one marked, its note loaded, Split restored and

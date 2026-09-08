@@ -12,6 +12,8 @@ that lists everything stops being read.
 
 | Document | What it answers |
 |---|---|
+| [ACCEPTANCE-0.1d.md](ACCEPTANCE-0.1d.md) | **Milestone 0.1d's acceptance — the interface** — ten areas nobody has ticked, the narrow automated half that is honest about being narrow, and the twenty-five flows of 0.1b and 0.1c re-indexed with their steps rewritten for the window that now exists. |
+| [DECISIONS-0.1d.md](DECISIONS-0.1d.md) | **Calls made while building 0.1d** — including the three questions the milestone left open by name, and the two contrast rules that were wrong the first time. |
 | [ACCEPTANCE-0.1c.md](ACCEPTANCE-0.1c.md) | **Milestone 0.1c's criteria, written from its first commit** — the two acceptance criteria and, from the same moment, the thirteen interface flows that no core test can reach. |
 | [ACCEPTANCE-0.1b.md](ACCEPTANCE-0.1b.md) | **Every 0.1b acceptance criterion against a named test or a documented manual step** — the watcher, identity across an external rename, the sanitizer census over `fixtures/xss/`, the trash — plus what the preview IR actually costs, measured, and the list of what nobody has looked at because the window has never been launched. |
 | [DECISIONS-0.1c.md](DECISIONS-0.1c.md) | **Calls made while building 0.1c** — including the one that refused to pull `notes-index` forward, and why an ACTIVE ADR made that a stop rather than a preference. |
