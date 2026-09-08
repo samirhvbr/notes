@@ -2,8 +2,9 @@
 
 > **Status:** `ACTIVE` · Every acceptance criterion of milestone 0.1a
 > (`.continue/SCOPE_final.md` §17), against a named automated test or a
-> documented manual step. **A criterion with neither is listed as not met**, and
-> one is.
+> documented manual step. **A criterion with neither is listed as not met.**
+> One was, until `0.7.5`: §5's full-disk half is now automated and the table
+> below reads `met` throughout.
 >
 > Measurements were taken on the development machine: Debian 13 (trixie),
 > Linux 6.12, ext4 on NVMe, X11, no NVIDIA. Rust 1.96, Node 24, Tauri 2.11.5.
@@ -14,9 +15,9 @@
 |---|---|---|
 | 1 | Tree lists in <1 s without reading content | **met** — measured |
 | 2 | 1 000 kills mid-save, never truncated or empty | **met** — 1000/1000 |
-| 3 | Open and save unchanged → `git status` clean | **met** — 228 files |
+| 3 | Open and save unchanged → `git status` clean | **met** — 227 files |
 | 4 | Dirty buffer + external append → suspend, draft, no overwrite | **met** — automated |
-| 5 | Disk full / permission denied → visible error, recoverable buffer | **partly met** — see §5 |
+| 5 | Disk full / permission denied → visible error, recoverable buffer | **met** — automated at `0.7.5` |
 | 6 | No command accepts a path outside the root | **met** — automated |
 | 7 | Opening a folder creates no file in it | **met** — automated |
 | 8 | `cargo test` passes with no Tauri | **met** — 123 tests |
@@ -83,7 +84,7 @@ run in CI on all three operating systems:
 == fixtures/basic
 saved unchanged: 206 · read-only: 1 · skipped: 0
 == fixtures/edge-cases
-saved unchanged: 22 · read-only: 4 · skipped: 0
+saved unchanged: 17 · read-only: 4 · skipped: 0
 
 PASS: every file opened and saved unchanged; git status is clean
 ```
@@ -118,7 +119,7 @@ app data holds exactly what was typed.
 follows it — while suspended, the debounce writes to the draft and never to the
 note.
 
-## 5. Disk full / permission denied — **partly met**
+## 5. Disk full / permission denied
 
 **Permission denied: automated** (Unix) — `notes-core`,
 `tests/protocol.rs::a_denied_write_is_reported_and_leaves_the_buffer_recoverable`.
@@ -126,29 +127,51 @@ The directory is made unwritable, the save returns
 `WriteFailed { kind: PermissionDenied }` rather than an error, and the draft on
 disk is asserted to contain the buffer verbatim.
 
-**Disk full: not automated.** `IoKind::classify` is unit-tested for ENOSPC and
-EDQUOT (`notes-model`, `error::tests::disk_full_is_distinguishable_from_permission_denied`
-and `::quota_reads_as_disk_full`), but **no test fills a filesystem**, so the
-path from a real ENOSPC to a visible error and a recoverable buffer is unproven.
+**Disk full: automated since `0.7.5`** — `notes-core`,
+`tests/enospc.rs::a_full_disk_is_reported_and_leaves_the_buffer_recoverable`,
+driven by `tools/enospc.sh` and run in CI on Linux:
 
-Manual step, until it is automated:
+```bash
+tools/enospc.sh          # optional size argument, default 1M
+```
+
+It asserts the whole path rather than the classifier: a real ENOSPC comes back
+as `WriteFailed { kind: DiskFull }` and not as an `Err`, the note on disk is
+byte-identical afterwards, no `.tmp` file is left in the user's folder, the
+draft in app data holds the buffer verbatim with `reason: write_failed`, and
+reopening the note offers that draft back.
+
+**It needs no privileges, which is what changed.** The manual recipe this
+section used to carry wanted `sudo mount -o loop`, so the criterion could not be
+automated without deciding what CI is allowed to do. It does not need root: an
+**unprivileged user namespace** may mount a `tmpfs`, a size-capped `tmpfs`
+returns ENOSPC exactly like a full disk, and the mount is private to the
+namespace so a failed run leaves nothing mounted anywhere. The reasoning, and
+the loopback alternative it displaced, are [DECISIONS-0.1b.md](DECISIONS-0.1b.md)
+D-03.
+
+`IoKind::classify` keeps its unit tests for errno 28 and EDQUOT (`notes-model`,
+`error::tests::disk_full_is_distinguishable_from_permission_denied` and
+`::quota_reads_as_disk_full`) — they cover the codes a real filesystem here does
+not produce, quota in particular.
+
+**A machine that forbids unprivileged user namespaces** (some hardened kernels
+set `kernel.unprivileged_userns_clone=0`) cannot run it, and `tools/enospc.sh`
+says so rather than passing. The loopback recipe stands for that case:
 
 ```bash
 # Linux: a 1 MiB filesystem, mounted, then filled.
 truncate -s 1M /tmp/tiny.img && mkfs.ext4 -q /tmp/tiny.img
 mkdir -p /tmp/tiny && sudo mount -o loop /tmp/tiny.img /tmp/tiny
 sudo chown "$USER" /tmp/tiny && printf '# n\n' > /tmp/tiny/n.md
-# Open /tmp/tiny as a workspace, type more than 1 MiB, and check:
-#   the status bar reads `error` with "no space left on the disk"
-#   the draft exists under <data>/workspaces/<id>/drafts/
-#   reopening the note offers to restore it
+NOTES_TINY_DIR=/tmp/tiny cargo test -p notes-core --test enospc -- --ignored --nocapture
 sudo umount /tmp/tiny
 ```
 
-**Verdict: partly met.** The error model distinguishes the two causes and the
-draft path is proven for one of them; the full-disk path is documented and
-unexercised. Automating it needs a loopback filesystem in CI, which is a decision
-about CI privileges rather than about this milestone.
+**The window itself is still unverified for this path** — the status bar
+reading `error` with "no space left on the disk" is asserted in the core's
+`SaveResult`, not observed on screen. That belongs to the *Not verified* list
+below with everything else the interface owes.
 
 ## 6. No command accepts a path outside the root
 
@@ -234,7 +257,8 @@ The response to the last one was `tools/check.sh`, which cross-checks the Window
 target locally ([DECISIONS-0.1a.md](DECISIONS-0.1a.md) D-25) — one `rustup target
 add`, no MSVC toolchain, and it would have caught both compile failures in
 seconds.
-- **The full-disk path**, as §5 states.
+- **The full-disk error as the user sees it.** §5 proves the core reports
+  `DiskFull` and keeps the buffer; nobody has watched the status bar say so.
 - **Milestone 0.0 remains open**, on hardware this machine does not have —
   [SPIKE-0.0.md](SPIKE-0.0.md). It is orthogonal to this milestone and blocks
   nothing here.

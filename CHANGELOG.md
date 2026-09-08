@@ -197,6 +197,53 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.7.5 - the debt 0.1a left: the Windows check runs by default and the full disk is automated
+
+Three things 0.1a left behind, cleared before any 0.1b feature so that the
+milestone starts from a gate that is actually closed.
+
+**The full-disk criterion is automated, and it is the one that mattered.**
+[ACCEPTANCE-0.1a.md](docs/ACCEPTANCE-0.1a.md) §5 read *partly met*: `IoKind`
+classified errno 28 in a unit test, but nothing exercised the path from a
+filesystem that is really out of room to a visible error and a recoverable
+buffer — the two steps in that gap being `write_atomic` returning `Err` at the
+right moment and `settle` writing the draft instead of propagating. The document
+called automating it "a decision about CI privileges", because the manual recipe
+wanted `sudo mount -o loop`. It does not need one: an **unprivileged user
+namespace** can mount a `tmpfs`, and a size-capped `tmpfs` over its limit returns
+ENOSPC exactly as a full disk does. `tools/enospc.sh` builds that namespace and
+runs `notes-core`'s `tests/enospc.rs` inside it, in the local gate and on the
+Linux leg of CI, with no privileges at all and no mount left behind anywhere.
+The test asserts the whole path: `WriteFailed { kind: DiskFull }` rather than an
+`Err`, the note byte-identical afterwards, no `.tmp` left in the user's folder,
+the draft holding the buffer verbatim, and reopening the note offering it back.
+Criterion 5 is now **met**; the reasoning and the loopback alternative it
+displaced are [DECISIONS-0.1b.md](docs/DECISIONS-0.1b.md) D-03.
+
+**The Windows cross-check runs by default.** `tools/check.sh` gained it at
+`0.7.3` and then skipped it whenever `x86_64-pc-windows-gnu` was not installed —
+so the one check that would have caught both Windows compile failures was
+missing on exactly the machines that had never added the target. It now installs
+the target once and runs. `NOTES_NO_WINDOWS_CHECK=1` opts out deliberately; a
+machine with no `rustup` gets a loud warning rather than a failed gate, because
+refusing to run the test suite over a cross-compilation concern trades a real
+check for a hypothetical one (D-01).
+
+**And the queue index points at a file that exists.** `.continue/README.md`
+linked `ARCHITECTURE.md` at the repository root, where it has never lived. That
+is a pointer, not queue material — the README says of itself that it is the
+folder's index — so repairing it is not the tidying the queue rule forbids
+(D-02).
+
+`docs/DECISIONS-0.1b.md` opens with these three, in the same shape the 0.1a log
+uses: what was decided, which gap it closed, and what to do instead if the owner
+disagrees.
+
+One stale transcript went with them: `ACCEPTANCE-0.1a.md` §3 still quoted 22
+edge-case files saved unchanged, from before D-20 and D-23 removed the names no
+target filesystem could hold. The corpus is 21 files — 17 saved unchanged, 4
+read-only — and 227 in total across both corpora.
+
 ## 0.7.4 - the CI matrix is green on all four platforms
 
 Ubuntu, macOS, Windows and Arch, plus the contracts job, the frontend and the

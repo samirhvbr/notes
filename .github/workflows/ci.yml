@@ -91,6 +91,14 @@ jobs:
       - run: tools/byte-preservation.sh
         shell: bash
 
+      # The full-disk criterion, on a filesystem that really is full. An
+      # unprivileged user namespace with a 1 MiB tmpfs needs no runner
+      # privileges, which is what made this automatable at all — see
+      # docs/DECISIONS-0.1b.md D-03. Linux only: the mechanism is a Linux one.
+      - name: full disk (ENOSPC)
+        if: runner.os == 'Linux'
+        run: tools/enospc.sh
+
   # Arch is rolling: WebKitGTK moves without warning, and breakage shows here
   # before it reaches a user (docs/ARCHITECTURE.md §3).
   arch:

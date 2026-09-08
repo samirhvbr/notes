@@ -4,9 +4,16 @@
 # The cross-target step is the one worth explaining: `cargo clippy` on Linux
 # cannot see code behind `#[cfg(windows)]`, and cannot see that a helper used
 # only under `#[cfg(unix)]` becomes dead on Windows — where `-D warnings` turns
-# it into a build failure. Two CI rounds were spent on exactly that. Checking the
-# Windows target locally needs only `rustup target add x86_64-pc-windows-gnu`;
-# it type-checks without linking, so no MSVC toolchain is involved.
+# it into a build failure. Two CI rounds were spent on exactly that.
+#
+# **It runs by default, and installs the target if it is missing.** Skipping it
+# when `rustup target add x86_64-pc-windows-gnu` had never been run made the one
+# step that would have caught both compile failures the one step nobody had —
+# a check that silently opts out is not a check. The target type-checks without
+# linking, so no MSVC toolchain is involved, and the install is a one-off of a
+# few seconds. `NOTES_NO_WINDOWS_CHECK=1` opts out deliberately; a machine with
+# no rustup and no target degrades to a warning rather than a failure, because
+# refusing to run the rest of the gate over a cross-check helps nobody.
 set -uo pipefail
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -18,15 +25,24 @@ step() {
 
 step "cargo fmt"            cargo fmt --all --check
 step "clippy (native)"      cargo clippy --all-targets -- -D warnings
-if rustup target list --installed | grep -q x86_64-pc-windows-gnu; then
+windows_target_ready() {
+  [ -z "${NOTES_NO_WINDOWS_CHECK:-}" ] || { echo "opted out by NOTES_NO_WINDOWS_CHECK"; return 1; }
+  command -v rustup >/dev/null 2>&1 || { echo "no rustup on this machine"; return 1; }
+  rustup target list --installed 2>/dev/null | grep -q '^x86_64-pc-windows-gnu$' && return 0
+  echo "   installing the x86_64-pc-windows-gnu target (one-off)…" >&2
+  rustup target add x86_64-pc-windows-gnu >/dev/null 2>&1 || { echo "could not install the target"; return 1; }
+}
+
+if why=$(windows_target_ready); then
   step "clippy (windows)"   cargo clippy --target x86_64-pc-windows-gnu \
                               -p notes-model -p notes-fs -p notes-core \
                               --all-targets -- -D warnings
 else
-  printf '\n== clippy (windows)\n   SKIPPED — rustup target add x86_64-pc-windows-gnu\n'
+  printf '\n== clippy (windows)\n   WARNING, not run — %s\n' "${why:-unknown}"
 fi
 step "cargo test"           cargo test --workspace
 step "byte preservation"    tools/byte-preservation.sh
+step "full disk (ENOSPC)"   tools/enospc.sh
 step "generated types"      bash -c '
   rm -rf apps/notes-app/src/ipc/generated
   cargo test -p notes-model -p notes-core --quiet >/dev/null 2>&1
