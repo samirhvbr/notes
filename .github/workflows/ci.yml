@@ -64,6 +64,19 @@ jobs:
       - name: no blocking script dialogs in the frontend
         run: tools/no-blocking-dialogs.sh
 
+      # The bundle version is stamped from version.md at build time (ADR-035).
+      # A real number committed here is a second copy of the version, and it is
+      # the copy that goes stale — a `.deb` on Release 0.11.1 calling itself
+      # 0.1.0 is a package nobody can match to the code that produced it.
+      - name: the bundle version is the placeholder, not a stamped one
+        run: |
+          if ! grep -q '"version": "0.0.0"' apps/notes-app/src-tauri/tauri.conf.json; then
+            echo "::error::tauri.conf.json carries a stamped version — it must be committed as 0.0.0"
+            grep '"version"' apps/notes-app/src-tauri/tauri.conf.json
+            exit 1
+          fi
+          echo "bundle version is the placeholder"
+
       # Every user-visible string is a key, and a key missing from either
       # catalogue is a blank label in one language (scope §9).
       - name: the i18n catalogues have the same keys

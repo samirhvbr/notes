@@ -1045,3 +1045,37 @@ every fixture the project had. `fixtures/large` measures 10 000 **notes** and
 lists them in 37 ms. The axis that broke was **directories**, and nothing
 measured it until `fixtures/deep` did. A performance criterion is only as good
 as the shape it is measured on.
+
+---
+
+## ADR-035 — The bundle version is stamped from `version.md`, never maintained beside it
+
+**Status:** `ACCEPTED` · 08/09/2026
+
+**Context.** `version.md` is the version (ADR-011): `tools/release.sh` names the
+git tag and the GitHub Release after it. `tauri.conf.json` needs the same number
+to stamp a `.deb`, an AppImage and a `PKGBUILD`, and it held its own copy —
+`0.1.0`, while `version.md` said `0.11.1`. A package attached to Release
+`0.11.1` that calls itself `0.1.0` cannot be matched to the code that produced
+it, which is the one thing a version number is for.
+
+**Decision.** `tools/stamp-version.sh` writes `version.md`'s version into
+`tauri.conf.json` at build time. **What is committed is `0.0.0`** — valid
+semver, and unmistakably not a release. `tools/check.sh` and CI both fail if the
+committed value is anything else, so a stamped tree cannot be committed by
+accident and the number cannot quietly acquire a second maintainer.
+
+The AUR package follows the same line: `packaging/aur/notes-bin/PKGBUILD` is
+**generated** from `PKGBUILD.in` by `packaging/aur/gen-pkgbuild.sh`, which fills
+in the version, the source and its `sha256sum`. The generated file is
+gitignored. A checksum committed by hand is a checksum that is eventually wrong.
+
+**Consequences.** The version lives in exactly one file, and every artefact that
+carries a version gets it from there. The cost is that a local
+`npm run tauri build` produces a `0.0.0` bundle unless `tools/stamp-version.sh`
+is run first — which is stated in the runbook and is the correct default, since
+a local build is not a release.
+
+**Alternative if you disagree.** Keep the number in `tauri.conf.json` and bump
+both. It is one more line in the commit ritual and it is the line that gets
+forgotten; the evidence is that it already had been, by ten minor versions.

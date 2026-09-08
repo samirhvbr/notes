@@ -31,12 +31,71 @@ _Fill in: what each variable in `.env.example` means, which ones are required,
 and which ones are secrets that never get committed
 ([security.md §5](security.md#5-secrets-and-configuration))._
 
-## 4. Deploy
+## 4. Release
 
-_Fill in: how a change reaches production, who may do it, what it restarts, and
-what to do when it fails halfway. Be specific about the traps — a
-`config:cache` newer than the `.env` means the `.env` does not apply, and a
-worker that loaded config at startup does not re-read it._
+There is no server. "Deploy" here means: a version gets a tag, a GitHub Release,
+and packages attached to it.
+
+**It is automatic, and the trigger is `version.md`.** Push a commit that bumps
+it and `release.yml` tags the version and publishes the Release from the
+CHANGELOG section with the same heading; `build.yml` then builds the artifacts
+and attaches them. Nothing below has to be run by hand
+([ARCHITECTURE.md §15](ARCHITECTURE.md), ADR-011, ADR-035).
+
+What ships today, and what does not:
+
+| | |
+|---|---|
+| Linux | `.deb`, AppImage, a tarball, and the AUR `notes-bin` package — all built and attached |
+| macOS, Windows | **not published.** The jobs are written in `build.yml` behind `if: false`; each carries the list of what is missing, and in both cases it is an account or a certificate rather than code (ADR-024) |
+
+### Building the packages locally
+
+The same three steps CI runs, in the same order:
+
+```bash
+tools/stamp-version.sh                      # version.md → tauri.conf.json
+cd apps/notes-app && npm ci
+npm run tauri build -- --bundles deb,appimage
+cd ../.. && packaging/linux/tarball.sh "$(cat version.md)"
+```
+
+**`tools/stamp-version.sh` first, or the bundle calls itself `0.0.0`.** That is
+the committed placeholder and CI fails if anything else is committed in its
+place (ADR-035) — a local build is not a release, so `0.0.0` is the honest
+default.
+
+The Arch package, the way the CI job does it, in a container so nothing is
+installed on the machine:
+
+```bash
+docker run --rm -v "$PWD:/src:ro" archlinux:latest bash -c '
+  pacman -Syu --noconfirm && pacman -S --noconfirm base-devel webkit2gtk-4.1 gtk3
+  useradd -m builder && echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+  cp -r /src /work && chown -R builder /work && cd /work
+  v="$(grep -oE "[0-9]+\.[0-9]+\.[0-9]+" version.md | head -1)"
+  sudo -u builder packaging/aur/gen-pkgbuild.sh "$v" "dist-release/notes-$v-x86_64-linux.tar.gz"
+  cd packaging/aur/notes-bin && sudo -u builder makepkg --noconfirm --syncdeps --cleanbuild
+  pacman -U --noconfirm ./*.pkg.tar.zst && ldd /usr/bin/notes | grep "not found" && exit 1
+  echo ok'
+```
+
+### When it fails halfway
+
+- **A Release exists with no artifacts.** That is `release.yml` green and
+  `build.yml` red, and it is the split those two workflows exist to allow. Fix
+  the build and re-run `build.yml`; it refuses to upload twice, so a re-run
+  after a partial upload is safe.
+- **`build.yml` did nothing.** It only runs when a Release for `version.md`'s
+  version exists and does not already carry a `.deb`. The job named *what to
+  build* says which of those two it was, as a notice.
+- **A version was released with the wrong number in the package.** The bundle
+  version is stamped from `version.md`; if they disagree, someone committed a
+  stamped `tauri.conf.json`. CI rejects that, so the more likely cause is a
+  build run without `tools/stamp-version.sh`.
+- **The Arch job is red and nothing here changed.** That is the job doing its
+  job: Arch is rolling, `webkit2gtk-4.1` moves, and finding out here is the
+  entire point of ADR-023. It is information, not flakiness to be muted.
 
 ## 5. The git hooks
 

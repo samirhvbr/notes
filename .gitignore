@@ -38,3 +38,9 @@ fixtures/deep/
 # OS noise
 .DS_Store
 Thumbs.db
+
+# The AUR package's source, copied in by `gen-pkgbuild.sh` for a local build,
+# and the PKGBUILD it generates. Both come from `PKGBUILD.in` and version.md.
+packaging/aur/notes-bin/PKGBUILD
+packaging/aur/notes-bin/*.tar.gz
+dist-release/

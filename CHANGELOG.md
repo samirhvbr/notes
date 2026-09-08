@@ -8,6 +8,56 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.2 - the Linux release: .deb, AppImage, tarball and an AUR package that was actually built
+
+`ARCHITECTURE.md` §15 has described this since 0.1a and none of it existed.
+Now it does, and all of it was run before it was committed.
+
+**`build.yml`** builds the artifacts and attaches them to the Release
+`release.yml` already publishes. Two workflows on purpose: publishing a Release
+must not wait on, or be failed by, a compiler — a broken build should leave a
+Release with notes rather than no Release. The trigger is `workflow_run` rather
+than `on: release`, because `release.yml` creates the Release with the built-in
+`GITHUB_TOKEN` and GitHub fires no workflow events for what a `GITHUB_TOKEN`
+did; an `on: release` job here would simply never have run.
+
+**Linux**: `.deb` and AppImage from the Tauri bundler, on `ubuntu-22.04` rather
+than `ubuntu-latest` — a `.deb` links against the glibc it was built on, so the
+oldest supported runner is the widest audience.
+
+**Arch** (ADR-023): `packaging/aur/notes-bin/PKGBUILD.in` plus
+`gen-pkgbuild.sh`, and a job that runs a real `makepkg` in an `archlinux:latest`
+container against the tarball the previous job produced — then installs the
+package and checks `ldd` resolves. Not a lint of a PKGBUILD: a package that
+builds nowhere but the maintainer's machine is not a release target. The
+tarball is unpacked from the `.deb` rather than assembled, so the `.desktop`
+entry and the icon set are the ones the bundler produced and not a second copy
+that drifts.
+
+**macOS and Windows are written and disabled** (ADR-024), each behind `if:
+false` with the list of what is missing: an Apple Developer membership and a
+Developer ID certificate for notarisation; an OV code-signing certificate for
+SmartScreen. Neither is engineering. A job that does not exist is a job nobody
+can cost.
+
+**ADR-035 — the version is stamped, not maintained twice.** `tauri.conf.json`
+said `0.1.0` while `version.md` said `0.11.1`; a package attached to Release
+`0.11.1` calling itself `0.1.0` cannot be matched to the code that produced it.
+`tools/stamp-version.sh` writes `version.md`'s version at build time, the
+committed value is `0.0.0`, and CI and `tools/check.sh` both fail on anything
+else. The `PKGBUILD` is generated the same way, checksum included.
+
+Two things the first build got wrong and this one does not: the binary was
+installed as `usr/bin/notes-app` — the crate name, an artefact of the workspace
+layout rather than the name of the program — fixed with `mainBinaryName`; and
+`Depends:` listed `libwebkit2gtk-4.1-0` and `libgtk-3-0` twice, because Tauri
+already derives them.
+
+Verified end to end on this machine before committing: the `.deb` builds and
+carries the right paths, the AppImage builds, the tarball unpacks from the
+`.deb`, and `makepkg` in a real `archlinux:latest` container built, installed
+and resolved a `notes-bin` package from a binary compiled on Debian 13.
+
 ## 0.11.1 - native_id on Windows, and the watcher stops being one shape for three platforms
 
 **D-24 closes.** `native_id` returned `None` on Windows from 0.1a because the

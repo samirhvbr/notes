@@ -819,18 +819,40 @@ seed) and never committed.
 
 ## 15. Distribution
 
-Release orchestration already exists: `.github/workflows/release.yml` tags and
-publishes a GitHub Release for every `version.md` bump via `tools/release.sh`.
-A `build.yml` workflow attaches artifacts to that Release.
+`.github/workflows/release.yml` tags and publishes a GitHub Release for every
+`version.md` bump via `tools/release.sh`. `.github/workflows/build.yml` builds
+the artifacts and attaches them to that Release.
 
-| Target | Artifact | Signing | Notes |
+**They are two workflows on purpose.** Publishing a Release must not wait on, or
+be failed by, a compiler: the Release is the record that a version exists, and a
+build that breaks should leave a Release with notes rather than no Release at
+all. `build.yml` triggers on `workflow_run` rather than `on: release`, because
+`release.yml` creates the Release with the built-in `GITHUB_TOKEN` and GitHub
+fires no workflow events for what a `GITHUB_TOKEN` did.
+
+| Target | Artifact | Signing | Status |
 |---|---|---|---|
-| Debian / Ubuntu | `.deb`, AppImage (Tauri bundler) | none required | AppImage depends on system `webkit2gtk-4.1` |
-| Arch Linux | `packaging/aur/notes-bin/PKGBUILD` consuming the release tarball (binary, `.desktop`, icons); `notes-git` optional | AUR account, `makepkg --printsrcinfo` in CI | `depends=(webkit2gtk-4.1 gtk3)`; a CI job runs `makepkg` in the Arch container |
-| macOS | `.dmg` (Apple Silicon; universal if cost is zero) | Developer ID + `notarytool` in CI | Apple Developer account is a prerequisite of the first macOS release |
-| Windows | NSIS installer (MSI later if asked) | OV code-signing certificate, `signtool` in CI | unsigned builds trip SmartScreen — not shipped |
+| Debian / Ubuntu | `.deb` (built on `ubuntu-22.04` for the oldest glibc still supported), AppImage | none required | **shipping** |
+| Arch Linux | `packaging/aur/notes-bin/PKGBUILD` consuming the release tarball (binary, `.desktop`, icons); `notes-git` optional | AUR account; `makepkg` and `--printsrcinfo` run in an `archlinux:latest` container | **shipping** — `depends=(webkit2gtk-4.1 gtk3)`, and the job installs the package and checks `ldd` resolves |
+| macOS | `.dmg` (universal) | Developer ID + `notarytool` | **written and disabled** — needs an Apple Developer Program membership and the certificate; ADR-024 |
+| Windows | NSIS installer (MSI later if asked) | OV code-signing certificate, `signtool` | **written and disabled** — needs the certificate; ADR-024 |
 | iOS `[0.4]` | TestFlight → App Store | Apple Developer | built on the macOS runner |
 | Android `[0.4]` | APK on the Release; Play later | upload key in CI secrets | built on Linux |
+
+The disabled jobs are written out in `build.yml` behind `if: false`, each with
+the list of what is missing. It is an account and a certificate, not
+engineering, and a job that does not exist is a job nobody can cost.
+
+**The version comes from `version.md` and from nowhere else.**
+`tools/stamp-version.sh` writes it into `tauri.conf.json` at build time; the
+committed value is `0.0.0` and both CI and `tools/check.sh` fail if it is
+anything else. The `PKGBUILD` is generated the same way, checksum included
+([ADR-035](decisions.md)).
+
+The release tarball is unpacked **from the `.deb`** rather than assembled:
+the binary, the `.desktop` entry and the icon set are produced by the Tauri
+bundler, and a second copy of the desktop entry here would be a second version
+of one rule.
 
 Secrets (certificates, keys) live in GitHub Actions secrets, never in the
 repository (CLAUDE.md golden rule 7).

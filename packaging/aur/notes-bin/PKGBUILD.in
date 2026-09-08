@@ -1,0 +1,33 @@
+# Maintainer: Samir Hanna Verza <samirhv@me.com>
+#
+# Template. `packaging/aur/gen-pkgbuild.sh` fills in the version, the source and
+# its checksum, and writes the real PKGBUILD beside this file. The version is
+# never edited by hand: version.md is the one place it lives (ADR-035).
+pkgname=notes-bin
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Local-first Markdown notes — the files on disk are the source of truth"
+arch=('x86_64')
+url="https://github.com/samirhvbr/notes"
+license=('MIT')
+# WebKitGTK and GTK are linked, not vendored. Arch is rolling and webkit2gtk-4.1
+# moves without warning, which is exactly why CI builds against the current one
+# (ADR-023) instead of finding out from a user.
+depends=('webkit2gtk-4.1' 'gtk3')
+provides=('notes')
+conflicts=('notes')
+options=('!strip' '!debug')
+source=("@SOURCE@")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "$srcdir/notes-$pkgver-x86_64-linux"
+  install -Dm755 bin/notes "$pkgdir/usr/bin/notes"
+  install -Dm644 share/applications/notes.desktop "$pkgdir/usr/share/applications/notes.desktop"
+  # Whatever sizes the bundler produced, at the paths it produced them under.
+  find share/icons -type f -name '*.png' -printf '%P\n' | while read -r icon; do
+    install -Dm644 "share/icons/$icon" "$pkgdir/usr/share/icons/$icon"
+  done
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

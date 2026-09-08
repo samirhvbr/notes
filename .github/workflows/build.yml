@@ -1,0 +1,330 @@
+# Builds the release artifacts and attaches them to the Release that
+# `release.yml` publishes for the version in `version.md`.
+#
+# WHY `workflow_run` AND NOT `on: release`: `release.yml` creates the Release
+# with the built-in `GITHUB_TOKEN`, and GitHub does not fire workflow events for
+# anything a `GITHUB_TOKEN` did — a `release: [published]` trigger here would
+# never run. Watching the Release *workflow* finish is the same moment, and it
+# is a moment this repository can observe.
+#
+# WHY ARTIFACTS ARE NOT BUILT IN `release.yml`: publishing a Release must not
+# wait on, or be failed by, a compiler. The Release is the record that a version
+# exists; the artifacts are attached to it when they are ready, and a build that
+# breaks leaves a Release with notes rather than no Release at all.
+#
+# macOS and Windows are written below and **disabled**. What is missing is not
+# engineering — see `ADR-024` and the `if: false` on each job.
+#
+# Norm: docs/ARCHITECTURE.md §15 · docs/decisions.md ADR-023, ADR-024, ADR-035
+name: Build
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build and attach to (default: version.md at HEAD)"
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.event.workflow_run.head_sha || github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  # One place decides what is being built, so no job re-derives it and gets a
+  # different answer. It also decides whether there is anything to do at all:
+  # `release.yml` runs on every `version.md` push and usually does nothing,
+  # because the tag already exists.
+  what:
+    name: what to build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.pick.outputs.version }}
+      build: ${{ steps.pick.outputs.build }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_run" ] \
+             && [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "::notice::the Release workflow did not succeed — nothing to build"
+            echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          version="${INPUT_VERSION:-}"
+          [ -n "$version" ] || version="$(grep -oE '[0-9]+\.[0-9]+\.[0-9]+' version.md | head -1)"
+          [ -n "$version" ] || { echo "::error::no version in version.md"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          # The Release is what artifacts attach to. No Release, nothing to do —
+          # and that is the ordinary case, not a failure.
+          if ! gh release view "$version" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::notice::no Release '$version' yet — nothing to attach to"
+            echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          # And artifacts are attached once. A re-run must not upload a second
+          # copy of a `.deb` somebody may already have downloaded.
+          if gh release view "$version" --repo "$GITHUB_REPOSITORY" \
+               --json assets --jq '.assets[].name' | grep -q '\.deb$'; then
+            echo "::notice::Release '$version' already carries its artifacts"
+            echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+
+          echo "build=true" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: linux (deb, AppImage, tarball)
+    needs: what
+    if: needs.what.outputs.build == 'true'
+    # NOT `ubuntu-latest`. A `.deb` links against the glibc it was built on, so
+    # the oldest runner still supported is the widest audience: a package built
+    # on 24.04 refuses to install on 22.04, and the reverse is fine.
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write          # attaching an asset to a Release is a write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/notes-app/package-lock.json
+
+      - name: system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf file
+
+      # The number in `tauri.conf.json` comes from `version.md`, never from a
+      # hand edit (ADR-035). A `.deb` on Release 0.11.1 that calls itself
+      # something else cannot be matched to the code that produced it.
+      - name: stamp the version
+        run: tools/stamp-version.sh "${{ needs.what.outputs.version }}"
+
+      - name: build
+        working-directory: apps/notes-app
+        run: |
+          npm ci
+          npm run tauri build -- --bundles deb,appimage
+
+      - name: the tarball the AUR package consumes
+        run: packaging/linux/tarball.sh "${{ needs.what.outputs.version }}"
+
+      # `makepkg` needs this before it can build, and the job after this one is
+      # what proves the tarball is packageable at all.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-tarball
+          path: dist-release/*.tar.gz
+          retention-days: 1
+
+      - name: attach to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.what.outputs.version }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(
+            target/release/bundle/deb/*.deb
+            target/release/bundle/appimage/*.AppImage
+            dist-release/*.tar.gz
+            dist-release/*.tar.gz.sha256
+          )
+          [ ${#files[@]} -gt 0 ] || { echo "::error::the build produced no artifacts"; exit 1; }
+          printf '%s\n' "${files[@]}"
+          gh release upload "$VERSION" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+  # ADR-023: Arch is a release target, and this is the job that says so. It is a
+  # real `makepkg` in a real Arch container against the tarball the previous job
+  # produced — not a lint of the PKGBUILD. A package that builds nowhere but the
+  # maintainer's machine is not a release target.
+  arch:
+    name: arch (makepkg)
+    needs: [what, linux]
+    if: needs.what.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: system dependencies
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git webkit2gtk-4.1 gtk3 github-cli
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-tarball
+          path: dist-release
+
+      # `makepkg` refuses to run as root, by design and for good reason.
+      - name: a user to build as
+        run: |
+          useradd -m builder
+          echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+          chown -R builder "$GITHUB_WORKSPACE"
+
+      - name: generate the PKGBUILD and build the package
+        run: |
+          set -euo pipefail
+          v="${{ needs.what.outputs.version }}"
+          sudo -u builder packaging/aur/gen-pkgbuild.sh "$v" "dist-release/notes-$v-x86_64-linux.tar.gz"
+          cd packaging/aur/notes-bin
+          sudo -u builder makepkg --noconfirm --syncdeps --cleanbuild
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+          cat .SRCINFO
+
+      # Installing it is the assertion. A package that builds and installs
+      # nothing useful is a passing job and a broken release.
+      - name: install it and check what landed
+        run: |
+          set -euo pipefail
+          pacman -U --noconfirm packaging/aur/notes-bin/*.pkg.tar.zst
+          test -x /usr/bin/notes
+          test -f /usr/share/applications/notes.desktop
+          test -n "$(find /usr/share/icons -name 'notes.png' -print -quit)"
+          # It links against the system WebKitGTK, which is the whole reason
+          # this job runs on rolling Arch: a missing soname is the failure
+          # ADR-023 exists to catch before a user does.
+          ldd /usr/bin/notes | grep -q 'not found' && { echo "::error::unresolved shared libraries"; ldd /usr/bin/notes | grep 'not found'; exit 1; }
+          echo "notes-bin installs and resolves its libraries"
+
+      - name: attach the package and its .SRCINFO
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.what.outputs.version }}
+        run: |
+          set -euo pipefail
+          # `.SRCINFO` is what the AUR reads; publishing it beside the package
+          # means the AUR push is a copy rather than a regeneration.
+          cp packaging/aur/notes-bin/.SRCINFO "packaging/aur/notes-bin/notes-bin-$VERSION.SRCINFO"
+          gh release upload "$VERSION" \
+            packaging/aur/notes-bin/*.pkg.tar.zst \
+            "packaging/aur/notes-bin/notes-bin-$VERSION.SRCINFO" \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  # --------------------------------------------------------------------------
+  # Disabled: ADR-024 — no unsigned macOS or Windows artefact is published.
+  #
+  # These are written rather than absent because the missing piece is an
+  # account and a certificate, not a workflow. When both exist, the `if: false`
+  # goes and the secrets are filled in; nothing else here should need to change.
+  # --------------------------------------------------------------------------
+
+  macos:
+    name: macos (disabled — no Apple Developer account)
+    # MISSING, and neither is engineering:
+    #   1. an Apple Developer Program membership (US$99/year), which is what
+    #      issues a Developer ID Application certificate;
+    #   2. that certificate and its private key, as APPLE_CERTIFICATE and
+    #      APPLE_CERTIFICATE_PASSWORD in the repository's secrets;
+    #   3. an app-specific password or an App Store Connect API key for
+    #      `notarytool`, as APPLE_ID / APPLE_PASSWORD / APPLE_TEAM_ID.
+    # Without notarisation Gatekeeper refuses the app, and the workaround a user
+    # would be taught is the one an attacker needs them to know (ADR-024).
+    if: false
+    needs: what
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/notes-app/package-lock.json
+      - run: tools/stamp-version.sh "${{ needs.what.outputs.version }}"
+      - name: build, sign and notarise
+        working-directory: apps/notes-app
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          npm ci
+          npm run tauri build -- --target universal-apple-darwin --bundles dmg
+      - name: attach to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ needs.what.outputs.version }}" \
+            target/universal-apple-darwin/release/bundle/dmg/*.dmg \
+            --repo "$GITHUB_REPOSITORY" --clobber
+
+  windows:
+    name: windows (disabled — no code-signing certificate)
+    # MISSING, and neither is engineering:
+    #   1. an OV (or EV) code-signing certificate from a CA, which requires
+    #      identity verification and is an annual cost;
+    #   2. the certificate as WINDOWS_CERTIFICATE (base64 PFX) and
+    #      WINDOWS_CERTIFICATE_PASSWORD in the repository's secrets.
+    # Unsigned, SmartScreen shows "Windows protected your PC" and the user is
+    # taught to click through it — which is exactly the habit ADR-024 refuses to
+    # teach. `native_id` works on Windows as of 0.11.1; the blocker is the
+    # certificate, not the code.
+    if: false
+    needs: what
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: apps/notes-app/package-lock.json
+      - run: bash tools/stamp-version.sh "${{ needs.what.outputs.version }}"
+      - name: build and sign
+        working-directory: apps/notes-app
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.WINDOWS_CERTIFICATE }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          npm ci
+          npm run tauri build -- --bundles nsis
+      - name: attach to the Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release upload "${{ needs.what.outputs.version }}" \
+            target/release/bundle/nsis/*-setup.exe \
+            --repo "$GITHUB_REPOSITORY" --clobber
