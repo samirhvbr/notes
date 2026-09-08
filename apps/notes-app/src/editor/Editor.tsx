@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
+import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/search";
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { useEditor } from "../stores/editor";
@@ -39,7 +40,16 @@ export function Editor() {
         lineNumbers(),
         highlightActiveLine(),
         history(),
-        keymap.of([...defaultKeymap, ...historyKeymap]),
+        // Search and replace **within the file** — the 0.1b half of scope §10.
+        // Global search is 0.1c and is a different thing entirely: it scans the
+        // workspace in the core, streams results and is cancellable. This one
+        // is `Ctrl+F`, it runs on the buffer in front of the user, and it
+        // therefore searches what is being typed rather than what is saved.
+        search({ top: true }),
+        highlightSelectionMatches(),
+        // `searchKeymap` first: `Ctrl+F` and `Ctrl+H` must reach the panel
+        // rather than whatever `defaultKeymap` would do with them.
+        keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         markdown({ codeLanguages: languages }),
         EditorView.lineWrapping,
         EditorState.readOnly.of(readOnly),

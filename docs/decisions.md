@@ -683,3 +683,141 @@ and are published without one.
 prerequisites of the first macOS and Windows releases — cost and lead time, not
 engineering. Linux ships before them, which matches where the project is
 developed. Secrets live in CI secrets and never in the repository.
+
+---
+
+## ADR-025 — The preview corpus is a golden corpus, and blessing is not accepting
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** `fixtures/xss/` shipped at 0.1a with a README calling each file "an
+assertion, not a sample", and nothing read it for a whole milestone. A corpus
+nobody executes is a comment. The question at 0.1b was what "executing" it
+should mean, and there are two answers with different failure modes: exact
+output files, which can freeze a bug as a decision if regenerated carelessly,
+and property assertions, which cannot say whether the renderer produces *the
+right* HTML.
+
+**Decision.** Both, for the two things they are each right for.
+`fixtures/markdown/` holds an input, its exact expected HTML and its exact
+expected `Document`, compared **byte for byte with no normalisation**;
+`NOTES_BLESS=1` regenerates them, and **the diff is read against a written
+contract before it is committed** (`fixtures/markdown/README.md`, one row per
+file). `fixtures/xss/` asserts *properties* — structurally, on tags and
+attributes read back out of the sanitized output — because a sanitizer is
+specified by what cannot survive it, and because `safe-in-code.md` must render
+`javascript:alert(1)` as text, which a substring ban would forbid.
+
+**Consequences.** The reading is not ceremony: the first one caught four
+defects, each of which the suite would otherwise have frozen — a dropped
+`#section` fragment, an email autolink rendered as a link to a file with an `@`
+in its name, a refused image losing its alt text, and bare URLs never linkified.
+Byte-exactness also turned an intermittent `ammonia` attribute-ordering
+behaviour into a red build rather than an occasional shrug
+([DECISIONS-0.1b.md](DECISIONS-0.1b.md) D-07). The cost is that a
+`pulldown-cmark` upgrade produces a diff that has to be read, which is the same
+property stated as a cost.
+
+---
+
+## ADR-026 — Reconciliation is driven from what vanished, and a full scan announces no creations
+
+**Status:** `ACCEPTED` · 07/09/2026 · **amends [ADR-014](#adr-014--identity-lives-in-the-registry-never-in-the-note-and-the-hash-is-correlation)**
+
+**Context.** `ARCHITECTURE.md` §9 states identity correlation as
+*"appeared := disk paths not in registry"*. That phrasing assumes a registry
+that knows every file. This one does not: it is populated when a note is
+**opened**, never by listing — [ADR-015](#adr-015--the-registry-is-operational-state-and-moves-to-its-own-database-at-02)
+and `docs/DECISIONS-0.1a.md` D-09, which exist so that listing a 10 000-note
+workspace does not hash 197 MiB. Under a lazy registry, "appeared" is
+nearly every file in the workspace, on every scan.
+
+**Decision.** Correlation is computed **from the vanished side**: for each
+record whose path is gone, look for a unique match among the paths on disk that
+no record claims. The answer is identical — a unique native id, then a unique
+non-empty hash, then a new identity — and the work is zero on every tick where
+nothing vanished. Separately, `ChangeKind::Created` is emitted **only for a
+hinted path**, one the watcher has just reported; a full scan reports
+modifications, removals and correlated moves and says nothing about a file that
+is merely absent from the registry.
+
+**Consequences.** A window regaining focus no longer announces every note the
+user has never opened as newly created — which the first run of the
+reconciliation tests did, a thousand events at a time, and which also blew the
+hash budget with events that were not changes. Nothing is lost: a scan re-lists
+the tree, which is what the sidebar needs, and a file that appeared as half of a
+rename is found by correlation, which walks for exactly that. The cost is that
+"a file appeared while the application was closed" is a listing rather than an
+event, which nothing currently needs.
+
+---
+
+## ADR-027 — Not being able to watch is a state of the workspace, not a failure
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** `ARCHITECTURE.md` §11 already says several backends have no
+watcher — SMB, NFS, exFAT, a SAF tree at 0.4 — and §8 says Linux can run out of
+inotify watches. The obvious signature, `watch() -> Result<()>`, makes all of
+those errors, and an error at open time is a workspace that will not open.
+
+**Decision.** `FileSystem::watch()` returns a `Watch` carrying an optional
+`degraded` reason rather than a `Result`. A workspace that cannot be watched
+opens normally, is reconciled by a 5 s poll and a scan on focus, and **the
+interface says why** — for the inotify case, with the `sysctl` that raises the
+limit.
+
+**Consequences.** Every backend in §11's matrix is usable, with a stated
+limitation instead of a refusal, which is the same shape as `Caps` everywhere
+else in this application. The application also always runs its poll and its
+focus scan, watcher or no watcher, so a watch that is silently lost degrades to
+5 s rather than to nothing.
+
+---
+
+## ADR-028 — A resolution keeps the version it did not choose
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** Scope §12 lists four resolutions for a conflict — compare, keep
+mine, use the disk's, save as a copy — and three of them destroy one of two
+versions of something the user wrote. It is the one moment in this application
+where answering a dialog quickly can cost a morning.
+
+**Decision.** Every resolution writes the version it is discarding to
+`conflicts/` **before** it acts: `KeepLocal` snapshots the disk, `UseDisk`
+snapshots the buffer, and `SaveAsCopy` writes the buffer to a file of its own so
+both survive on disk. `note_convert_eol` — the one command that rewrites a file
+the user did not edit — does the same with the old bytes. Unresolved conflicts
+are drafts and are never pruned; resolved snapshots are pruned after a retention
+setting whose `0` means *keep*, and the 200 MB warning **deletes nothing**.
+
+**Consequences.** A resolution is always recoverable, which is what lets the
+interface offer the three buttons without a second confirmation. The cost is
+disk in app data, bounded by retention and reported rather than reclaimed —
+making room by throwing away the only copy of something a user wrote is the
+failure the directory exists to prevent.
+
+---
+
+## ADR-029 — `mailto:` and every scheme but `http(s)` render as text
+
+**Status:** `ACCEPTED` · 07/09/2026
+
+**Context.** Scope §8.4: *"Links externos `http(s)` abrem no navegador do SO por
+clique. Outros esquemas recusados."* `mailto:` is the one that looks like an
+exception worth making, and `shell:allow-open` in the capability file is
+restricted to `http` and `https`.
+
+**Decision.** A `mailto:` link, and an email autolink, render as text. Only
+`http` and `https` become anchors, with `target=_blank rel="noopener
+noreferrer"`, opened through a command that **checks the scheme again in Rust**
+— the capability is what the WebView may ask for, and the check is what the
+process will do.
+
+**Consequences.** A rendered `mailto:` would have been a link that does nothing
+when clicked, which is worse than text. Making it work means widening a
+capability, and granting a permission is the owner's act, written into the
+capability file with its reason — not applied by an agent on the way past
+(CLAUDE.md golden rule 7). The change is two lines and is written out in
+[DECISIONS-0.1b.md](DECISIONS-0.1b.md) D-06 for whoever makes it.

@@ -1,14 +1,17 @@
 # Architecture
 
-**Status: ACTIVE** — milestone 0.1a ships in the commit that made this line
-`ACTIVE`. Sections tagged `[0.1b]`, `[0.2]`, `[0.3]` and `[0.4]` remain
-`PROPOSED` until their milestone ships, and are here only so that 0.1a does not
-foreclose them.
+**Status: ACTIVE** — milestones 0.1a and **0.1b** have shipped. §7's 0.1b
+commands, §8 (reconciliation), §9 (identity correlation) and §10 (the Markdown
+IR) describe code that exists as of `0.9.0`. Sections tagged `[0.2]`, `[0.3]`
+and `[0.4]` remain `PROPOSED` until their milestone ships, and are here only so
+that what has shipped does not foreclose them.
 
 The decisions this document introduced are recorded as **ADR-013 … ADR-024** in
-[decisions.md](decisions.md); the calls taken while building, with their
-alternatives, are in [DECISIONS-0.1a.md](DECISIONS-0.1a.md); what each acceptance
-criterion is verified by is in [ACCEPTANCE-0.1a.md](ACCEPTANCE-0.1a.md).
+[decisions.md](decisions.md), with **ADR-025 … ADR-029** added by 0.1b. The
+calls taken while building are in [DECISIONS-0.1a.md](DECISIONS-0.1a.md) and
+[DECISIONS-0.1b.md](DECISIONS-0.1b.md); what each acceptance criterion is
+verified by is in [ACCEPTANCE-0.1a.md](ACCEPTANCE-0.1a.md) and
+[ACCEPTANCE-0.1b.md](ACCEPTANCE-0.1b.md).
 
 This document closes the decisions the product scope leaves to architecture:
 repository layout, crates, core types, the app-data layout and its schemas, the
@@ -497,14 +500,30 @@ raw watcher events ─▶ notify-debouncer (200 ms) ─▶ normalize to FsEvent 
        Removed / Created                   → identity correlation (§9), then registry update
 ```
 
-The self-write expectation is consumed on its first match and expires after
-2 s, so an external write that lands right after ours is seen, not swallowed.
+The self-write expectation is **armed before the write, not after** — otherwise
+there is a window exactly as long as the write in which our own save is news —
+consumed on its first match and expired after 2 s, so an external write that
+lands right after ours is seen, not swallowed.
+
+**`Created` is emitted only for a hinted path.** The table above was written
+against a registry that knows every file; this one is populated when a note is
+*opened* (§9's `observe`, `DECISIONS-0.1a.md` D-09), so on a full scan every
+note the user has never opened is "not in the registry". Announcing them would
+report the whole workspace as created on every window focus. A scan re-lists the
+tree, which is what the sidebar needs, and a file that appeared as half of a
+rename is found by correlation, which walks for it — [ADR-026](decisions.md).
 
 Budget: at most 50 files hashed per reconciliation tick; the rest is queued.
 The UI never waits on reconciliation to open or edit a note.
 
 `inotify` limits: on `ENOSPC` from `max_user_watches`, the watcher degrades to
 poll for that workspace and the UI says so with the `sysctl` to raise it.
+**Not being able to watch is a state of the workspace rather than a failure of
+the call**: `FileSystem::watch()` returns a `Watch` carrying an optional
+`degraded` reason, never an `Err`, so a backend with no watcher opens normally
+and is reconciled by the 5 s poll and the scan on focus ([ADR-027](decisions.md)).
+The poll and the focus scan run whether or not there is a watcher, so a watch
+silently lost degrades to 5 s rather than to nothing.
 
 ---
 
@@ -512,6 +531,11 @@ poll for that workspace and the UI says so with the `sysctl` to raise it.
 
 Runs after any scan or Removed/Created pair. Renames the app performs itself
 never enter this algorithm; they update the registry directly.
+
+**Computed from the vanished side.** "Disk paths not in the registry" is nearly
+every file here, because the registry is lazy; driving the loop from what
+vanished gives the same answer and costs nothing on every tick where nothing
+has ([ADR-026](decisions.md)).
 
 ```
 vanished := registry paths not on disk
@@ -793,15 +817,17 @@ user's, and the app tolerates them by falling back to defaults.
 
 ## 17. Milestone map
 
+`●` planned, `✔` shipped.
+
 | Section | 0.0 | 0.1a | 0.1b | 0.1c | 0.2 | 0.3 |
 |---|---|---|---|---|---|---|
 | §3 types, §4.1 registry (JSON), §4.2 drafts, §4.5 settings | | ● | | | | |
 | §5 write protocol, §5.1 text profile, §5.2 atomic replace | | ● | | | | |
 | §6 lock | | ● | | | | mcp uses it |
 | §7 commands: workspace, tree, note_open/save/flush/close/create, dir_create | | ● | | | | |
-| §2 notes-markdown, §10 IR, §7 markdown_render/outline (preview, split) | | | ● | | | |
-| §7 commands: rename, move, duplicate, delete, conflict_resolve, draft_restore, convert_eol | | | ● | | | |
-| §8 reconciliation (watcher, focus), §9 correlation, §4.3 conflicts | | | ● | | | |
+| §2 notes-markdown, §10 IR, §7 markdown_render/outline (preview, split) | | | ✔ | | | |
+| §7 commands: rename, move, duplicate, delete, conflict_resolve, draft_restore, convert_eol | | | ✔ | | | |
+| §8 reconciliation (watcher, focus), §9 correlation, §4.3 conflicts | | | ✔ | | | |
 | §7 search_*, session_*, settings_* UI, §13 i18n | | | | ● | | |
 | §4.1 registry.db, §2 notes-index, link rewrite | | | | | ● | |
 | §2 notes-mcp, tags, wiki links, attachments | | | | | | ● |
@@ -822,6 +848,9 @@ Resolved by the owner on 07/09/2026; `.continue/SCOPE_final.md` is not edited
 | §12 | Draft written on conflict or write failure | Also on 30 s dirty, and on exit (§4.2) | **This document wins** — a superset. More situations in which a buffer survives cannot make the guarantee weaker |
 | §9 | Every write carries `(buffer_version, BaseRev)` | `note_save(..., base_rev)` (§5, §7.1) | **The scope wins**; this document was changed to match |
 | §7.6 | Default ignore list | `IGNORE_DEFAULT` in `notes-core` (§16) | Same list; the scope did not say where it lives |
+| §8.4 | "Outros esquemas recusados" | `mailto:` renders as **text**, not as a link | **The scope wins, and it is worth spelling out**: `shell:allow-open` permits only `http(s)`, so a rendered `mailto:` would be a link that does nothing. Widening the capability is the owner's act ([ADR-029](decisions.md)) |
+| §8.1 | "autolinks" among the GFM features | A bare `https://`/`http://` is linkified; a bare `www.` is **not** | GFM guesses `http://` for `www.`, and guessing an insecure scheme for the user is not something this application does quietly |
+| §7.7 | Delete reports which happened | `DeleteOutcome`, and the trash is attempted whenever `caps.trash` | Same rule; the fallback exists because a removable stick has no bin, and it is never silent ([DECISIONS-0.1b.md](DECISIONS-0.1b.md) D-11) |
 
 ## 18. Decisions this document introduces (record as ADRs)
 

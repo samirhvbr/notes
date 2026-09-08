@@ -12,12 +12,17 @@
 | # | Etapa | Estado |
 |---|---|---|
 | 0 | Dívida do 0.1a — link do `.continue/README.md`, alvo Windows por padrão, ENOSPC automatizado | **feito** — `0.7.5` |
-| 1 | Fixtures do preview + suíte de asserção do `fixtures/xss/` | em curso |
-| 2 | `notes-markdown` (C2): parse, sanitize, links, front matter | não começou |
-| 3 | IR pelo §10 — HTML sanitizado no IPC, AST não | não começou |
-| 4 | UI: Source / Preview / Split + tela "comparar" do conflito (C3) | não começou |
-| 5 | Resto do escopo: rename/move/duplicate/delete, watcher, reconciliação | não começou |
-| 6 | `docs/ACCEPTANCE-0.1b.md` | não começou |
+| 1 | Fixtures do preview + suíte de asserção do `fixtures/xss/` | **feito** — `0.8.0` |
+| 2 | `notes-markdown` (C2): parse, sanitize, links, front matter | **feito** — `0.8.0` |
+| 3 | IR pelo §10 — HTML sanitizado no IPC, AST não | **feito** — `0.8.1`, com o custo medido |
+| 4 | UI: Source / Preview / Split + tela "comparar" do conflito (C3) | **feito** — `0.8.2` (core) e `0.8.3` (tela) |
+| 5 | Resto do escopo: rename/move/duplicate/delete, watcher, reconciliação | **feito** — `0.8.4` e `0.8.5` |
+| 6 | `docs/ACCEPTANCE-0.1b.md` | **feito** — `0.9.0` |
+
+**O marco fechou em `0.9.0`.** Este arquivo some no commit seguinte, ou fica
+como registro se o Samir preferir. O que ficou por verificar está em
+`docs/ACCEPTANCE-0.1b.md`, seção *Not verified* — em uma linha: **ninguém abriu
+a janela**.
 
 ## O que a etapa 0 resolveu
 

@@ -197,6 +197,48 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.9.0 - milestone 0.1b ships: search in the file, the acceptance document, and five ADRs
+
+The last scope item and the record. `@codemirror/search` gives `Ctrl+F` and
+`Ctrl+H` **on the buffer in front of the user** — which is why it searches what
+is being typed rather than what is saved. Global search is 0.1c and is a
+different thing entirely: it scans the workspace in the core, streams results
+and is cancellable.
+
+[docs/ACCEPTANCE-0.1b.md](docs/ACCEPTANCE-0.1b.md) puts each of scope §17's five
+criteria against a named test or a documented manual step, and says plainly
+where a criterion is met **in the core** and unobserved in the window. All five
+are met; criterion 1 is qualified, because nobody has watched a tab update.
+
+**262 Rust tests and 8 `vitest` cases.** The `fixtures/xss/` census renders every
+payload under all four combinations of `raw_html` and `remote_images`, so adding
+one is enough and forgetting to write a test for it cannot make it pass.
+
+**What the preview IR costs, measured rather than argued.** Turning `Rendered`
+into JSON is 6–9% of render-plus-serialise at any size a person writes and 18%
+at the 5 MiB edge case: not where the time goes, and nothing was engineered
+around it. What the profile *did* say is that the cost tracks element count
+rather than bytes — 1 MiB of dense HTML costs about what 5 MiB of prose does —
+and that is written down so the next person measures the right thing.
+
+Five ADRs, for the decisions that outlived the milestone that made them:
+**ADR-025** golden corpus, and why blessing is not accepting; **ADR-026**
+reconciliation driven from what vanished, and a full scan that announces no
+creations, amending ADR-014; **ADR-027** not being able to watch is a state of
+the workspace rather than a failure; **ADR-028** a resolution keeps the version
+it did not choose; **ADR-029** `mailto:` and every scheme but `http(s)` render
+as text.
+
+`docs/ARCHITECTURE.md` is `ACTIVE` for §§7–10 — they describe code that exists
+now — and §17.1 gained four more rows where the implementation and the
+Portuguese scope had to be reconciled out loud.
+
+**What is not done, in one line: nobody has launched the window.** The
+interface compiles, typechecks, bundles, and has tests over the one piece of it
+that is logic rather than markup. Everything else about it is unobserved, and
+`ACCEPTANCE-0.1b.md`'s *Not verified* section lists it item by item rather than
+leaving it to be discovered.
+
 ## 0.8.5 - the watcher, reconciliation, and identity that survives an external rename
 
 `ARCHITECTURE.md` §8 and §9 in code, and the last three 0.1b criteria that can

@@ -336,3 +336,35 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 }
 .menu button:hover { background: #26262c; }
 .menu button.danger { color: var(--bad); }
+
+/* CodeMirror's search panel, in the application's own colours. It is part of
+   the editor rather than a dialog: search-in-file acts on the buffer in front
+   of the user (scope §10). */
+.cm-panels { background: var(--bg-raised); color: var(--fg); border-color: var(--line); }
+.cm-panels.cm-panels-top { border-bottom: 1px solid var(--line); }
+.cm-panel.cm-search { padding: 6px 8px; }
+.cm-panel.cm-search input,
+.cm-panel.cm-search button,
+.cm-panel.cm-search label {
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--fg);
+}
+.cm-panel.cm-search input[type="text"] {
+  background: #26262c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.cm-panel.cm-search input[type="text"]:focus-visible { outline: 2px solid var(--accent); }
+.cm-panel.cm-search button[name] {
+  background: #26262c;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.cm-panel.cm-search button[name]:hover { border-color: var(--accent); }
+.cm-searchMatch { background: #3a2c1f; }
+.cm-searchMatch-selected { background: #5a4527; }
+.cm-selectionMatch { background: #2a3350; }
