@@ -197,6 +197,34 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.9.1 - the ENOSPC test needed the one privilege the runner has
+
+CI had been red on the Linux leg since `0.7.5`, and on that leg alone: Windows,
+macOS, Arch, the contracts job, the frontend and the crash loop were green
+throughout. The failing step was the full-disk test, with
+`unshare: write failed /proc/self/uid_map: Operation not permitted`.
+
+**It is the case the script already anticipated, arriving from the machine
+nobody expected it from.** Ubuntu 24.04 ships
+`kernel.apparmor_restrict_unprivileged_userns=1`, so a GitHub runner cannot
+create the user namespace the test mounts its `tmpfs` in — and it is also the
+one machine in this project with passwordless `sudo`. `tools/enospc.sh` now
+tries both, in the order that needs the fewest privileges: the namespace first,
+because that is what a developer runs and it leaves nothing mounted anywhere,
+then `sudo -n mount -t tmpfs`. `sudo -n` never prompts, so a machine with a
+password falls through rather than stopping the gate to ask for one.
+
+**And a skip is now a failure where it matters.** `NOTES_REQUIRE_ENOSPC=1` is
+set on the CI leg: a runner that lost both mechanisms would otherwise skip in
+silence, which is precisely the failure mode D-01 was written to refuse two
+versions ago — a check that quietly opts out is not a check.
+
+**The lesson is mine and it is worth writing down.** Six commits went out
+without the CI result being read, on the assumption that a green local gate
+meant a green matrix. It did not, for a reason the local gate structurally
+cannot see: the developer machine allows the thing the runner forbids. The
+matrix exists for exactly that, and it is only useful if somebody looks at it.
+
 ## 0.9.0 - milestone 0.1b ships: search in the file, the acceptance document, and five ADRs
 
 The last scope item and the record. `@codemirror/search` gives `Ctrl+F` and

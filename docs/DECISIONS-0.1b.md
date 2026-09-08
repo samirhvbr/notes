@@ -91,10 +91,27 @@ machine, which the loopback recipe could.
 still asserted in the core rather than observed on screen, along with everything
 else the window owes.
 
-**Alternative if you disagree.** Keep the loopback recipe as the automated form
-and give the CI job `sudo`; the test binary is unchanged, only the harness that
-provides `NOTES_TINY_DIR` differs, and that recipe is still printed in
-`ACCEPTANCE-0.1a.md` §5 for kernels that forbid unprivileged user namespaces.
+**Amended at `0.9.1`: both mechanisms, in the order that needs the fewest
+privileges.** The GitHub runner turned out to be the hardened-kernel case this
+decision had already anticipated — Ubuntu 24.04 ships
+`kernel.apparmor_restrict_unprivileged_userns=1`, and `unshare -U -r` fails with
+*"write failed /proc/self/uid_map: Operation not permitted"*. It is also the one
+machine with passwordless `sudo`. So `tools/enospc.sh` tries the user namespace
+first and falls back to `sudo -n mount -t tmpfs`, and **`NOTES_REQUIRE_ENOSPC=1`
+on the CI leg turns "no mechanism available" into a failure** — a runner that
+lost both would otherwise skip in silence, which is exactly the failure mode
+D-01 exists to refuse. `sudo -n` never prompts, so a developer machine with a
+password falls through to a loud skip rather than stopping the gate to ask for
+one.
+
+The reasoning above is unchanged and is why the order is what it is: the
+privilege-free path is the one a developer runs, and the privileged one exists
+because a specific machine forbids the other.
+
+**Alternative if you disagree.** Drop the fallback and mark criterion 5 *partly
+met* again on any kernel that restricts user namespaces; or drop the namespace
+path and require `sudo` everywhere, which is what the original manual recipe
+did and what this decision was taken to avoid.
 
 ---
 

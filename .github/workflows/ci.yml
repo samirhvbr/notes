@@ -95,12 +95,20 @@ jobs:
       - run: tools/byte-preservation.sh
         shell: bash
 
-      # The full-disk criterion, on a filesystem that really is full. An
-      # unprivileged user namespace with a 1 MiB tmpfs needs no runner
-      # privileges, which is what made this automatable at all — see
+      # The full-disk criterion, on a filesystem that really is full — see
       # docs/DECISIONS-0.1b.md D-03. Linux only: the mechanism is a Linux one.
+      #
+      # `NOTES_REQUIRE_ENOSPC` turns "no mechanism available" into a failure.
+      # The script prefers an unprivileged user namespace, which needs nothing
+      # from the runner, and falls back to `sudo mount -t tmpfs` — which is what
+      # this runner actually needs, because Ubuntu 24.04 ships
+      # `apparmor_restrict_unprivileged_userns=1`. Without the variable a
+      # runner that lost both would skip in silence, which is the failure mode
+      # D-01 exists to refuse.
       - name: full disk (ENOSPC)
         if: runner.os == 'Linux'
+        env:
+          NOTES_REQUIRE_ENOSPC: "1"
         run: tools/enospc.sh
 
   # Arch is rolling: WebKitGTK moves without warning, and breakage shows here
