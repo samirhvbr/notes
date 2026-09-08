@@ -8,6 +8,30 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.0 - artifacts on a minor bump, and a patch release that says why it is empty
+
+The owner's call on yesterday's cost: *"9 min e 105 MB por commit de doc não se
+justifica."* ADR-011 makes every commit a version and every version a Release,
+and `build.yml` was packaging all of them — twelve full builds in one session,
+three concurrent, with the CI job that gates the work queued behind an AppImage.
+
+`build.yml` now builds a version whose patch component is `0`, plus any version
+asked for through `workflow_dispatch`. A patch Release carries no artifacts and
+**says so in its own description**, with how to get them — an empty downloads
+section otherwise reads as a build that failed. The note is written once; a
+marker keeps a re-run from appending it twice.
+
+The rule is arithmetic on the version string rather than a diff of what changed.
+A patch that touches the editor gets no artifacts even though the binary is
+different, and a minor bump that only moves documents gets a full set. Deciding
+by content means defining which paths count, keeping that list right, and
+explaining an empty Release whose commit *looks* like code. The version number
+is a decision the author already made; reading it is cheaper than
+second-guessing it (ADR-036).
+
+**This release is the first minor bump under the new rule**, which makes it the
+first one built by it.
+
 ## 0.11.11 - one build at a time, because the burst was starving CI
 
 An operational consequence of yesterday's release pipeline, observed rather than

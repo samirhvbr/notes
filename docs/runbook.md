@@ -86,13 +86,17 @@ docker run --rm -v "$PWD:/src:ro" archlinux:latest bash -c '
   `build.yml` red, and it is the split those two workflows exist to allow. Fix
   the build and re-run `build.yml`; it refuses to upload twice, so a re-run
   after a partial upload is safe.
-- **`build.yml` did nothing.** It only runs when a Release for `version.md`'s
-  version exists and does not already carry its `.SRCINFO`. The job named *what
-  to build* says which of those two it was, as a notice.
-- **An older version has no artifacts.** Expected during a working session: one
-  build runs at a time and a newer version cancels it, so intermediate releases
-  can be empty. The newest is always built. To fill one in afterwards, run
-  `build.yml` by hand with its version as the input.
+- **`build.yml` did nothing.** Three reasons, and the job named *what to build*
+  says which as a notice: no Release for `version.md`'s version yet; the Release
+  already carries its `.SRCINFO`; or the version is a **patch**, which is not
+  built (ADR-036).
+- **A release has no artifacts.** Expected for any `X.Y.Z` where `Z` is not `0`
+  — the Release says so itself. To package one anyway, run the **Build**
+  workflow by hand with that version as the input:
+
+  ```bash
+  gh workflow run build.yml --repo samirhvbr/notes -f version=0.11.12
+  ```
 - **A version was released with the wrong number in the package.** The bundle
   version is stamped from `version.md`; if they disagree, someone committed a
   stamped `tauri.conf.json`. CI rejects that, so the more likely cause is a

@@ -39,7 +39,10 @@ the index at 0.2.
 
 ## Install
 
-Linux, from the [latest release](https://github.com/samirhvbr/notes/releases/latest):
+Linux, from the
+[latest release that carries packages](https://github.com/samirhvbr/notes/releases):
+every commit is a version, and **packages are built for minor bumps** (`X.Y.0`)
+and on request — a patch release says so in its own description ([ADR-036](docs/decisions.md)).
 
 ```bash
 # Debian, Ubuntu and derivatives

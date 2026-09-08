@@ -1083,3 +1083,48 @@ a local build is not a release.
 **Alternative if you disagree.** Keep the number in `tauri.conf.json` and bump
 both. It is one more line in the commit ritual and it is the line that gets
 forgotten; the evidence is that it already had been, by ten minor versions.
+
+---
+
+## ADR-036 — Release artifacts are built for minor bumps, and on request
+
+**Status:** `ACCEPTED` · 08/09/2026 · refines
+[ADR-023](#adr-023--arch-linux-is-a-release-target-with-its-own-ci-job) and
+[ADR-035](#adr-035--the-bundle-version-is-stamped-from-versionmd-never-maintained-beside-it)
+
+**Context.** ADR-011 makes every commit a version and every version a Release.
+`build.yml` then built a `.deb`, a 105 MB AppImage, a tarball and an Arch
+package for each of them — nine minutes a time. In one working session that was
+twelve full builds, three of them running concurrently while the CI job that
+actually gates the work sat queued behind an AppImage. The owner's call:
+*"9 min e 105 MB por commit de doc não se justifica."*
+
+**Decision.** Artifacts are built for a **minor bump** — a version whose patch
+component is `0` — and for any version asked for explicitly through
+`workflow_dispatch`. A patch Release carries no artifacts and **says so in its
+own description**, with the marker `<!-- no-artifacts -->` so a re-run does not
+append the note twice.
+
+Serialisation stays as well: the concurrency group is `build` with
+`cancel-in-progress`, so even a burst of minor bumps produces one build.
+
+**Consequences.** The version a user installs is a version where something an
+installer contains actually changed. A patch that somebody does want packaged
+is one manual run away, and the Release itself carries that instruction rather
+than leaving an empty downloads section to be read as a failed build. What is
+lost is the invariant *"every Release is installable"*; what replaces it is
+*"every Release says whether it is"*, which is the honest version and the one a
+person can act on.
+
+The rule is arithmetic on the version string, not a diff of what changed. A
+patch that touches the editor gets no artifacts even though it changes the
+binary, and a minor bump that only moves documents gets a full set. Deciding by
+content would mean defining which paths count, keeping that list correct, and
+explaining an empty Release whose commit *looks* like code — the version number
+is a decision the author already made, and reading it is cheaper than
+second-guessing it.
+
+**Alternative if you disagree.** Build on every version, which is what shipped
+at `0.11.2` and cost the CI queue; or decide by which paths a release range
+touched, which trades nine minutes for a rule that has to be maintained and can
+be wrong in both directions.

@@ -12,10 +12,15 @@
 # exists; the artifacts are attached to it when they are ready, and a build that
 # breaks leaves a Release with notes rather than no Release at all.
 #
+# WHAT GETS BUILT: minor bumps (`X.Y.0`), plus any version asked for through
+# `workflow_dispatch`. A patch Release carries no artifacts and says so in its
+# own description — ADR-036.
+#
 # macOS and Windows are written below and **disabled**. What is missing is not
 # engineering — see `ADR-024` and the `if: false` on each job.
 #
-# Norm: docs/ARCHITECTURE.md §15 · docs/decisions.md ADR-023, ADR-024, ADR-035
+# Norm: docs/ARCHITECTURE.md §15 · docs/decisions.md ADR-023, ADR-024, ADR-035,
+# ADR-036
 name: Build
 
 on:
@@ -53,6 +58,8 @@ jobs:
   what:
     name: what to build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write          # a patch Release gets a line saying why it is empty
     outputs:
       version: ${{ steps.pick.outputs.version }}
       build: ${{ steps.pick.outputs.build }}
@@ -96,7 +103,42 @@ jobs:
             echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
 
+          # **Only a minor bump is built**, plus anything asked for by hand.
+          #
+          # Every commit is a version and every version gets a Release
+          # (ADR-011), so most versions are a step inside a working session — a
+          # document, a comment, a test. Nine minutes and a 105 MB AppImage per
+          # one of those buys nobody anything, and the burst was starving CI of
+          # runners. A minor bump is where the thing a user installs actually
+          # changes; `workflow_dispatch` covers the patch somebody does want
+          # (docs/decisions.md ADR-036).
+          patch="${version##*.}"
+          if [ "${{ github.event_name }}" != "workflow_dispatch" ] && [ "$patch" != "0" ]; then
+            echo "::notice::$version is a patch — no artifacts (run this workflow by hand to build one)"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "annotate=$version" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           echo "build=true" >> "$GITHUB_OUTPUT"
+
+      # A Release with no downloads has to say why, or it reads as a build that
+      # failed. The marker keeps a re-run from appending the note twice.
+      - name: say so on a patch Release
+        if: steps.pick.outputs.annotate != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.pick.outputs.annotate }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          marker="<!-- no-artifacts -->"
+          body="$(gh release view "$VERSION" --repo "$REPO" --json body --jq .body)"
+          case "$body" in *"$marker"*) echo "already annotated"; exit 0 ;; esac
+          printf '%s\n\n---\n\n%s\n**No artifacts on this release.** It is a patch; packages are built for minor bumps (`X.Y.0`) and on request. The newest release that carries them is the one to install — or run the **Build** workflow by hand with `%s` as the version.\n' \
+            "$body" "$marker" "$VERSION" > /tmp/notes-body.md
+          gh release edit "$VERSION" --repo "$REPO" --notes-file /tmp/notes-body.md
+          echo "annotated $VERSION"
 
   linux:
     name: linux (deb, AppImage, tarball)
