@@ -21,10 +21,14 @@ export function SettingsPanel({
   onChanged: (s: CoreSettings) => void;
 }) {
   const [settings, setSettings] = useState<CoreSettings | null>(null);
+  const [env, setEnv] = useState<ipc.EnvReport | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.settingsGet().then(setSettings).catch((e) => setError(String(e)));
+    // Never fatal: a panel that refuses to open because a diagnostic could not
+    // be read is worse than a panel with one section missing.
+    ipc.envReport().then(setEnv).catch(() => {});
   }, []);
 
   if (!settings) return null;
@@ -125,6 +129,26 @@ export function SettingsPanel({
           <option value="en">English</option>
           <option value="pt-BR">Português (Brasil)</option>
         </select>
+
+        {/* Diagnostics. They used to sit in the window's top bar, where they
+            were the first thing anyone saw and almost never what anyone
+            wanted; 0.1d removed that bar, and this is where a thing you look
+            up rather than read belongs. The dmabuf line is the one that
+            mattered — it is what told the owner the workaround had applied
+            (ADR-033). */}
+        {env && (
+          <>
+            <h3>{t("settings.diagnostics")}</h3>
+            <dl className="diag">
+              <dt>{t("settings.diag.platform")}</dt>
+              <dd>
+                {env.os} / {env.session}
+              </dd>
+              <dt>{t("settings.diag.dmabuf")}</dt>
+              <dd>{env.dmabufExplanation}</dd>
+            </dl>
+          </>
+        )}
 
         {error && <p className="bad">{error}</p>}
 

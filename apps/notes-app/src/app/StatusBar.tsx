@@ -40,22 +40,56 @@ export function StatusBar() {
         ? t(`readonly.${doc.readOnly}`)
         : null;
 
+  const counts = doc ? measure(doc.text) : null;
+
   return (
     <footer className="statusbar">
+      {/* Background work on the left, discreet, and gone when it finishes
+          (`.continue/0.1d-interface.md` §4.4). */}
+      {watchText && <span className="muted watch">{watchText}</span>}
+      {message && <span className="message">{message}</span>}
+      <span className="spacer" />
+      {/* And the note's own facts on the right: the seven states of scope §9,
+          words, characters. **Nothing else.** A backlinks counter would need
+          the index that arrives at 0.3, and a counter with no data behind it is
+          a lie with the face of a feature (§3). */}
+      {info && (
+        <span className="muted root" title={info.root}>
+          {info.display_name}
+        </span>
+      )}
+      {counts && (
+        <>
+          <span className="muted count">{t("status.words", { count: counts.words })}</span>
+          <span className="muted count">{t("status.chars", { count: counts.chars })}</span>
+        </>
+      )}
       <span className={`status status-${status}`}>
         <span aria-hidden="true">{GLYPH[status]}</span> {t(`status.${status}`)}
       </span>
-      {doc && <span className="muted path">{doc.path}</span>}
-      {message && <span className="message">{message}</span>}
-      <span className="spacer" />
-      {/* Background work, while there is any. Opening a workspace returns as
-          soon as the tree can be drawn; the watcher's walk carries on behind
-          it, so the bar says so instead of leaving the user to guess whether
-          an unwatched folder is a bug (docs/DECISIONS-0.1c.md D-09). */}
-      {watchText && <span className="muted watch">{watchText}</span>}
-      {info && <span className="muted root" title={info.root}>{info.display_name}</span>}
     </footer>
   );
+}
+
+/**
+ * Words and characters of the buffer on screen.
+ *
+ * Characters are **code points**, not UTF-16 units, so `\u{1F331}` counts once
+ * rather than twice — the editor's own `length` would say two, and a person
+ * counting a character does not mean a surrogate pair. Words are runs of
+ * non-whitespace, which is the definition that does not need a dictionary and
+ * does not surprise anyone in either catalogue's language.
+ *
+ * Markdown syntax is counted: `# Title` is two words. Stripping it would mean
+ * parsing on every keystroke to produce a number nobody is auditing, and the
+ * count would then disagree with what the editor visibly contains.
+ */
+function measure(text: string): { words: number; chars: number } {
+  const trimmed = text.trim();
+  return {
+    words: trimmed ? trimmed.split(/\s+/).length : 0,
+    chars: [...text].length,
+  };
 }
 
 /**

@@ -6,6 +6,9 @@ import type { CoreError, Entry, NoteId, RelPath, WorkspaceInfo } from "../ipc";
 import { useEditor } from "./editor";
 import { useTabs } from "./tabs";
 
+/** Directories always come first; this orders what follows within each kind. */
+export type SortMode = "name" | "name-desc";
+
 interface WorkspaceState {
   info: WorkspaceInfo | null;
   /** Directory listings, keyed by path. The tree is lazy: a directory is
@@ -13,6 +16,17 @@ interface WorkspaceState {
   listings: Record<string, Entry[]>;
   expanded: Set<string>;
   error: CoreError | null;
+  /**
+   * How the explorer orders a directory.
+   *
+   * The **core's** order is directories first, then names case-insensitively,
+   * and it is stable so the tree does not reshuffle between listings
+   * (`LocalFs::list`). That stays the default and the sort here reorders what
+   * came back — it never asks the core for a different order, because the order
+   * a directory listing arrives in is a filesystem question and the order a
+   * person wants to read it in is not.
+   */
+  sort: SortMode;
 
   restore: () => Promise<void>;
   adopt: (info: WorkspaceInfo) => Promise<void>;
@@ -31,6 +45,10 @@ interface WorkspaceState {
   list: (dir: RelPath) => Promise<void>;
   toggle: (dir: RelPath) => Promise<void>;
   refresh: (dir: RelPath) => Promise<void>;
+  setSort: (s: SortMode) => void;
+  /** Fold every expanded directory. The listings are kept — they are cheap and
+   *  still correct; only the expansion state changes. */
+  collapseAll: () => void;
   fail: (e: unknown) => void;
   /** A short, non-error message — "moved to the trash", "duplicated as …".
    *  Scope §7.7 requires the application to *say* which of two things it did,
@@ -45,8 +63,12 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   listings: {},
   expanded: new Set(),
   error: null,
+  sort: "name",
 
   notice: null,
+
+  setSort: (sort) => set({ sort }),
+  collapseAll: () => set({ expanded: new Set() }),
 
   fail: (e) => set({ error: ipc.asCoreError(e) }),
   note: (notice) => set({ notice }),

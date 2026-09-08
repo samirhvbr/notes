@@ -66,6 +66,7 @@ export const useTabs = create<TabsState>((set, get) => ({
 
   reset() {
     if (persistTimer) clearTimeout(persistTimer);
+    void import("./history").then((m) => m.useHistoryStore.getState().reset());
     set({ tabs: [], activeId: null, restoring: false });
   },
 
@@ -84,6 +85,7 @@ export const useTabs = create<TabsState>((set, get) => ({
         : [...s.tabs, { noteId: doc.noteId, path: doc.path, line: 1, col: 1, scrollTop: 0, pinned: false }],
       activeId: doc.noteId,
     }));
+    visited(doc.path);
     schedulePersist(get);
   },
 
@@ -116,6 +118,7 @@ export const useTabs = create<TabsState>((set, get) => ({
     await leaveCurrent();
     await useEditor.getState().open(tab.path);
     set({ activeId: noteId });
+    visited(tab.path);
     schedulePersist(get);
   },
 
@@ -260,6 +263,18 @@ export function pendingCursor(noteId: NoteId | undefined): { line: number; col: 
   if (!noteId) return null;
   const t = useTabs.getState().tabs.find((x) => x.noteId === noteId);
   return t ? { line: t.line, col: t.col } : null;
+}
+
+/**
+ * Tell the back/forward history a note is now on screen.
+ *
+ * Imported lazily so the two stores do not import each other at module load —
+ * `history.ts` needs `openPath` to navigate, and this needs `visited` to
+ * record. The cycle is real and it is fine at call time; at import time it is
+ * an undefined function.
+ */
+function visited(path: RelPath) {
+  void import("./history").then((m) => m.useHistoryStore.getState().visited(path));
 }
 
 /** Leave the current document safely before another takes its place. */

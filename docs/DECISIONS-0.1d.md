@@ -143,3 +143,69 @@ case: there is no disabled toolbar to explain and no empty tab bar to justify.
 **Alternative if you disagree.** The shell with an empty sidebar, which is what
 Obsidian does and which makes opening a folder feel like a smaller step. It
 costs an empty state for every panel in the shell rather than one screen.
+
+
+---
+
+## D-06 — Back and forward are one history for the window, not one per tab
+
+**Decided.** `stores/history.ts` keeps a single list of visited paths with a
+cursor. The note header's two arrows move it.
+
+**Gap closed.** `.continue/0.1d-interface.md` §4.3 says *"voltar/avançar
+(histórico da aba)"*, and a per-tab history does not have anything to hold.
+
+**Why.** A tab in this application is a **note**, not a viewport (ADR-030).
+Opening a note from the tree, from quick open or from a search hit either
+activates its existing tab or makes one; there is no navigating *within* a tab,
+so a per-tab history would be a list of one entry that never grows. What a
+person means by "back" is *the note I was looking at before this one*, and that
+is a fact about the window.
+
+The list holds **paths rather than `NoteId`s**, so a note deleted while it is in
+the history simply fails to open and is stepped over, instead of holding an
+identity the registry has forgotten. It is bounded at 100 and everything ahead
+of the cursor is dropped on a new visit, which is what makes it a history rather
+than a ring.
+
+**Alternative if you disagree.** A history per tab, which becomes meaningful at
+0.3 when a wiki link can navigate inside a tab without opening a new one. That
+is the milestone to build it in, against a case that exists.
+
+---
+
+## D-07 — Contrast is checked as three different things, and the script says which
+
+**Decided.** `tools/contrast.sh` applies WCAG 4.5:1 to text, WCAG 3:1 to the
+focus ring and to disabled controls, and an **8/255 sRGB step** to the three
+dark surfaces and the divider. It also fails the build on any hex written
+outside `:root`.
+
+**Gap closed.** `.continue/0.1d-interface.md` §7 asks for *"contraste AA de cada
+par texto/superfície, verificado por script"*. Writing it revealed that "AA" is
+not one number and does not answer every question the palette raises.
+
+**Why not one rule for everything.** The first version held `--line` to 3:1 and
+the surface levels to a 1.15:1 ratio, and both were wrong:
+
+- **1.4.11 does not cover a divider.** It covers visual information required to
+  *identify a component or its state*. A rule between two panels that are
+  already different surfaces identifies nothing — remove it and the sidebar is
+  still a sidebar. At 3:1 it would be a near-white hairline, brighter than the
+  secondary text beside it.
+- **A contrast ratio is the wrong instrument near black.** The formula adds 0.05
+  to both luminances to model ambient flare, and at these depths that constant
+  dominates: three surfaces anyone can tell apart score 1.05–1.13, and no
+  palette that still reads as one tone of dark reaches 1.15 on the second step.
+  What a bad panel loses is **code values near black**, so the check is a step in
+  sRGB.
+
+**What it caught, which is the argument for having it.** The palette committed
+minutes earlier had levels 1.05:1 apart — the exact failure §5 names.
+`--disabled` was at 2.15:1, a smudge rather than the legible-but-inert control
+§3 asks for. `--fg-dim` on a selected row was 4.36:1. And thirty-odd colours
+were written inline, where no checker could reach them.
+
+**Alternative if you disagree.** Check AA on text only and leave the levels to
+judgement. It is the smaller script, and the level failure is the one nobody
+notices until they open the application on a different screen.

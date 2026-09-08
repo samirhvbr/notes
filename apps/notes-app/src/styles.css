@@ -1,12 +1,42 @@
 /* Dark theme only (SCOPE §5). No remote fonts: the CSP forbids them and the
    spike must render identically with no network. */
 :root {
-  --bg: #17171a;
-  --bg-raised: #1e1e22;
-  --line: #2b2b31;
-  --fg: #e6e6e6;
-  --fg-dim: #9a9aa3;
-  --accent: #7aa2f7;
+  /* Three levels of dark (`.continue/0.1d-interface.md` §5), and the editor's
+     ground is the *lightest* of them: the surface a person reads on for hours
+     is the one that should not be a hole. Panels step down, dividers step up.
+     The gap between levels has to be visible on a bad screen, which is why it
+     is ~4% of luminance rather than the 1–2% that photographs well. */
+  --bg: #232329;          /* editor ground */
+  --bg-raised: #18181d;   /* rail, sidebar, tab strip, status bar */
+  --bg-sunken: #0e0e12;   /* the strip behind the tabs */
+  --line: #34343d;
+  --fg: #e4e4e7;
+  --fg-dim: #9b9ba4;
+  /* One accent, everywhere: links, selection, active tab, caret, active rail
+     icon. A second one is a theme system, and that is §18. */
+  --accent: #8aa9f9;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  /* The editor column. A maximum, not a width — margins grow with the window
+     (D-03). One line to change, no schema, no migration. */
+  --column: 700px;
+
+  /* Roles, so nothing below this block writes a hex. `tools/contrast.sh` reads
+     the tokens; a colour written inline is a colour it cannot check, and
+     `tools/check.sh` fails the build if one appears. */
+  --hover: #ffffff12;         /* the wash under a hovered row or icon */
+  --hover-soft: #ffffff0b;    /* the same, one step quieter */
+  --selected: #28304a;        /* a chosen row: tree, palette, search hit */
+  --disabled: #70707a;        /* an inert control that must still be legible */
+  --shadow: #00000099;
+  --shadow-deep: #000000cc;
+  --scrim: #000000a8;         /* behind a modal */
+  --field: #101014;           /* the ground inside an input */
+  /* Banner grounds: the warning family, and the two sides of a comparison. */
+  --tint-info: #1f2430;
+  --tint-warn: #3a2c1f;
+  --tint-mine: #23331f;
+  --tint-theirs: #3a1f26;
+  --on-bad: #ffd7dd;
   --bad: #f7768e;
   --good: #9ece6a;
   --warn: #e0af68;
@@ -48,7 +78,7 @@ body {
 button {
   font: inherit;
   color: var(--fg);
-  background: #26262c;
+  background: var(--hover);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 4px 10px;
@@ -105,8 +135,8 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   border-radius: 3px;
   padding: 4px 6px;
 }
-.files button:hover { background: #26262c; }
-.files button.on { background: #2a3350; color: #fff; }
+.files button:hover { background: var(--hover); }
+.files button.on { background: var(--selected); color: var(--fg); }
 
 .main { flex: 1 1 auto; min-width: 0; display: flex; }
 .editor { flex: 1 1 auto; min-width: 0; overflow: hidden; }
@@ -118,26 +148,89 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .err {
   flex: 0 0 auto;
   padding: 8px 12px;
-  background: #3a1f26;
+  background: var(--tint-theirs);
   border-top: 1px solid var(--bad);
-  color: #ffd7dd;
+  color: var(--on-bad);
   font-size: 12px;
   white-space: pre-wrap;
 }
 
 /* ---- 0.1a shell -------------------------------------------------------- */
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bg-raised);
-  flex: 0 0 auto;
-}
 .spacer { flex: 1 1 auto; }
 .diag { font-size: 11px; }
+.diag dt { color: var(--fg-dim); margin-top: 8px; font-size: 11px; }
+.diag dd { margin: 2px 0 0; }
+
+/* ---- 0.1d: the rail --------------------------------------------------- */
+
+.rail {
+  flex: 0 0 auto;
+  width: 44px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  background: var(--bg-raised);
+  border-right: 1px solid var(--line);
+}
+.rail-spacer { flex: 1 1 auto; }
+.rail-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent;
+  color: var(--fg-dim); cursor: pointer;
+}
+.rail-btn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.rail-btn.on { background: var(--accent-soft); color: var(--accent); }
+/* Disabled and still readable: the graph entry is a promise with a date on it
+   (ADR-038), not a smudge. */
+.rail-btn:disabled { color: var(--disabled); cursor: default; }
+
+/* ---- 0.1d: the explorer toolbar --------------------------------------- */
+
+.ex-toolbar {
+  display: flex; align-items: center; gap: 2px;
+  padding: 8px 8px 8px 12px;
+  flex: 0 0 auto;
+}
+.ex-title {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--fg-dim);
+}
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; padding: 0;
+  border: 0; border-radius: 5px; background: transparent;
+  color: var(--fg-dim); cursor: pointer;
+}
+.icon-btn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.icon-btn.on { background: var(--accent-soft); color: var(--accent); }
+.icon-btn:disabled { color: var(--disabled); cursor: default; }
+
+/* ---- 0.1d: the note header -------------------------------------------- */
+
+.note-head {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.note-nav { display: flex; gap: 2px; }
+.note-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-dim);
+  text-align: center;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.note-actions { display: flex; gap: 2px; justify-content: flex-end; position: relative; }
+.note-actions .menu { top: calc(100% + 6px); right: 0; }
 
 .welcome {
   height: 100%;
@@ -161,16 +254,31 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   width: 100%; text-align: left; background: transparent; border: none;
   padding: 5px 8px; border-radius: 4px;
 }
-.welcome .recent button:hover { background: #26262c; }
+.welcome .recent button:hover { background: var(--hover); }
 
 .tree { list-style: none; margin: 0; padding: 0; }
+.row-wrap { display: flex; align-items: center; position: relative; border-radius: 4px; }
+.row-wrap:hover { background: var(--hover-soft); }
+.row-wrap.on { background: var(--accent-soft); }
+.row-wrap .menu { top: calc(100% + 2px); right: 4px; }
+.row-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 22px; height: 22px; margin-right: 4px;
+  border: 0; border-radius: 4px; background: transparent;
+  color: var(--fg-dim); opacity: 0; cursor: pointer;
+}
+/* Revealed on hover and **always** on focus: hiding a control from the
+   keyboard is how a menu becomes mouse-only without anyone deciding it. */
+.row-wrap:hover .row-more, .row-more:focus-visible, .row-more[aria-expanded="true"] {
+  opacity: 1;
+}
 .tree .row {
   display: flex; align-items: center; gap: 6px; width: 100%;
   text-align: left; background: transparent; border: none;
   padding: 3px 8px; border-radius: 3px; font: inherit;
 }
-.tree .row:hover:not(:disabled) { background: #26262c; }
-.tree .row.on { background: #2a3350; color: #fff; }
+.tree .row { flex: 1 1 auto; min-width: 0; }
+.row-wrap.on .row { color: var(--fg); }
 .tree .row:disabled { color: var(--fg-dim); cursor: default; }
 .tree .glyph { width: 12px; flex: 0 0 auto; color: var(--fg-dim); }
 .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -179,17 +287,18 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .banner {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   padding: 8px 12px; border-bottom: 1px solid var(--line);
-  background: #1f2430; font-size: 13px; flex: 0 0 auto;
+  background: var(--tint-info); font-size: 13px; flex: 0 0 auto;
 }
-.banner.warn { background: #3a2c1f; border-bottom-color: var(--warn); }
+.banner.warn { background: var(--tint-warn); border-bottom-color: var(--warn); }
 
 .main { flex-direction: column; }
 
 .statusbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 5px 12px; border-top: 1px solid var(--line);
-  background: var(--bg-raised); font-size: 12px; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 14px;
+  padding: 4px 14px; border-top: 1px solid var(--line);
+  background: var(--bg-raised); font-size: 11px; flex: 0 0 auto;
 }
+.statusbar .count { white-space: nowrap; }
 .statusbar .path, .statusbar .root { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .statusbar .message { color: var(--warn); }
 
@@ -204,7 +313,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 
 .views { display: flex; gap: 4px; }
 .views button { padding: 3px 9px; }
-.views button.on { background: #2a3350; border-color: var(--accent); color: #fff; }
+.views button.on { background: var(--selected); border-color: var(--accent); color: var(--fg); }
 
 .panes { display: flex; flex: 1 1 auto; min-height: 0; min-width: 0; }
 .panes > * { min-width: 0; }
@@ -234,7 +343,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .preview a { color: var(--accent); }
 .preview img { max-width: 100%; height: auto; border-radius: 4px; }
 .preview code {
-  background: #26262c;
+  background: var(--hover);
   border-radius: 3px;
   padding: 0.1em 0.35em;
   font-size: 0.92em;
@@ -310,13 +419,13 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   padding: 0 6px;
   border-radius: 2px;
 }
-.compare-line .no { flex: 0 0 3.5ch; text-align: right; color: #55555f; user-select: none; }
+.compare-line .no { flex: 0 0 3.5ch; text-align: right; color: var(--disabled); user-select: none; }
 .compare-line .mark { flex: 0 0 1ch; color: var(--fg-dim); user-select: none; }
 .compare-line .text { flex: 1 1 auto; }
 /* Never colour alone: the gutter carries ~, + or − as well (scope §9). */
-.compare-line.k-changed { background: #3a2c1f; }
-.compare-line.k-mine { background: #23331f; }
-.compare-line.k-theirs { background: #3a1f26; }
+.compare-line.k-changed { background: var(--tint-warn); }
+.compare-line.k-mine { background: var(--tint-mine); }
+.compare-line.k-theirs { background: var(--tint-theirs); }
 
 /* ---- 0.1b: the entry menu ---------------------------------------------- */
 
@@ -331,7 +440,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: 6px;
-  box-shadow: 0 8px 24px #0008;
+  box-shadow: 0 8px 24px var(--shadow);
 }
 .menu button {
   text-align: left;
@@ -340,7 +449,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   border-radius: 4px;
   padding: 5px 8px;
 }
-.menu button:hover { background: #26262c; }
+.menu button:hover { background: var(--hover); }
 .menu button.danger { color: var(--bad); }
 
 /* CodeMirror's search panel, in the application's own colours. It is part of
@@ -357,23 +466,23 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   color: var(--fg);
 }
 .cm-panel.cm-search input[type="text"] {
-  background: #26262c;
+  background: var(--hover);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 3px 6px;
 }
 .cm-panel.cm-search input[type="text"]:focus-visible { outline: 2px solid var(--accent); }
 .cm-panel.cm-search button[name] {
-  background: #26262c;
+  background: var(--hover);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 3px 8px;
   cursor: pointer;
 }
 .cm-panel.cm-search button[name]:hover { border-color: var(--accent); }
-.cm-searchMatch { background: #3a2c1f; }
-.cm-searchMatch-selected { background: #5a4527; }
-.cm-selectionMatch { background: #2a3350; }
+.cm-searchMatch { background: var(--tint-warn); }
+.cm-searchMatch-selected { background: var(--tint-warn); }
+.cm-selectionMatch { background: var(--selected); }
 
 /* ---- modal dialogs ----------------------------------------------------- */
 /* The application's own, because the WebView is not a browser and the script
@@ -382,7 +491,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .overlay {
   position: fixed;
   inset: 0;
-  background: #000000a8;
+  background: var(--scrim);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -394,7 +503,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 16px 48px #00000080;
+  box-shadow: 0 16px 48px var(--shadow-deep);
   width: min(460px, 100%);
   padding: 18px 20px 16px;
 }
@@ -410,7 +519,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   width: 100%;
   font: inherit;
   color: var(--fg);
-  background: #131317;
+  background: var(--field);
   border: 1px solid var(--line);
   border-radius: 4px;
   padding: 6px 8px;
@@ -419,35 +528,39 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .dialog input[aria-invalid="true"] { border-color: var(--bad); }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .dialog .primary { border-color: var(--accent); }
-.dialog .danger { border-color: var(--bad); color: #ffd7dd; }
+.dialog .danger { border-color: var(--bad); color: var(--on-bad); }
 
 /* ---- tabs (0.1c) ------------------------------------------------------- */
 /* The dirty marker is a dot, not a colour: state never rides on colour alone. */
 
-.tabs {
+.tabbar {
   display: flex;
   align-items: stretch;
-  gap: 1px;
-  overflow-x: auto;
   border-bottom: 1px solid var(--line);
-  background: #131317;
+  background: var(--bg-sunken);
+  padding-right: 6px;
   flex: 0 0 auto;
 }
+.tabs { display: flex; align-items: stretch; gap: 1px; overflow-x: auto; min-width: 0; }
+.tabbar .icon-btn { align-self: center; }
+.tab-new { margin-left: 2px; }
 .tab { display: flex; align-items: center; background: var(--bg-raised); }
-.tab.on { background: #2a3350; }
+/* Background, not weight: on a bad screen a bolder label is not a difference.
+   The accent bar on top is the second cue, so it is never colour alone. */
+.tab.on { background: var(--bg); box-shadow: inset 0 2px 0 var(--accent); }
 .tab-label {
   display: flex; align-items: center; gap: 5px;
   background: transparent; border: none; border-radius: 0;
   padding: 6px 4px 6px 10px; max-width: 220px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.tab.on .tab-label { color: #fff; }
+.tab.on .tab-label { color: var(--fg); }
 .tab-dirty { color: var(--warn); font-size: 10px; width: 8px; }
 .tab-close {
   background: transparent; border: none; border-radius: 3px;
   padding: 2px 8px 3px; color: var(--fg-dim); line-height: 1;
 }
-.tab-close:hover { background: #ffffff14; color: var(--fg); }
+.tab-close:hover { background: var(--hover); color: var(--fg); }
 
 /* ---- palette: quick open and commands ---------------------------------- */
 
@@ -457,7 +570,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 16px 48px #00000080;
+  box-shadow: 0 16px 48px var(--shadow-deep);
   overflow: hidden;
 }
 .palette input {
@@ -472,23 +585,25 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   text-align: left; background: transparent; border: none;
   padding: 6px 10px; border-radius: 4px;
 }
-.palette-rows .row.on { background: #2a3350; color: #fff; }
+.palette-rows .row.on { background: var(--selected); color: var(--fg); }
 .palette-rows .secondary, .palette-rows .hint { font-size: 12px; }
 .palette-rows .hint { margin-left: auto; }
 .empty-row { padding: 14px; margin: 0; }
 
 /* ---- global search ----------------------------------------------------- */
 
+/* Inside the sidebar from 0.1d, not floating beside it: the rail's Search icon
+   selects it as a panel, so it takes the sidebar's width rather than adding a
+   third column that pushed the editor over. */
 .search-panel {
-  width: 380px; flex: 0 0 auto;
-  border-right: 1px solid var(--line);
+  flex: 1 1 auto; min-height: 0; min-width: 0;
   display: flex; flex-direction: column;
   overflow: hidden; padding: 10px 12px;
 }
 .search-panel header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
 .search-panel input[type="text"], .search-panel input:not([type]) {
   width: 100%; font: inherit; color: var(--fg);
-  background: #131317; border: 1px solid var(--line);
+  background: var(--bg-sunken); border: 1px solid var(--line);
   border-radius: 4px; padding: 6px 8px;
 }
 .search-options {
@@ -496,7 +611,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   margin-top: 8px; font-size: 12px;
 }
 .search-options select {
-  font: inherit; color: var(--fg); background: #131317;
+  font: inherit; color: var(--fg); background: var(--bg-sunken);
   border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;
 }
 .search-panel .note, .search-panel .count { font-size: 12px; margin: 8px 0 4px; }
@@ -507,7 +622,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   background: transparent; border: none; border-radius: 4px;
   padding: 5px 6px;
 }
-.hits .row:hover { background: #26262c; }
+.hits .row:hover { background: var(--hover); }
 .hits .where { display: block; font-size: 12px; }
 .hits .context {
   display: block; font-family: "JetBrains Mono", ui-monospace, monospace;
@@ -519,7 +634,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 
 .dialog.settings { width: min(420px, 100%); }
 .dialog.settings input[type="number"], .dialog.settings select {
-  width: 100%; font: inherit; color: var(--fg); background: #131317;
+  width: 100%; font: inherit; color: var(--fg); background: var(--field);
   border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px;
   margin-bottom: 10px;
 }

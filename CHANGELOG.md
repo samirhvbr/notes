@@ -8,6 +8,72 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.2 - the shell: a rail, a real sidebar, a note header, and a contrast check that found a bug in my own palette
+
+Step 2 of 0.1d (`.continue/0.1d-interface.md` §6). Everything in its place;
+the fine styling is step 3.
+
+**The rail**, 44 px on the left: files, search, graph, and settings at the foot.
+Clicking the icon of the panel already showing collapses the sidebar, which is
+the only way to give the editor the whole window. Graph is rendered
+**disabled with its milestone in the tooltip** — ADR-038 moved it from "out of
+scope" to 0.3, and a promise with a date on it is worth more than a gap in the
+rail.
+
+**The sidebar** is one column with three parts: a toolbar that acts on the panel
+(new note, new folder, sort, collapse all), the panel, and the workspace
+selector pinned below the scroll. Global search moved *into* it — it used to be
+a third column that pushed the editor sideways.
+
+**The tree's context menu is now the shared `Menu`**, so it has arrows, `Escape`
+and the focus return that 0.12.1's eleven tests cover. It also gained a `⋮`
+button, revealed on hover and **always on focus**: hiding a control from the
+keyboard is how a menu becomes mouse-only without anyone deciding it.
+
+**The note header** carries back/forward, the centred title (file name without
+`.md`), the Source/Preview toggle and a `⋮`. It sits below the tabs rather than
+in a top bar because at split there are two of them, one per pane — a header in
+the window chrome could not be. Back/forward is one history for the window
+rather than one per tab, and D-06 says why: a tab here is a note, not a
+viewport, so there is no navigation *within* one to have a history of.
+
+**The status bar** moved right and gained words and characters. Characters are
+code points, so an emoji counts once. **Nothing else is there**: a backlinks
+counter needs the index that arrives at 0.3, and a counter with no data behind
+it is a lie with the face of a feature (§3). Background work — the watcher's
+walk — sits on the left, discreet, and disappears when it finishes.
+
+The old top bar is gone; its diagnostics moved into Settings, which is where a
+thing you look up rather than read belongs.
+
+**`tools/contrast.sh`**, and it earned its place immediately: it failed on the
+palette I had just written. The three dark levels were 1.05:1 apart — exactly
+the *"visível numa tela ruim"* failure §5 names.
+
+Two things were wrong and both were mine. `--line` was being held to WCAG's
+3:1 for non-text contrast, which does not apply: 1.4.11 covers what identifies
+a **control**, and a rule between two panels that are already different surfaces
+identifies nothing — holding it to 3:1 means a near-white hairline brighter than
+the text beside it. And the level check was a contrast *ratio*, which is the
+wrong instrument near black: the formula adds 0.05 to both sides to model screen
+flare, and that constant swamps the difference. My first floor of 1.15:1 was
+unreachable by any palette that still reads as one tone of dark.
+
+Levels and dividers are now checked as a **step in 8-bit sRGB** — 8/255, about
+where a cheap panel stops merging two greys — and text and the focus ring keep
+their WCAG ratios. The script says which number is a standard and which is this
+project's own.
+
+Then it found three more: `--disabled` at 2.15:1 was a smudge rather than the
+legible-but-inert control §3 asks for, and `--fg-dim` on a selected row was
+4.36:1. Both fixed in the palette.
+
+And the hole underneath all of it: **a colour written outside `:root` is a
+colour the checker cannot see.** Thirty-odd inline hexes were doing exactly
+that. They are now role tokens — `--hover`, `--selected`, `--field`, `--scrim`,
+the tint family — and the script fails the build if a raw hex appears below the
+token block. 41 pairs checked, up from nine.
+
 ## 0.12.1 - 0.1d opens with the two ADRs and the bug: you can change folder again
 
 Milestone 0.1d — Interface — enters the scope, and the desktop MVP becomes

@@ -6,14 +6,28 @@ export type ViewMode = "source" | "preview" | "split";
 
 const MODES: ViewMode[] = ["source", "preview", "split"];
 
+/**
+ * Which panel the sidebar is showing, or `null` for a collapsed sidebar.
+ *
+ * The rail's icons toggle this, and clicking the icon of the panel already
+ * showing collapses the sidebar (`.continue/0.1d-interface.md` §4.1). `graph`
+ * is not here: it is 0.3, and the rail shows it disabled rather than pretending
+ * it is a panel that could be selected (ADR-038).
+ */
+export type Panel = "files" | "search";
+
 interface UiState {
   view: ViewMode;
+  /** `null` means the sidebar is collapsed. */
+  panel: Panel | null;
   /** The conflict comparison screen. Not a command — it changes nothing on
    *  disk and reads two strings this frontend already holds
    *  (docs/ARCHITECTURE.md §17.1). */
   comparing: boolean;
 
   setView: (v: ViewMode) => void;
+  /** Show a panel; showing the one already shown collapses the sidebar. */
+  togglePanel: (p: Panel) => void;
   /** `Ctrl+E`, per scope §9's shortcut table. */
   cycleView: () => void;
   setComparing: (b: boolean) => void;
@@ -40,7 +54,12 @@ function remember(view: ViewMode) {
 
 export const useUi = create<UiState>((set, get) => ({
   view: "source",
+  panel: "files",
   comparing: false,
+
+  togglePanel(p) {
+    set((s) => ({ panel: s.panel === p ? null : p }));
+  },
 
   setView(view) {
     set({ view });

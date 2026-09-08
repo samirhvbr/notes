@@ -5,6 +5,9 @@ import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
 import { Dialog } from "./app/Dialog";
 import { Tabs } from "./app/Tabs";
+import { Rail } from "./app/Rail";
+import { NoteHeader } from "./app/NoteHeader";
+import { ExplorerToolbar } from "./explorer/ExplorerToolbar";
 import { WorkspaceMenu } from "./app/WorkspaceMenu";
 import { Palette, type Command, type PaletteMode } from "./app/Palette";
 import { SettingsPanel } from "./app/Settings";
@@ -18,10 +21,8 @@ import { t } from "./i18n";
 import * as ipc from "./ipc";
 import { useEditor } from "./stores/editor";
 import { useSync } from "./stores/sync";
-import { useUi, type ViewMode } from "./stores/ui";
+import { useUi } from "./stores/ui";
 import { useWorkspace } from "./stores/workspace";
-
-const VIEWS: ViewMode[] = ["source", "preview", "split"];
 
 export default function App() {
   const info = useWorkspace((s) => s.info);
@@ -38,7 +39,8 @@ export default function App() {
   const convertEol = useEditor((s) => s.convertEol);
   const setAutosave = useEditor((s) => s.setAutosave);
   const view = useUi((s) => s.view);
-  const setView = useUi((s) => s.setView);
+  const panel = useUi((s) => s.panel);
+  const togglePanel = useUi((s) => s.togglePanel);
   const cycleView = useUi((s) => s.cycleView);
   const comparing = useUi((s) => s.comparing);
   const setComparing = useUi((s) => s.setComparing);
@@ -47,9 +49,7 @@ export default function App() {
   const stopSync = useSync((s) => s.stop);
   const degraded = useSync((s) => s.degraded);
   const watch = useSync((s) => s.watch);
-  const [env, setEnv] = useState<ipc.EnvReport | null>(null);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
-  const [searching, setSearching] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const applySettings = useSettings((s) => s.apply);
   const loadSettings = useSettings((s) => s.load);
@@ -60,7 +60,6 @@ export default function App() {
   useEffect(() => {
     void restore();
     ipc.settingsGet().then((s) => setAutosave(s.files.autosave_ms)).catch(() => {});
-    ipc.envReport().then(setEnv).catch(() => {});
   }, [restore, setAutosave]);
 
   // The session is per workspace, so the view mode is only readable once one is
@@ -116,7 +115,7 @@ export default function App() {
         // `Ctrl+F` belongs to CodeMirror's in-file panel (0.1b); the workspace
         // search is the shifted one, exactly as scope §34 lists them.
         e.preventDefault();
-        setSearching(true);
+        showPanel("search");
       } else if (key === "w") {
         e.preventDefault();
         void closeActiveTab();
@@ -177,9 +176,19 @@ export default function App() {
     }
   }, [refresh, fail]);
 
+  // Search moved from a floating panel into the sidebar (§4.1), so "open
+  // search" is "show that panel" — and never *toggles* it, because a shortcut
+  // that closes what it is asked to open is a shortcut people stop pressing.
+  const showPanel = useCallback(
+    (p: "files" | "search") => {
+      if (useUi.getState().panel !== p) togglePanel(p);
+    },
+    [togglePanel],
+  );
+
   const commands: Command[] = [
     { id: "quick-open", label: "command.quickOpen", hint: "Ctrl+P", run: () => setPalette("files") },
-    { id: "search", label: "command.searchWorkspace", hint: "Ctrl+Shift+F", run: () => setSearching(true) },
+    { id: "search", label: "command.searchWorkspace", hint: "Ctrl+Shift+F", run: () => showPanel("search") },
     { id: "new-note", label: "command.newNote", hint: "Ctrl+N", run: newNote },
     { id: "new-folder", label: "command.newFolder", run: newFolder },
     { id: "close-tab", label: "command.closeTab", hint: "Ctrl+W", run: () => void closeActiveTab() },
@@ -192,47 +201,35 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="toolbar">
-        <strong>notes</strong>
-        <button onClick={newNote}>{t("tree.newNote")}</button>
-        <button onClick={newFolder}>{t("tree.newFolder")}</button>
-
-        <div className="views" role="group" aria-label={t("view.group")}>
-          {VIEWS.map((v) => (
-            <button
-              key={v}
-              className={view === v ? "on" : undefined}
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-              title={t("view.hint")}
-            >
-              {t(`view.${v}`)}
-            </button>
-          ))}
-        </div>
-
-        <span className="spacer" />
-        {env && (
-          <span className="muted diag" title={env.dmabufExplanation}>
-            {env.os}/{env.session}
-            {env.dmabufApplied ? " · dmabuf off" : ""}
-          </span>
-        )}
-      </header>
-
       <div className="body">
-        <aside className="side">
-          <div className="side-scroll">
-            <Tree />
-          </div>
-          {/* The sidebar footer, which is where changing workspace lives from
-              0.1d on. Before it, the only route was the Welcome screen — and
-              the Welcome screen is gone the moment a folder is open. */}
-          <WorkspaceMenu />
-        </aside>
-        {searching && <SearchPanel onClose={() => setSearching(false)} />}
+        <Rail onSettings={() => setSettingsOpen(true)} />
+
+        {/* The sidebar is one column with three parts: a toolbar that acts on
+            the panel, the panel itself, and the workspace selector pinned to
+            the bottom. Collapsing it (the rail's active icon) gives the editor
+            the whole window. */}
+        {panel && (
+          <aside className="side">
+            {panel === "files" ? (
+              <>
+                <ExplorerToolbar />
+                <div className="side-scroll">
+                  <Tree />
+                </div>
+              </>
+            ) : (
+              <SearchPanel onClose={() => togglePanel("search")} />
+            )}
+            {/* Where changing workspace lives from 0.1d on. Before it, the only
+                route was the Welcome screen — and the Welcome screen is gone
+                the moment a folder is open. */}
+            <WorkspaceMenu />
+          </aside>
+        )}
+
         <main className="main">
-          <Tabs />
+          <Tabs onNew={newNote} />
+          <NoteHeader />
           {doc?.draft && (
             <div className="banner">
               <span>{t("draft.found", { name: doc.path })}</span>

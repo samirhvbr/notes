@@ -1,84 +1,55 @@
-import { useCallback, useEffect, useState } from "react";
+import { MoreVertical } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../stores/workspace";
 import { useEditor } from "../stores/editor";
 import { useTabs } from "../stores/tabs";
 import { t } from "../i18n";
 import { askConfirm, askText } from "../app/dialog";
+import { Menu, type MenuRow } from "../app/Menu";
 import * as ipc from "../ipc";
 import { ROOT, type Entry, type RelPath } from "../ipc";
 
 /** Lazy tree: a directory is listed when it is first expanded, never up front. */
 export function Tree() {
-  const [menu, setMenu] = useState<{ entry: Entry; x: number; y: number } | null>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("keydown", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", close);
-    };
-  }, [menu]);
-
-  return (
-    <>
-      <Level dir={ROOT} depth={0} onMenu={setMenu} />
-      {menu && <Actions entry={menu.entry} x={menu.x} y={menu.y} close={() => setMenu(null)} />}
-    </>
-  );
+  return <Level dir={ROOT} depth={0} />;
 }
 
-type OpenMenu = (m: { entry: Entry; x: number; y: number }) => void;
-
-function Level({
-  dir,
-  depth,
-  onMenu,
-}: {
-  dir: RelPath;
-  depth: number;
-  onMenu: OpenMenu;
-}) {
+function Level({ dir, depth }: { dir: RelPath; depth: number }) {
   const entries = useWorkspace((s) => s.listings[dir]);
   const expanded = useWorkspace((s) => s.expanded);
   const toggle = useWorkspace((s) => s.toggle);
+  const sort = useWorkspace((s) => s.sort);
   const open = useTabs((s) => s.openPath);
   const active = useEditor((s) => s.doc?.path);
 
-  if (!entries) return null;
-  if (entries.length === 0 && depth === 0)
+  // Directories stay first whatever the sort: that is a structural fact about a
+  // tree, not a preference about order. The sort reorders within each kind.
+  const ordered = useMemo(() => {
+    if (!entries) return entries;
+    const cmp = (a: Entry, b: Entry) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    return [...entries].sort((a, b) => {
+      const da = a.kind !== "Dir" ? 1 : 0;
+      const db = b.kind !== "Dir" ? 1 : 0;
+      return da - db || (sort === "name" ? cmp(a, b) : cmp(b, a));
+    });
+  }, [entries, sort]);
+
+  if (!ordered) return null;
+  if (ordered.length === 0 && depth === 0)
     return <p className="muted pad">{t("tree.empty")}</p>;
 
   return (
     <ul className="tree" role="group">
-      {entries.map((e: Entry) => {
+      {ordered.map((e: Entry) => {
         const isDir = e.kind === "Dir";
         const isOpen = expanded.has(e.path);
         return (
           <li key={e.path}>
-            <button
-              className={active === e.path ? "row on" : "row"}
-              style={{ paddingLeft: 8 + depth * 14 }}
-              aria-expanded={isDir ? isOpen : undefined}
-              onClick={() => (isDir ? toggle(e.path) : open(e.path).catch(() => {}))}
-              // Rename, duplicate, move and delete. On the row rather than in a
-              // toolbar because they act on *that* entry, and a menu that acts
-              // on a selection nobody can see is how the wrong file gets
-              // deleted.
-              onContextMenu={(ev) => {
-                ev.preventDefault();
-                onMenu({ entry: e, x: ev.clientX, y: ev.clientY });
-              }}
-              disabled={!isDir && !e.is_note}
-              title={t("tree.actions.hint", { path: e.path })}
-            >
-              <span className="glyph" aria-hidden="true">
-                {isDir ? (isOpen ? "▾" : "▸") : e.is_note ? "•" : "·"}
-              </span>
-              <span className="label">{e.name}</span>
-            </button>
-            {isDir && isOpen && <Level dir={e.path} depth={depth + 1} onMenu={onMenu} />}
+            <Row entry={e} depth={depth} isDir={isDir} isOpen={isOpen}
+                 selected={active === e.path}
+                 onActivate={() => (isDir ? toggle(e.path) : open(e.path).catch(() => {}))} />
+            {isDir && isOpen && <Level dir={e.path} depth={depth + 1} />}
           </li>
         );
       })}
@@ -87,23 +58,93 @@ function Level({
 }
 
 /**
- * The four entry operations of 0.1b.
+ * One row, and its menu.
+ *
+ * The four entry operations of 0.1b live **on the entry** rather than in the
+ * toolbar, because they act on *that* entry and a menu that operates on a
+ * selection nobody can see is how the wrong file gets deleted.
+ *
+ * Reachable two ways, which `.continue/0.1d-interface.md` §4.2 requires: right
+ * click anywhere on the row, or the `⋮` button — which is a real focusable
+ * control, so the keyboard gets there by tabbing rather than by a shortcut
+ * nobody discovers. The menu itself is the shared one, so arrows, `Escape` and
+ * the focus return are the same everywhere in the application.
+ */
+function Row({
+  entry,
+  depth,
+  isDir,
+  isOpen,
+  selected,
+  onActivate,
+}: {
+  entry: Entry;
+  depth: number;
+  isDir: boolean;
+  isOpen: boolean;
+  selected: boolean;
+  onActivate: () => void;
+}) {
+  const [menu, setMenu] = useState(false);
+  const trigger = useRef<HTMLButtonElement | null>(null);
+  const rows = useEntryActions(entry);
+
+  return (
+    <div
+      className={selected ? "row-wrap on" : "row-wrap"}
+      onContextMenu={(ev) => {
+        ev.preventDefault();
+        setMenu(true);
+      }}
+    >
+      <button
+        className="row"
+        style={{ paddingLeft: 8 + depth * 14 }}
+        aria-expanded={isDir ? isOpen : undefined}
+        aria-current={selected || undefined}
+        onClick={onActivate}
+        disabled={!isDir && !entry.is_note}
+        title={entry.path}
+      >
+        <span className="glyph" aria-hidden="true">
+          {isDir ? (isOpen ? "▾" : "▸") : entry.is_note ? "•" : "·"}
+        </span>
+        <span className="label">{entry.name}</span>
+      </button>
+      <button
+        ref={trigger}
+        type="button"
+        className="row-more"
+        aria-haspopup="menu"
+        aria-expanded={menu}
+        aria-label={t("tree.actions.hint", { path: entry.path })}
+        onClick={(e) => {
+          e.stopPropagation();
+          setMenu((m) => !m);
+        }}
+      >
+        <MoreVertical size={14} aria-hidden="true" />
+      </button>
+      <Menu
+        rows={rows}
+        open={menu}
+        onClose={() => setMenu(false)}
+        label={t("tree.actions.hint", { path: entry.path })}
+        align="end"
+        trigger={trigger}
+      />
+    </div>
+  );
+}
+
+/**
+ * Rename · move · duplicate · delete.
  *
  * Each one re-lists the affected directories rather than patching the tree in
  * place: the disk is the source of truth for what exists, and a listing is
  * cheap (one level, no content read).
  */
-function Actions({
-  entry,
-  x,
-  y,
-  close,
-}: {
-  entry: Entry;
-  x: number;
-  y: number;
-  close: () => void;
-}) {
+function useEntryActions(entry: Entry): MenuRow[] {
   const refresh = useWorkspace((s) => s.refresh);
   const fail = useWorkspace((s) => s.fail);
   const note = useWorkspace((s) => s.note);
@@ -115,11 +156,9 @@ function Actions({
         await fn();
       } catch (e) {
         fail(e);
-      } finally {
-        close();
       }
     },
-    [fail, close],
+    [fail],
   );
 
   const rename = () =>
@@ -182,19 +221,13 @@ function Actions({
       );
     });
 
-  return (
-    <div
-      className="menu"
-      style={{ left: x, top: y }}
-      role="menu"
-      onClick={(e) => e.stopPropagation()}
-    >
-      <button role="menuitem" onClick={rename}>{t("tree.rename")}</button>
-      <button role="menuitem" onClick={move}>{t("tree.move")}</button>
-      <button role="menuitem" onClick={duplicate}>{t("tree.duplicate")}</button>
-      <button role="menuitem" className="danger" onClick={remove}>{t("tree.delete")}</button>
-    </div>
-  );
+  return [
+    { id: "rename", label: t("tree.rename"), run: rename },
+    { id: "move", label: t("tree.move"), run: move },
+    { id: "duplicate", label: t("tree.duplicate"), run: duplicate },
+    { separator: true },
+    { id: "delete", label: t("tree.delete"), danger: true, run: remove },
+  ];
 }
 
 function parentOf(path: RelPath): RelPath {

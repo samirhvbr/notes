@@ -58,6 +58,12 @@ jobs:
           test -n "$(ls -A apps/notes-app/src/ipc/generated)" || { echo "::error::nothing was generated"; exit 1; }
           echo "generated types are in step with the Rust"
 
+      # AA for every text/surface pair, and three dark levels a cheap panel can
+      # still tell apart. Nine pairs before the accent — a number nobody
+      # re-checks by eye after changing one hex digit (docs/ACCEPTANCE-0.1d.md).
+      - name: the palette meets AA and its levels are distinguishable
+        run: tools/contrast.sh --table
+
       # A browser's blocking script dialog compiles, ships, and does nothing in
       # the WebView — six flows of 0.1b were behind one, and no core test could
       # have known.

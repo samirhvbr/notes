@@ -58,6 +58,9 @@ step "no fs capability"     bash -c '
 # version, and it is the copy that goes stale.
 step "version placeholder"  bash -c '
   grep -q '"'"'"version": "0.0.0"'"'"' apps/notes-app/src-tauri/tauri.conf.json'
+# Every text colour against every surface it can land on, and the three dark
+# levels far enough apart to survive a bad panel (`ACCEPTANCE-0.1d.md`).
+step "contrast"            tools/contrast.sh
 step "no blocking dialogs" tools/no-blocking-dialogs.sh
 step "i18n keys match"      python3 -c '
 import json,sys
