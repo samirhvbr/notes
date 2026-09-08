@@ -8,6 +8,24 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.8 - the front door stops saying there is no application
+
+`README.md` said **"Documentation only — there is no application code in this
+repository yet"** while the repository built a Markdown editor, tested it on
+four platforms and published a `.deb`, an AppImage and an Arch package. A
+release nobody can find is not a release, and the first file anyone opens was
+telling them not to look.
+
+It now says what is built, how to install it on each of the three Linux routes,
+and how to build it. It also says the thing the acceptance documents say and the
+old text never had to: **nobody has walked the interface.** Every criterion so
+far is an assertion about the core, and the twenty-five flows stay unticked
+until a person has done them.
+
+`docs/roadmap.md` goes from `PROPOSED` to `ACTIVE` for 0.1 only, with the three
+sub-milestones and the versions they shipped in. Everything from 0.2 on is still
+a specification.
+
 ## 0.11.7 - the index stopped starving itself on a workspace that keeps changing
 
 A bug the background index introduced, found by asking what happens on a folder

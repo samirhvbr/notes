@@ -17,21 +17,61 @@ by us.
 
 ## Status
 
-**Documentation only — there is no application code in this repository yet.**
-What exists is the product definition, the architecture and the decisions behind
-them. [docs/roadmap.md](docs/roadmap.md) says what gets built and in what order;
-milestone 0.1 is a usable desktop Markdown editor.
+**Milestone 0.1 is built and packaged for Linux.** The editor, the preview, the
+watcher, tabs, quick open, global search and the settings all exist and are
+tested; the [acceptance documents](docs/README.md) list every criterion against
+the test that holds it.
 
-Planned stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite.
+**What has not happened is a person walking the interface.** Every criterion so
+far is an assertion about the core, and the twenty-five interface flows in
+`docs/ACCEPTANCE-0.1b.md` and `docs/ACCEPTANCE-0.1c.md` are unticked on purpose:
+a flow is verified when somebody has done it, not when a test near it passes.
 
-## Getting started
+macOS and Windows build and are tested in CI on every push. **No artefact is
+published for either**, because an unsigned one teaches its user to click past
+the warning that exists to protect them
+([ADR-024](docs/decisions.md)) — the missing pieces are an Apple Developer
+membership and a code-signing certificate, and they are named in
+`.github/workflows/build.yml`.
+
+Stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6. SQLite arrives with
+the index at 0.2.
+
+## Install
+
+Linux, from the [latest release](https://github.com/samirhvbr/notes/releases/latest):
 
 ```bash
-# nothing to run yet — see docs/roadmap.md, milestone 0.1
+# Debian, Ubuntu and derivatives
+sudo apt install ./notes_<version>_amd64.deb
+
+# Anything else: the AppImage, which needs no installation
+chmod +x notes_<version>_amd64.AppImage && ./notes_<version>_amd64.AppImage
+```
+
+Arch, from the release tarball via the `notes-bin` `PKGBUILD` in
+[`packaging/aur/`](packaging/aur/) — the same one CI builds and installs in an
+`archlinux:latest` container on every release.
+
+The `.deb` depends on `libwebkit2gtk-4.1-0` and `libgtk-3-0`; the AppImage
+carries its own copy and is correspondingly larger.
+
+## Building it yourself
+
+```bash
 git clone git@github.com:samirhvbr/notes.git
 cd notes
 git config core.hooksPath tools/git-hooks
+
+cd apps/notes-app && npm ci
+npm run tauri dev            # run it
+npm run tauri build          # package it — see docs/runbook.md §4
 ```
+
+`tools/check.sh` is the full local gate: format, clippy on the native and the
+Windows target, the whole test suite, the byte-preservation and full-disk
+suites, the generated TypeScript, and the frontend. CI runs the same checks on
+Ubuntu, macOS, Windows and rolling Arch.
 
 ## Documentation
 

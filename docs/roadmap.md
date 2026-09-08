@@ -1,10 +1,13 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `PROPOSED` · **Nothing described here has been built yet.** This
-> document is the worked-out form of a specification that still lives in the
-> queue, [`../.continue/`](../.continue/README.md), and **the queue is the
-> authority on intent while both exist** — intent changes there, and this page is
-> updated when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
+> **Status:** `ACTIVE` for 0.1, `PROPOSED` from 0.2 on. Milestone **0.1 is
+> built** — the desktop editor exists, is tested on four platforms and is
+> packaged for Linux — with the interface flows still unwalked by a person
+> (`ACCEPTANCE-0.1b.md`, `ACCEPTANCE-0.1c.md`). Everything from 0.2 down is
+> still the worked-out form of a specification that lives in the queue,
+> [`../.continue/`](../.continue/README.md), and **the queue is the authority on
+> intent while both exist** — intent changes there, and this page is updated
+> when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
 > A section becomes `ACTIVE` when its code exists and works.
 >
 > What is built when, and what each stage must be able to
@@ -36,6 +39,12 @@ and one who stops after 0.3 has a good one.
 ---
 
 ## 0.1 — Desktop MVP
+
+> **Built.** Shipped across `0.3.0`–`0.11.x` as milestones 0.1a (editor and
+> write protocol), 0.1b (watcher, entry operations, preview, conflicts) and 0.1c
+> (tabs, quick open, global search, palette, settings, `en`/`pt-BR`). Packaged
+> for Linux: `.deb`, AppImage and the AUR `notes-bin`. macOS and Windows are
+> tested in CI and **not published** — [ADR-024](decisions.md).
 
 Linux, macOS, Windows.
 
