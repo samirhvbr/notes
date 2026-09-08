@@ -165,6 +165,26 @@ impl DeepTree {
     }
 }
 
+/// Whether a mode-000 directory is actually unreadable **here**.
+///
+/// It is not, for root: `CAP_DAC_OVERRIDE` reads it anyway, and the Arch CI job
+/// runs the suite as root inside its container. A test about skipping an
+/// unreadable directory has nothing to exercise there, and asserting anyway
+/// would be asserting about the runner rather than about the code.
+#[cfg(unix)]
+fn permissions_are_enforced_here() -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    let d = tempfile::tempdir().unwrap();
+    let denied = d.path().join("negado");
+    std::fs::create_dir(&denied).unwrap();
+    if std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o000)).is_err() {
+        return false;
+    }
+    let enforced = std::fs::read_dir(&denied).is_err();
+    let _ = std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o755));
+    enforced
+}
+
 fn opened(root: &Path) -> (WorkspaceService, tempfile::TempDir) {
     let data = tempfile::tempdir().unwrap();
     let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
@@ -278,14 +298,20 @@ fn an_unreadable_directory_does_not_demote_the_workspace() {
         "the walk returned — the symlink loop is not followed"
     );
     assert_eq!(status.degraded, None, "the workspace is still watched");
-    assert_eq!(
-        status.unreadable, 1,
-        "and the one directory is counted: {status:?}"
-    );
-    assert!(
-        status.dirs > 20,
-        "the rest of the tree is watched: {status:?}"
-    );
+
+    // The count only exists where there is a per-directory walk to count in.
+    // macOS and Windows watch the subtree from one handle and never read the
+    // tree, so an unreadable directory is not something they can meet (D-10).
+    if cfg!(target_os = "linux") && permissions_are_enforced_here() {
+        assert_eq!(
+            status.unreadable, 1,
+            "and the one directory is counted: {status:?}"
+        );
+        assert!(
+            status.dirs > 20,
+            "the rest of the tree is watched: {status:?}"
+        );
+    }
 }
 
 /// **0.1c's criterion.** Quick open answers immediately on a deep workspace,
@@ -338,8 +364,10 @@ fn quick_open_answers_immediately_and_admits_it_is_still_indexing() {
         done.indexed
     );
     #[cfg(unix)]
-    assert_eq!(
-        done.unreadable, 1,
-        "the unreadable directory is counted, not fatal"
-    );
+    if permissions_are_enforced_here() {
+        assert_eq!(
+            done.unreadable, 1,
+            "the unreadable directory is counted, not fatal"
+        );
+    }
 }

@@ -8,6 +8,29 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.3 - two tests that asserted about the runner instead of the code
+
+The 0.11.0 criteria were green here and red on two of the four CI platforms, and
+in both cases the test was wrong rather than the code.
+
+**Arch, as root.** The container job runs the suite as root, and root reads a
+mode-000 directory anyway — `CAP_DAC_OVERRIDE`. A test about *skipping an
+unreadable directory* has nothing to exercise there, so it asserted that a
+directory it could read had been skipped. It now probes first —
+`permissions_are_enforced_here()` creates a mode-000 directory and checks
+whether reading it actually fails — and skips with a reason when it does not.
+A uid check would have been the same test written to guess; this asks.
+
+**macOS.** `an_unreadable_directory_does_not_demote_the_workspace` asserted the
+per-directory counters, which 0.11.1 made Linux-only on purpose: FSEvents
+watches the subtree from one handle and never reads the tree, so it cannot meet
+an unreadable directory. The half that is universal — the workspace is still
+watched, `degraded` is `None` — stays universal; the counting is guarded.
+
+The two edits that missed in 0.11.1 missed for one reason: they were written
+against the file as it read before `cargo fmt` split the assertions across
+lines, and the replacement was made without checking that it had matched.
+
 ## 0.11.2 - the Linux release: .deb, AppImage, tarball and an AUR package that was actually built
 
 `ARCHITECTURE.md` §15 has described this since 0.1a and none of it existed.

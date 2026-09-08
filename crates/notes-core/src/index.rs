@@ -203,12 +203,36 @@ mod tests {
         assert!(!s.building);
     }
 
+    /// Whether a mode-000 directory is actually unreadable **here**.
+    ///
+    /// It is not, for root: `CAP_DAC_OVERRIDE` reads it anyway, and the Arch CI
+    /// job runs the suite as root inside its container. A test about skipping
+    /// an unreadable directory has nothing to exercise there, and asserting
+    /// anyway would be asserting about the runner rather than about the code.
+    #[cfg(unix)]
+    fn permissions_are_enforced_here() -> bool {
+        use std::os::unix::fs::PermissionsExt;
+        let d = tempfile::tempdir().unwrap();
+        let denied = d.path().join("negado");
+        std::fs::create_dir(&denied).unwrap();
+        if std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o000)).is_err() {
+            return false;
+        }
+        let enforced = std::fs::read_dir(&denied).is_err();
+        let _ = std::fs::set_permissions(&denied, std::fs::Permissions::from_mode(0o755));
+        enforced
+    }
+
     /// The bug this module exists to remove: one unreadable directory used to
     /// make quick open return nothing at all.
     #[cfg(unix)]
     #[test]
     fn an_unreadable_directory_is_counted_and_skipped_not_fatal() {
         use std::os::unix::fs::PermissionsExt;
+        if !permissions_are_enforced_here() {
+            eprintln!("skipped: this process reads a mode-000 directory anyway (root?)");
+            return;
+        }
         let d = tempfile::tempdir().unwrap();
         std::fs::write(d.path().join("visivel.md"), b"").unwrap();
         let denied = d.path().join("negado");
