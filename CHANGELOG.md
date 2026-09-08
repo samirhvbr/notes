@@ -8,6 +8,45 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.11 - tabs, quick open, workspace search, the command palette and settings
+
+The interface half of milestone 0.1c.
+
+**Tabs are a separate store, and that is the decision worth stating.** The editor
+holds exactly one loaded document and all of 0.1a and 0.1b is written against
+that; making every consumer tab-aware to gain a tab strip would put the write
+protocol back in play for a navigation feature. So the new store owns the *list*
+and the editor keeps owning the *document*. A tab carries only what has to
+survive a restart — path, identity, cursor, scroll — and the buffer stays where
+it was.
+
+Leaving a tab is not a new rule either: a dirty note is **flushed** and a note in
+conflict writes its **draft** instead, which is what `ARCHITECTURE.md` §5 already
+says happens when a buffer stops being looked at.
+
+The cursor is the part of the restart criterion that is easy to lose, because it
+can only be applied *after* the editor has mounted the document — a position in a
+document that does not exist yet means nothing. So the editor reports the caret
+on every selection change and asks the tab store for one when it builds a view,
+and the store suppresses reports while a restore is in flight so a freshly
+mounted editor does not overwrite the position being restored.
+
+**Quick open and the command palette are one surface**, because filter-arrow-
+`Enter` over different rows is one interaction. **Global search is not**, and is a
+panel rather than a modal: its results are something you work through, not
+something you pick from. It polls the core the way reconciliation does, and says
+two things out loud that scope §10 requires — that it reads **what is on disk**,
+with an explicit warning when the open note has unsaved changes, and that a
+truncated list is the first N rather than all of them.
+
+Settings apply as they are changed, with no Save button, for the same reason a
+note has none: a panel that can be closed with unsaved changes is a way to lose
+them. Font size, line numbers, wrapping and tab size are CodeMirror *extensions*,
+so each one rebuilds the view — they are in the effect's dependency list rather
+than applied to a live one, which is the honest way to say it.
+
+Thirty-eight new strings, in both catalogues, and CI still fails if they diverge.
+
 ## 0.9.10 - milestone 0.1c starts with search in the core, and its acceptance document
 
 **First result in `fixtures/large` in 11.4 ms, cancel in 650 ns** — two orders of

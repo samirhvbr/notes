@@ -34,7 +34,14 @@ import type { NoteId } from "./generated/NoteId";
 import type { OpenedNote } from "./generated/OpenedNote";
 import type { RelPath } from "./generated/RelPath";
 import type { SaveResult } from "./generated/SaveResult";
+import type { QuickMatch } from "./generated/QuickMatch";
+import type { SearchHit } from "./generated/SearchHit";
+import type { SearchId } from "./generated/SearchId";
+import type { SearchMode } from "./generated/SearchMode";
+import type { SearchOpts } from "./generated/SearchOpts";
+import type { SearchProgress } from "./generated/SearchProgress";
 import type { Session } from "./generated/Session";
+import type { Tab } from "./generated/Tab";
 import type { Settings } from "./generated/Settings";
 import type { WorkspaceInfo } from "./generated/WorkspaceInfo";
 import type { WorkspaceEntry } from "./generated/WorkspaceEntry";
@@ -43,7 +50,8 @@ export type {
   BaseRev, ChangeKind, ConflictChoice, ConflictKind, ConflictSnapshot,
   Conflicts, CoreError, CoreEvent, DeleteKind, Deleted, DocStatus, DraftChoice,
   DraftInfo, DraftReason, Document, Entry, Eol, Heading, Link, LinkKind, NoteId,
-  OpenedNote, Reconciled, RelPath, Rendered, SaveResult, Session, Settings,
+  OpenedNote, QuickMatch, Reconciled, RelPath, Rendered, SaveResult, SearchHit, SearchId,
+  SearchMode, SearchOpts, SearchProgress, Session, Settings, Tab,
   Span, Task, WorkspaceInfo, WorkspaceEntry,
 };
 
@@ -205,6 +213,19 @@ export const draftWrite = (
 export const draftList = () => invoke<DraftInfo[]>("draft_list");
 export const draftResolve = (noteId: NoteId, choice: DraftChoice) =>
   invoke<OpenedNote>("draft_resolve", { noteId, choice });
+
+/** Fuzzy match over paths, from memory — safe on every keystroke (0.1c). */
+export const quickOpen = (query: string, limit: number) =>
+  invoke<QuickMatch[]>("quick_open", { query, limit });
+
+/** Start a content scan. Starting one cancels the previous. */
+export const searchStart = (query: string, opts: SearchOpts) =>
+  invoke<SearchId>("search_start", { query, opts });
+
+/** Drain the hits found since the last poll — the `reconcile_tick` shape. */
+export const searchPoll = (id: SearchId) => invoke<SearchProgress>("search_poll", { id });
+
+export const searchCancel = (id: SearchId) => invoke<void>("search_cancel", { id });
 
 export const sessionGet = () => invoke<Session>("session_get");
 export const sessionSave = (session: Session) => invoke<void>("session_save", { session });

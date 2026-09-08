@@ -4,6 +4,12 @@ import { Tree } from "./explorer/Tree";
 import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
 import { Dialog } from "./app/Dialog";
+import { Tabs } from "./app/Tabs";
+import { Palette, type Command, type PaletteMode } from "./app/Palette";
+import { SettingsPanel } from "./app/Settings";
+import { SearchPanel } from "./search/SearchPanel";
+import { useTabs } from "./stores/tabs";
+import { useSettings } from "./stores/settings";
 import { askText } from "./app/dialog";
 import { Preview } from "./preview/Preview";
 import { Compare } from "./conflict/Compare";
@@ -40,6 +46,14 @@ export default function App() {
   const stopSync = useSync((s) => s.stop);
   const degraded = useSync((s) => s.degraded);
   const [env, setEnv] = useState<ipc.EnvReport | null>(null);
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const applySettings = useSettings((s) => s.apply);
+  const loadSettings = useSettings((s) => s.load);
+  const restoreTabs = useTabs((s) => s.restore);
+  const closeActiveTab = useTabs((s) => s.closeActive);
+  const resetTabs = useTabs((s) => s.reset);
 
   useEffect(() => {
     void restore();
@@ -61,6 +75,23 @@ export default function App() {
     return () => stopSync();
   }, [info, startSync, stopSync]);
 
+  // Settings before the editor mounts, so it is not built once with defaults
+  // and rebuilt a frame later with the real font size.
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
+
+  // Tabs belong to a workspace: they are restored when one opens and dropped
+  // when it changes. This is half of the 0.1c criterion — the other half is the
+  // cursor, which `stores/tabs.ts` hands to the editor after it mounts.
+  useEffect(() => {
+    if (!info) {
+      resetTabs();
+      return;
+    }
+    void restoreTabs();
+  }, [info, restoreTabs, resetTabs]);
+
   // Ctrl/Cmd+S forces a flush; the app never depends on it to save.
   // Ctrl/Cmd+E cycles Source → Preview → Split (scope §9).
   useEffect(() => {
@@ -73,11 +104,28 @@ export default function App() {
       } else if (key === "e") {
         e.preventDefault();
         cycleView();
+      } else if (key === "p" && !e.shiftKey) {
+        e.preventDefault();
+        setPalette("files");
+      } else if (key === "p" && e.shiftKey) {
+        e.preventDefault();
+        setPalette("commands");
+      } else if (key === "f" && e.shiftKey) {
+        // `Ctrl+F` belongs to CodeMirror's in-file panel (0.1b); the workspace
+        // search is the shifted one, exactly as scope §34 lists them.
+        e.preventDefault();
+        setSearching(true);
+      } else if (key === "w") {
+        e.preventDefault();
+        void closeActiveTab();
+      } else if (key === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [save, cycleView]);
+  }, [save, cycleView, closeActiveTab]);
 
   // Closing with a dirty buffer keeps it: the draft is written on the way out.
   useEffect(() => {
@@ -105,7 +153,7 @@ export default function App() {
     try {
       const e = await ipc.noteCreate(ipc.ROOT, name);
       await refresh(ipc.ROOT);
-      await useEditor.getState().open(e.path);
+      await useTabs.getState().openPath(e.path);
     } catch (err) {
       fail(err);
     }
@@ -126,6 +174,17 @@ export default function App() {
       fail(err);
     }
   }, [refresh, fail]);
+
+  const commands: Command[] = [
+    { id: "quick-open", label: "command.quickOpen", hint: "Ctrl+P", run: () => setPalette("files") },
+    { id: "search", label: "command.searchWorkspace", hint: "Ctrl+Shift+F", run: () => setSearching(true) },
+    { id: "new-note", label: "command.newNote", hint: "Ctrl+N", run: newNote },
+    { id: "new-folder", label: "command.newFolder", run: newFolder },
+    { id: "close-tab", label: "command.closeTab", hint: "Ctrl+W", run: () => void closeActiveTab() },
+    { id: "cycle-view", label: "command.cycleView", hint: "Ctrl+E", run: cycleView },
+    { id: "save", label: "command.save", hint: "Ctrl+S", run: () => void save(true) },
+    { id: "settings", label: "command.settings", hint: "Ctrl+,", run: () => setSettingsOpen(true) },
+  ];
 
   if (!info) return <Welcome />;
 
@@ -163,7 +222,9 @@ export default function App() {
         <aside className="side">
           <Tree />
         </aside>
+        {searching && <SearchPanel onClose={() => setSearching(false)} />}
         <main className="main">
+          <Tabs />
           {doc?.draft && (
             <div className="banner">
               <span>{t("draft.found", { name: doc.path })}</span>
@@ -221,6 +282,12 @@ export default function App() {
       </div>
 
       <Dialog />
+      {palette && (
+        <Palette mode={palette} commands={commands} onClose={() => setPalette(null)} />
+      )}
+      {settingsOpen && (
+        <SettingsPanel onClose={() => setSettingsOpen(false)} onChanged={applySettings} />
+      )}
       <StatusBar />
     </div>
   );

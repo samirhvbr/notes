@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
+use notes_core::search::{QuickMatch, SearchId, SearchOpts, SearchProgress};
 use notes_core::{
     ConflictChoice, Conflicts, Deleted, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote,
     Reconciled, Rendered, SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo,
@@ -330,6 +331,34 @@ pub fn draft_list(app: State<'_, App>) -> R<Vec<DraftInfo>> {
 #[tauri::command]
 pub fn draft_resolve(app: State<'_, App>, note_id: NoteId, choice: DraftChoice) -> R<OpenedNote> {
     svc(&app)?.resolve_draft(note_id, choice)
+}
+
+// ---- search (0.1c) -----------------------------------------------------
+
+/// Fuzzy match over paths, from memory. Never reads a file, so it is safe to
+/// call on every keystroke.
+#[tauri::command]
+pub fn quick_open(app: State<'_, App>, query: String, limit: usize) -> R<Vec<QuickMatch>> {
+    svc(&app)?.quick_open(&query, limit)
+}
+
+/// Start a content search. Starting one cancels the previous, because the caller
+/// is a search box and the previous query is no longer wanted.
+#[tauri::command]
+pub fn search_start(app: State<'_, App>, query: String, opts: SearchOpts) -> R<SearchId> {
+    svc(&app)?.search_start(&query, opts)
+}
+
+/// Drain the hits found since the last poll. Following the same shape as
+/// `reconcile_tick`: the core collects, the frontend asks.
+#[tauri::command]
+pub fn search_poll(app: State<'_, App>, id: SearchId) -> R<SearchProgress> {
+    svc(&app)?.search_poll(id)
+}
+
+#[tauri::command]
+pub fn search_cancel(app: State<'_, App>, id: SearchId) -> R<()> {
+    svc(&app)?.search_cancel(id)
 }
 
 // ---- session and settings ----------------------------------------------

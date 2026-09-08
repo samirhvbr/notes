@@ -6,6 +6,8 @@ import { search, searchKeymap, highlightSelectionMatches } from "@codemirror/sea
 import { markdown } from "@codemirror/lang-markdown";
 import { languages } from "@codemirror/language-data";
 import { useEditor } from "../stores/editor";
+import { pendingCursor, useTabs } from "../stores/tabs";
+import { useSettings } from "../stores/settings";
 import { t } from "../i18n";
 
 /**
@@ -22,10 +24,25 @@ const External = Annotation.define<boolean>();
 export function Editor() {
   const doc = useEditor((s) => s.doc);
   const edit = useEditor((s) => s.edit);
+  const noteIdRef = useRef(doc?.noteId);
+  noteIdRef.current = doc?.noteId;
+  const reportCursor = useRef((line: number, col: number, scrollTop: number) => {
+    const id = noteIdRef.current;
+    if (id) useTabs.getState().noteCursor(id, line, col, scrollTop);
+  }).current;
   const host = useRef<HTMLDivElement | null>(null);
   const view = useRef<EditorView | null>(null);
   const editRef = useRef(edit);
   editRef.current = edit;
+
+  // The editor's own settings (0.1c). Line numbers and wrapping are CodeMirror
+  // *extensions*, so changing one rebuilds the view — which is why they are in
+  // the key below rather than applied afterwards.
+  const editorSettings = useSettings((s) => s.settings?.editor);
+  const fontSize = editorSettings?.font_size ?? 14;
+  const lineNumbersOn = editorSettings?.line_numbers ?? true;
+  const wrapOn = editorSettings?.word_wrap ?? true;
+  const tabSize = editorSettings?.tab_size ?? 2;
 
   const key = doc ? `${doc.noteId}:${doc.savedVersion}` : null;
   const initial = useRef(doc?.text ?? "");
@@ -37,8 +54,9 @@ export function Editor() {
     const state = EditorState.create({
       doc: initial.current,
       extensions: [
-        lineNumbers(),
+        ...(lineNumbersOn ? [lineNumbers()] : []),
         highlightActiveLine(),
+        EditorState.tabSize.of(tabSize),
         history(),
         // Search and replace **within the file** — the 0.1b half of scope §10.
         // Global search is 0.1c and is a different thing entirely: it scans the
@@ -51,10 +69,22 @@ export function Editor() {
         // rather than whatever `defaultKeymap` would do with them.
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         markdown({ codeLanguages: languages }),
-        EditorView.lineWrapping,
+        ...(wrapOn ? [EditorView.lineWrapping] : []),
         EditorState.readOnly.of(readOnly),
         EditorState.lineSeparator.of("\n"),
+        // The caret and the scroll position belong to the tab, not to the
+        // document: the 0.1c criterion is that reopening the application puts
+        // them back (`stores/tabs.ts`).
         EditorView.updateListener.of((u) => {
+          if (u.docChanged || u.selectionSet || u.geometryChanged) {
+            const head = u.state.selection.main.head;
+            const line = u.state.doc.lineAt(head);
+            reportCursor(
+              line.number,
+              head - line.from + 1,
+              Math.round(u.view.scrollDOM.scrollTop),
+            );
+          }
           if (!u.docChanged) return;
           // A reload from disk is not a keystroke: marking the buffer dirty
           // here would start an autosave of text the user never typed.
@@ -62,10 +92,21 @@ export function Editor() {
           editRef.current(u.state.doc.toString());
         }),
         theme,
+        EditorView.theme({ "&": { fontSize: `${fontSize}px` } }),
       ],
     });
     const created = new EditorView({ state, parent: host.current });
     view.current = created;
+
+    // Put the caret back where the tab left it. After creation, because the
+    // document has to exist before a position in it means anything.
+    const want = pendingCursor(noteIdRef.current);
+    if (want) {
+      const lines = created.state.doc.lines;
+      const line = created.state.doc.line(Math.min(Math.max(want.line, 1), lines));
+      const pos = Math.min(line.from + Math.max(want.col - 1, 0), line.to);
+      created.dispatch({ selection: { anchor: pos }, scrollIntoView: true });
+    }
     return () => {
       created.destroy();
       if (view.current === created) view.current = null;
@@ -73,7 +114,9 @@ export function Editor() {
     // Keyed by the document, not its text: rebuilding on every keystroke would
     // destroy the undo history and the IME composition.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key === null ? null : key.split(":")[0], readOnly]);
+    // Settings are in the dependency list because each of them is an extension:
+    // there is no way to change them on a live view without rebuilding it.
+  }, [key === null ? null : key.split(":")[0], readOnly, lineNumbersOn, wrapOn, tabSize, fontSize]);
 
   return <EditorBody doc={doc} host={host} view={view} externalRev={doc?.externalRev ?? 0} />;
 }

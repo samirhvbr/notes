@@ -414,3 +414,111 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .dialog .primary { border-color: var(--accent); }
 .dialog .danger { border-color: var(--bad); color: #ffd7dd; }
+
+/* ---- tabs (0.1c) ------------------------------------------------------- */
+/* The dirty marker is a dot, not a colour: state never rides on colour alone. */
+
+.tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 1px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--line);
+  background: #131317;
+  flex: 0 0 auto;
+}
+.tab { display: flex; align-items: center; background: var(--bg-raised); }
+.tab.on { background: #2a3350; }
+.tab-label {
+  display: flex; align-items: center; gap: 5px;
+  background: transparent; border: none; border-radius: 0;
+  padding: 6px 4px 6px 10px; max-width: 220px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.tab.on .tab-label { color: #fff; }
+.tab-dirty { color: var(--warn); font-size: 10px; width: 8px; }
+.tab-close {
+  background: transparent; border: none; border-radius: 3px;
+  padding: 2px 8px 3px; color: var(--fg-dim); line-height: 1;
+}
+.tab-close:hover { background: #ffffff14; color: var(--fg); }
+
+/* ---- palette: quick open and commands ---------------------------------- */
+
+.palette-overlay { align-items: flex-start; padding-top: 12vh; }
+.palette {
+  width: min(680px, 100%);
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px #00000080;
+  overflow: hidden;
+}
+.palette input {
+  width: 100%; font: inherit; font-size: 15px; color: var(--fg);
+  background: transparent; border: none; border-bottom: 1px solid var(--line);
+  padding: 12px 14px;
+}
+.palette input:focus-visible { outline: none; border-bottom-color: var(--accent); }
+.palette-rows { list-style: none; margin: 0; padding: 4px; max-height: 46vh; overflow-y: auto; }
+.palette-rows .row {
+  display: flex; align-items: baseline; gap: 8px; width: 100%;
+  text-align: left; background: transparent; border: none;
+  padding: 6px 10px; border-radius: 4px;
+}
+.palette-rows .row.on { background: #2a3350; color: #fff; }
+.palette-rows .secondary, .palette-rows .hint { font-size: 12px; }
+.palette-rows .hint { margin-left: auto; }
+.empty-row { padding: 14px; margin: 0; }
+
+/* ---- global search ----------------------------------------------------- */
+
+.search-panel {
+  width: 380px; flex: 0 0 auto;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow: hidden; padding: 10px 12px;
+}
+.search-panel header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.search-panel input[type="text"], .search-panel input:not([type]) {
+  width: 100%; font: inherit; color: var(--fg);
+  background: #131317; border: 1px solid var(--line);
+  border-radius: 4px; padding: 6px 8px;
+}
+.search-options {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px; font-size: 12px;
+}
+.search-options select {
+  font: inherit; color: var(--fg); background: #131317;
+  border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px;
+}
+.search-panel .note, .search-panel .count { font-size: 12px; margin: 8px 0 4px; }
+.search-panel .note strong { color: var(--warn); font-weight: 600; }
+.hits { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1 1 auto; }
+.hits .row {
+  display: block; width: 100%; text-align: left;
+  background: transparent; border: none; border-radius: 4px;
+  padding: 5px 6px;
+}
+.hits .row:hover { background: #26262c; }
+.hits .where { display: block; font-size: 12px; }
+.hits .context {
+  display: block; font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px; color: var(--fg-dim);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- settings ---------------------------------------------------------- */
+
+.dialog.settings { width: min(420px, 100%); }
+.dialog.settings input[type="number"], .dialog.settings select {
+  width: 100%; font: inherit; color: var(--fg); background: #131317;
+  border: 1px solid var(--line); border-radius: 4px; padding: 6px 8px;
+  margin-bottom: 10px;
+}
+.dialog.settings label.check {
+  display: flex; align-items: center; gap: 8px;
+  color: var(--fg); font-size: 13px; margin-bottom: 8px;
+}
+.dialog.settings label.check input { width: auto; margin: 0; }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useWorkspace } from "../stores/workspace";
 import { useEditor } from "../stores/editor";
+import { useTabs } from "../stores/tabs";
 import { t } from "../i18n";
 import { askConfirm, askText } from "../app/dialog";
 import * as ipc from "../ipc";
@@ -42,7 +43,7 @@ function Level({
   const entries = useWorkspace((s) => s.listings[dir]);
   const expanded = useWorkspace((s) => s.expanded);
   const toggle = useWorkspace((s) => s.toggle);
-  const open = useEditor((s) => s.open);
+  const open = useTabs((s) => s.openPath);
   const active = useEditor((s) => s.doc?.path);
 
   if (!entries) return null;
