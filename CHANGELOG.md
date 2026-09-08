@@ -8,6 +8,26 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.1 - the queue says where 0.1d and 0.2 stand
+
+Two rows in `.continue/README.md`, which is the folder's index and had neither.
+
+`0.1d-interface.md` **stays in the queue** even though the interface is on
+screen as of `0.13.0`. Its own header says it leaves when the interface exists
+there — but the rule the owner set for this milestone is stricter than the one
+the file was written under: a box is ticked after they have walked it on the
+installed `.deb` **and repeated it on the release after**. Until then the
+milestone is built and unverified, which is a state the queue can hold and a
+tick cannot.
+
+`0.2-indice.md` records where the index milestone stopped. The code written for
+it — the `notes-index` crate, the SQLite plumbing with WAL and a migration
+ladder, five green tests — was **discarded** rather than left on a branch,
+because scope §5 says a crate exists only once the milestone that uses it
+begins and 0.2 has not begun. What is kept is the part that was expensive: the
+crate cut ADR-003 deferred, the argument for `notes-index` touching no
+filesystem, and the two-phase `plan`/`apply` protocol that follows from it.
+
 ## 0.13.0 - milestone 0.1d ships: the interface, with twenty-six boxes nobody has ticked
 
 The minor the milestone asks for, so `build.yml` produces a `.deb`, an AppImage,
