@@ -8,6 +8,23 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.10.3 - milestone 0.0 closes on this machine, and the queue drops three rows
+
+The owner ran it without the environment variable and then **switched the failure
+back on**: with `NOTES_NO_DMABUF_WORKAROUND=1` the GBM error returns. That was
+the control the Debian section was missing — until it was run, "the workaround
+fixed it" was inference, and now the failure has been turned off and on again.
+The section is closed.
+
+Three rows leave `.continue/`. Dependabot #1 was merged at `0.9.6`, and
+`PROGRESS-0.1b.md` describes where a milestone stopped that shipped at `0.9.0` —
+both were items the `QUEUE-RULE` says should have gone with the commit that
+carried the work. The repodocs skeleton defect leaves for a different reason: it
+is **not this repository's item**. It is a defect in repodocs' skeleton, fixed
+here at `0.1.0` and still shipping from there to every new repository, so it is
+recorded in "where things went" pointing at the repository that can fix it rather
+than sitting in a queue that cannot.
+
 ## 0.10.2 - the record catches up with the cause
 
 Three documents said something the run at `0.10.1` disproved.

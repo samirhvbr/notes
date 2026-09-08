@@ -45,8 +45,6 @@ here would be a second source of truth.
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) — my §20 proposal | **Superseded** by [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), Samir's v2.0-aligned document. Kept, not deleted: it is where the questions were asked. Three of its §5 questions are answered there; the bundle identifier is answered only for the spike | — |
 | [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the v1 drafts | Superseded by `SCOPE_final.md`; kept until the work they describe exists | — |
 | Cut the concrete boundaries between `notes-core`, `notes-fs` and `notes-index` | Deferred to the first code that needs them, on purpose — see [ADR-003](../docs/decisions.md) | — |
-| Dependabot PR #1 (`actions/checkout` 5 → 7) | Open on GitHub | Samir |
-| Report the `CHANGELOG.md` header defect back to the repodocs skeleton | Found while bootstrapping this repo: the skeleton describes the commit format in Portuguese while repodocs' own root file says English. Fixed here at `0.1.0`; still ships to every new repository | Samir |
 
 ## 2. Where things went
 
@@ -56,6 +54,7 @@ here would be a second source of truth.
 
 | It was here | It is now at |
 |---|---|
+| The repodocs skeleton's `CHANGELOG.md` header defect | **Not this repository's item** — it is a defect in [samirhvbr/repodocs](https://github.com/samirhvbr/repodocs)'s skeleton, fixed *here* at `0.1.0` and still shipping to every new repository from there. Tracked where it can be fixed, not where it was noticed |
 | _(nothing yet — nothing here has been built)_ | |
 
 ## 3. Pending decisions

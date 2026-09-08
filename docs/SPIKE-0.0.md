@@ -96,7 +96,7 @@ not after reasoning that it should work.**
 > environment proves nothing about criterion 1. **Unset the variable before
 > testing**, or the first box below is unanswerable.
 
-### Debian 13 · X11 · NVIDIA proprietary — **verified, and it failed**
+### Debian 13 · X11 · NVIDIA proprietary — **closed 08/09/2026**
 
 This is the machine the project is developed on, and until 08/09/2026 it was
 being reported as if it had no NVIDIA driver. It is a checklist item now, with
@@ -120,9 +120,11 @@ both boxes answered.
       machine logs `applied — proprietary nvidia driver detected`, produces no
       GBM error, and renders.
 
-- [ ] **With `settings.linux.webkit_dmabuf_workaround = "off"`**, the failure
-      returns. Unwalked: it would confirm that the workaround, and not something
-      else that changed, is what fixed it.
+- [x] **With the workaround disabled the failure returns** — walked by the owner
+      on 08/09/2026 with `NOTES_NO_DMABUF_WORKAROUND=1`: the GBM error comes
+      back. That is the control this section needed. Until it was run, "the
+      workaround fixed it" was inference; now the failure has been switched off
+      and on again.
 
 ### Arch Linux · Wayland · NVIDIA
 
