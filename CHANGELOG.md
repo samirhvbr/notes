@@ -8,6 +8,29 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.7 - the index stopped starving itself on a workspace that keeps changing
+
+A bug the background index introduced, found by asking what happens on a folder
+that is being written to while it fills.
+
+ADR-032 drops the quick-open list on every operation that changes the tree, and
+on every reconciliation that saw an event. That was right when building the list
+was a 30 ms walk inside the call. It is wrong once the walk is background work
+that takes **15.8 s on `~/x`**: any folder with continuous activity in it — a
+build, an `npm install`, a `git checkout` — invalidates faster than the walk can
+finish, so each `Ctrl+P` restarted it from zero and quick open returned an empty
+list for as long as the activity lasted.
+
+`quick_open` now rebuilds when there is no index, or when the list is stale
+**and the previous walk has finished**. The staleness is remembered rather than
+dropped; the next call after the walk ends starts a fresh one, and the palette
+says `building` for the whole of it.
+
+Measured by putting the old rule back:
+`QuickOpen { matches: [], indexed: 0, building: true }` after **2 919 changes**
+and thirty seconds. With D-11 the same test settles in 1.4 s with the whole
+workspace indexed, while the changes are still arriving.
+
 ## 0.11.6 - the watch-limit sentence is asserted; the behaviour behind it is not
 
 The one claim in this milestone that nothing exercised. `notify` reports an

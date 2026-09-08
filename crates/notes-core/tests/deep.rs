@@ -450,3 +450,53 @@ fn where_the_time_goes_on_a_real_folder() {
         ms(opened + listed)
     );
 }
+
+/// A workspace that keeps changing must not starve its own index.
+///
+/// Every operation that changes the tree drops the quick-open list (ADR-032).
+/// The first version of the background index restarted the walk on the next
+/// `quick_open` whatever state it was in, so a folder with continuous activity
+/// in it — a build, an `npm install`, a `git checkout` — invalidated it faster
+/// than the walk could finish and `Ctrl+P` returned an empty list *for as long
+/// as the activity lasted*. The assertion is exactly that: the index finishes
+/// **while the churn is still going**.
+#[test]
+fn an_index_that_is_still_building_is_not_restarted_by_a_change() {
+    let tree = DeepTree::build(400);
+    let (mut svc, _data) = opened(tree.path());
+
+    let first = svc.quick_open("readme", 10).unwrap();
+    assert!(first.building, "the walk is still going at this size");
+
+    let deadline = Instant::now() + Duration::from_secs(30);
+    let mut last = first;
+    let mut ticks = 0;
+    while Instant::now() < deadline {
+        // `create_note` is the tree change that needs no watcher to reach the
+        // invalidation, and it is what a user creating notes does anyway.
+        svc.create_note(&RelPath::root(), &format!("churn{ticks}"))
+            .unwrap();
+        ticks += 1;
+        last = svc.quick_open("readme", 10).unwrap();
+        if !last.building {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(1));
+    }
+
+    assert!(
+        ticks > 1,
+        "the list was invalidated more than once: {ticks}"
+    );
+    assert!(
+        !last.building,
+        "the index finished while the workspace kept changing — it did not, \
+         which means an invalidation restarted a walk that was still running: \
+         {last:?} after {ticks} changes"
+    );
+    assert!(
+        last.indexed >= 400 * 8,
+        "and it indexed the whole workspace: {}",
+        last.indexed
+    );
+}

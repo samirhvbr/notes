@@ -1403,7 +1403,21 @@ impl WorkspaceService {
             .unwrap_or(self.settings.files.show_hidden);
 
         let mut state = open.paths.lock().unwrap();
-        if state.index.is_none() || state.stale {
+        // A walk that is still running is **left alone**, stale or not.
+        //
+        // Restarting on every invalidation is what the first version did, and on
+        // a folder whose index takes fifteen seconds it means a folder with any
+        // background activity in it — a build, a `git` operation — restarts the
+        // walk faster than it can finish, so every `Ctrl+P` sees an empty list
+        // forever. A list a few seconds old is a better answer than a rebuild
+        // that never lands, and the palette already says it is still filling.
+        // The staleness is remembered, not lost: the next call after the walk
+        // ends starts a fresh one.
+        let rebuild = match state.index.as_ref() {
+            None => true,
+            Some(ix) => state.stale && !ix.snapshot().building,
+        };
+        if rebuild {
             // Dropping the previous index cancels its walk.
             state.index = Some(index::PathIndex::start(
                 open.fs.root(),

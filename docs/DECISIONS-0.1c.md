@@ -330,3 +330,39 @@ failure rather than a slow start.
 one `RecursiveMode::Recursive` call — the same one that shipped before 0.11.0 —
 and CI runs the suite on both, but nobody has watched a subtree event arrive on
 either.
+
+---
+
+## D-11 — A walk that is still running is never restarted by an invalidation
+
+**Decided.** `quick_open` rebuilds the path index when there is none, or when
+the list is stale **and the previous walk has finished**. A stale list whose
+walk is still running is left alone; the staleness is remembered, and the next
+call after that walk ends starts a fresh one.
+
+**The bug this removes, which the background index introduced.** ADR-032 drops
+the list on every operation that changes the tree, and on every reconciliation
+that saw an event. That was correct when building the list was a 30 ms walk
+inside the call. It is not correct when the walk is background work that takes
+**15.8 seconds on `~/x`**: any folder with continuous activity in it — a build,
+an `npm install`, a `git checkout` — invalidates faster than the walk can
+finish, so each `Ctrl+P` restarted it from zero and quick open returned an empty
+list *for as long as the activity lasted*.
+
+Measured, by putting the old rule back:
+`QuickOpen { matches: [], indexed: 0, building: true }` after **2 919 changes**
+and thirty seconds. With this rule the same test finishes in 1.4 s, with the
+whole workspace indexed, while the changes are still arriving —
+`deep.rs::an_index_that_is_still_building_is_not_restarted_by_a_change`.
+
+**Why staleness is not simply ignored.** A list that is a few seconds old offers
+a note that has just been renamed away, which is ADR-032's whole objection. That
+objection stands; what changed is *when* the rebuild happens, not whether it
+does. The window is bounded by one walk, and the palette says `building` for the
+whole of it.
+
+**Alternative if you disagree.** Rebuild into a second index and swap when it
+completes, keeping the old list live throughout. It removes the window entirely
+and costs two walks' memory plus the swap; the window here is a few seconds of
+a list that is at most one walk out of date, on a workspace being modified by
+something other than the user.

@@ -1031,7 +1031,11 @@ number of directories that are not — and the interface now says so instead of
 collapsing it to the worse of the two ends. Rule 2 is the amendment to ADR-032:
 the cached path list is still a cached path list, but it is **built in the
 background** and `quick_open` answers from a partial one with `building: true`
-beside it, rather than blocking on the first call.
+beside it, rather than blocking on the first call. ADR-032's *"every operation
+that changes the tree drops the cache"* survives with one qualification that
+only a background walk needs: a walk still running is not restarted, because on
+a workspace with continuous activity it would never finish
+(`DECISIONS-0.1c.md` D-11).
 
 **Consequences.** Quick open can answer from an incomplete index for the first
 few seconds on a very large workspace, and says so in the palette. The watcher

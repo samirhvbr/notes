@@ -575,6 +575,12 @@ Both background walks are **cancellable**, and dropping their owner is what
 cancels them — a `Watch` for the watcher, a `PathIndex` for quick open. Closing
 a workspace must not leave a thread walking a folder nobody has open.
 
+A walk that is still running is **not** restarted by an invalidation, however.
+§16's rule that every tree change drops the quick-open list was written for a
+30 ms walk inside the call; against a walk of seconds it means any workspace
+with a build running in it never finishes indexing. The staleness is remembered
+and acted on when the walk ends (`DECISIONS-0.1c.md` D-11).
+
 **Why this is a rule and not a note.** Opening a folder of ~160 repositories
 froze the Welcome screen for over two minutes. The tree was not at fault: on
 20 962 directories, `open_workspace` plus listing the root costs **1.13 ms**,

@@ -119,6 +119,16 @@ over **7 200 directories** with a mode-000 directory and a symlink loop in place
   **not** the visibility list, and `node_modules/` and `target/` are deliberately
   absent from `IGNORE_DEFAULT` ([DECISIONS-0.1c.md](DECISIONS-0.1c.md) D-08).
 
+And one more, `::an_index_that_is_still_building_is_not_restarted_by_a_change`:
+the index **finishes while the workspace keeps changing**. ADR-032 drops the
+list on every tree change, which was right when building it was a 30 ms walk
+inside the call and wrong once it became 15.8 s of background work — any folder
+with a build running in it invalidated faster than the walk could finish, and
+`Ctrl+P` returned nothing for as long as the activity lasted. Putting the old
+rule back fails the test with `indexed: 0, building: true` after **2 919
+changes**; with D-11 the same test settles in 1.4 s with the whole workspace
+indexed.
+
 **Measured on the real shape**, `tools/gen-deep.sh` plus
 `cargo test -p notes-core --test deep -- --ignored --nocapture`, **20 962
 directories**: the first `quick_open` cost **549.88 ms** before and under a
