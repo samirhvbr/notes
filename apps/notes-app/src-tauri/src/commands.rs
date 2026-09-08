@@ -8,7 +8,7 @@
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use notes_core::search::{QuickMatch, SearchId, SearchOpts, SearchProgress};
+use notes_core::search::{QuickOpen, SearchId, SearchOpts, SearchProgress};
 use notes_core::{
     ConflictChoice, Conflicts, Deleted, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote,
     Reconciled, Rendered, SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo,
@@ -335,12 +335,18 @@ pub fn draft_resolve(app: State<'_, App>, note_id: NoteId, choice: DraftChoice) 
     svc(&app)?.resolve_draft(note_id, choice)
 }
 
+/// What the watcher has managed so far. Polled beside `reconcile_tick`.
+#[tauri::command]
+pub fn watch_status(app: State<'_, App>) -> R<notes_core::WatchStatus> {
+    Ok(svc(&app)?.watch_status())
+}
+
 // ---- search (0.1c) -----------------------------------------------------
 
 /// Fuzzy match over paths, from memory. Never reads a file, so it is safe to
 /// call on every keystroke.
 #[tauri::command]
-pub fn quick_open(app: State<'_, App>, query: String, limit: usize) -> R<Vec<QuickMatch>> {
+pub fn quick_open(app: State<'_, App>, query: String, limit: usize) -> R<QuickOpen> {
     svc(&app)?.quick_open(&query, limit)
 }
 

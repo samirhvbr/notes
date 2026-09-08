@@ -8,6 +8,67 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.0 - the tree in under a second, and two walks moved off the critical path
+
+Opening `~/x` — around 160 repositories with `node_modules/`, `target/` and
+`.git/` — froze the Welcome screen for over two minutes, with a banner naming
+one unreadable subdirectory. That is not a notes workload, and it does not have
+to be: the application may not freeze on any folder.
+
+**Measured first.** `tools/gen-deep.sh` builds the same shape — 20 962
+directories, with a mode-000 directory and a symlink loop in it — and
+`crates/notes-core/tests/deep.rs` times each step of opening it:
+
+```
+open_workspace:        0.70 ms
+list root:             0.43 ms   (160 entries)
+start_watch:         502.72 ms
+quick_open first:    549.88 ms
+to a usable tree:      1.13 ms
+```
+
+The tree costs a millisecond on 21 000 directories, because it is lazy. The
+freeze was `start_watch` and `quick_open`, each walking the whole tree inside a
+`#[tauri::command]` holding `Mutex<WorkspaceService>` — so `tree_list` did not
+run slowly, it did not run at all until they finished. The fixture also found a
+second bug that had nothing to do with time: with the mode-000 directory in
+place, `quick_open` returned `Err(PermissionDenied)` for the entire workspace,
+and `notify`'s recursive add did the same to the watcher, demoting the whole
+folder to polling because of one directory.
+
+**The rule, now an acceptance criterion (ADR-034).** `workspace_open` returns and
+the tree appears in under one second at any size. Everything that needs the whole
+tree runs on its own thread, is cancellable, and reports progress to the status
+bar: the watcher's per-directory walk (`notes-fs::watch`) and quick open's path
+list (the new `notes-core::index`). Both use an explicit stack and
+`symlink_metadata`, so a symlink loop cannot be entered. Both count and skip a
+directory they cannot read. A full watch table degrades **only the excess** —
+the watches already installed keep working, the remainder is counted, and the
+banner names the number and the `sysctl`.
+
+`quick_open` now returns `QuickOpen { matches, indexed, building, unreadable }`
+and answers from a partial index while it fills; the palette says *"still
+indexing — N notes so far"* rather than "nothing matches". The status bar shows
+the watcher's coverage while it walks.
+
+**`node_modules/` and `target/` do not go into the default ignores** (D-08). They
+hold real Markdown, and hiding a folder by name is the application deciding which
+of the user's files are real. They go into the watcher's skip list instead, which
+is a different list answering a different question — a watch is a finite kernel
+resource, visibility is not. Changes inside a skipped directory still arrive
+through the 5 s scan.
+
+Three new automated criteria, in CI rather than behind `--ignored`, over a corpus
+each test builds: the tree under a second on 2 160 directories; `start_watch` and
+the first `quick_open` each returning in under a fifth of the walk they replace,
+over 7 200 directories. The assertion is a ratio against the walk measured in the
+same test rather than a millisecond budget, because at this size a synchronous
+walk costs ~30 ms and any absolute budget worth writing would let it through.
+Both were verified by putting the regression back: the inline walk fails them.
+
+`fixtures/large` could never have caught this. It is 10 000 notes, flat, and
+lists in 37 ms. The axis that broke was directories.
+
 ## 0.10.3 - milestone 0.0 closes on this machine, and the queue drops three rows
 
 The owner ran it without the environment variable and then **switched the failure

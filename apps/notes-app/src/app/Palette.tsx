@@ -42,6 +42,12 @@ export function Palette({
 }) {
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState<QuickMatch[]>([]);
+  /**
+   * The index is built on a background thread, so an early keystroke matches a
+   * **partial** workspace. Saying "nothing matches" then would be wrong; the
+   * palette says it is still filling and how far it has got.
+   */
+  const [indexing, setIndexing] = useState<{ indexed: number } | null>(null);
   const [cursor, setCursor] = useState(0);
   const input = useRef<HTMLInputElement | null>(null);
   const openPath = useTabs((s) => s.openPath);
@@ -60,8 +66,16 @@ export function Palette({
     let live = true;
     ipc
       .quickOpen(query, 50)
-      .then((r) => live && setFiles(r))
-      .catch(() => live && setFiles([]));
+      .then((r) => {
+        if (!live) return;
+        setFiles(r.matches);
+        setIndexing(r.building ? { indexed: r.indexed } : null);
+      })
+      .catch(() => {
+        if (!live) return;
+        setFiles([]);
+        setIndexing(null);
+      });
     return () => {
       live = false;
     };
@@ -137,7 +151,11 @@ export function Palette({
         />
 
         {rows.length === 0 ? (
-          <p className="muted empty-row">{t("palette.noMatch")}</p>
+          <p className="muted empty-row">
+            {mode === "files" && indexing
+              ? t("palette.building", { count: indexing.indexed })
+              : t("palette.noMatch")}
+          </p>
         ) : (
           <ul className="palette-rows" role="listbox">
             {rows.map((row, i) => (
@@ -156,6 +174,9 @@ export function Palette({
               </li>
             ))}
           </ul>
+        )}
+        {mode === "files" && indexing && rows.length > 0 && (
+          <p className="muted empty-row">{t("palette.building", { count: indexing.indexed })}</p>
         )}
       </div>
     </div>

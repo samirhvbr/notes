@@ -3,7 +3,7 @@
 //! The timed criterion needs `fixtures/large` and is `#[ignore]`d; everything
 //! else runs in the ordinary suite.
 
-use notes_core::search::{SearchMode, SearchOpts};
+use notes_core::search::{QuickMatch, SearchMode, SearchOpts};
 use notes_core::WorkspaceService;
 use notes_model::{CoreError, RelPath};
 use std::path::{Path, PathBuf};
@@ -222,10 +222,29 @@ fn search_reads_the_disk_not_the_open_buffer() {
 // Quick open
 // ---------------------------------------------------------------------------
 
+/// Quick open's answer once its index has finished filling.
+///
+/// The path list is built on a background thread (ADR-034), so a call made
+/// immediately after the tree changed matches a **partial** workspace and says
+/// so with `building: true`. That is the right answer for a palette on a
+/// keystroke and the wrong one for a test about *what is in the list*, so these
+/// tests wait — which is a wait of microseconds on a five-note fixture, and is
+/// the only thing about quick open that this change altered.
+fn quick(svc: &notes_core::WorkspaceService, query: &str, limit: usize) -> Vec<QuickMatch> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let r = svc.quick_open(query, limit).unwrap();
+        if !r.building || std::time::Instant::now() > deadline {
+            return r.matches;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(1));
+    }
+}
+
 #[test]
 fn quick_open_matches_paths_without_reading_files() {
     let f = setup();
-    let hits = f.svc.quick_open("rede", 10).unwrap();
+    let hits = quick(&f.svc, "rede", 10);
     assert_eq!(hits[0].path.as_str(), "infra/rede.md");
     assert_eq!(hits[0].name, "rede.md");
 }
@@ -233,7 +252,7 @@ fn quick_open_matches_paths_without_reading_files() {
 #[test]
 fn quick_open_lists_only_notes() {
     let f = setup();
-    let all = f.svc.quick_open("", 100).unwrap();
+    let all = quick(&f.svc, "", 100);
     let paths: Vec<_> = all.iter().map(|m| m.path.as_str()).collect();
     assert!(paths.contains(&"servidor.md"));
     assert!(paths.contains(&"infra/rede.md"));
@@ -245,10 +264,10 @@ fn quick_open_lists_only_notes() {
 fn a_note_created_after_the_cache_was_built_is_still_offered() {
     let mut f = setup();
     // Build the cache…
-    assert!(f.svc.quick_open("terceira", 10).unwrap().is_empty());
+    assert!(quick(&f.svc, "terceira", 10).is_empty());
     // …then change the tree through the application.
     f.svc.create_note(&RelPath::root(), "terceira").unwrap();
-    let hits = f.svc.quick_open("terceira", 10).unwrap();
+    let hits = quick(&f.svc, "terceira", 10);
     assert_eq!(
         hits.len(),
         1,
@@ -259,13 +278,13 @@ fn a_note_created_after_the_cache_was_built_is_still_offered() {
 #[test]
 fn a_note_renamed_is_no_longer_offered_under_its_old_name() {
     let mut f = setup();
-    assert!(!f.svc.quick_open("servidor", 10).unwrap().is_empty());
+    assert!(!quick(&f.svc, "servidor", 10).is_empty());
     f.svc
         .rename_entry(&RelPath::parse("servidor.md").unwrap(), "maquina.md")
         .unwrap();
-    let old = f.svc.quick_open("servidor", 10).unwrap();
+    let old = quick(&f.svc, "servidor", 10);
     assert!(old.is_empty(), "got {old:?}");
-    assert!(!f.svc.quick_open("maquina", 10).unwrap().is_empty());
+    assert!(!quick(&f.svc, "maquina", 10).is_empty());
 }
 
 // ---------------------------------------------------------------------------

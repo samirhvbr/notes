@@ -8,6 +8,7 @@
 pub mod conflicts;
 pub mod drafts;
 pub mod ignore;
+pub mod index;
 mod lock;
 pub mod paths;
 pub mod preview;
@@ -39,6 +40,24 @@ pub use settings::{Session, Settings, Tab};
 use state::Loaded;
 
 type Result<T> = std::result::Result<T, CoreError>;
+
+/// What the watcher is doing, for the status bar.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct WatchStatus {
+    pub watching: bool,
+    /// True while the walk that installs the watches is still running.
+    pub walking: bool,
+    #[ts(type = "number")]
+    pub dirs: usize,
+    #[ts(type = "number")]
+    pub unreadable: usize,
+    #[ts(type = "number")]
+    pub over_limit: usize,
+    /// Set only when **nothing** is watched. A directory that could not be
+    /// watched is counted above, not here.
+    pub degraded: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -146,6 +165,13 @@ impl Open {
     }
 }
 
+/// The quick-open index and whether it still describes the tree.
+#[derive(Default)]
+struct PathState {
+    index: Option<index::PathIndex>,
+    stale: bool,
+}
+
 struct Open {
     id: WorkspaceId,
     fs: LocalFs,
@@ -159,12 +185,12 @@ struct Open {
     recon: std::sync::Mutex<reconcile::Recon>,
     /// The running watch, when the backend has one.
     watch: Option<notes_fs::Watch>,
-    /// Every note path in the workspace, for quick open.
+    /// The quick-open path list, built on a thread of its own.
     ///
-    /// Built on first use and dropped whenever the tree changes — rebuilding a
-    /// 10 000-note list takes tens of milliseconds, and doing it per keystroke
-    /// is what would make `Ctrl+P` stop feeling instant.
-    paths: std::sync::Mutex<Option<Vec<RelPath>>>,
+    /// `stale` is set by anything that changes the shape of the tree; the
+    /// rebuild happens on the next `quick_open` rather than immediately, so a
+    /// reconciliation tick cannot put the walk on a treadmill.
+    paths: std::sync::Mutex<PathState>,
 }
 
 pub struct WorkspaceService {
@@ -357,7 +383,7 @@ impl WorkspaceService {
             suspended: BTreeSet::new(),
             recon: std::sync::Mutex::new(reconcile::Recon::default()),
             watch: None,
-            paths: std::sync::Mutex::new(None),
+            paths: std::sync::Mutex::new(PathState::default()),
         });
 
         Ok(WorkspaceInfo {
@@ -1324,6 +1350,33 @@ impl WorkspaceService {
         Ok(())
     }
 
+    /// What the watcher has managed so far.
+    ///
+    /// The walk that installs one watch per directory runs on its own thread, so
+    /// this is a progress report and not a result: `walking` is true while it is
+    /// still going. `unreadable` and `over_limit` are the two ways a workspace
+    /// ends up **partly** watched, and both are numbers the interface shows
+    /// rather than a flag that says "degraded" and hides which.
+    pub fn watch_status(&self) -> WatchStatus {
+        let Some(open) = self.open.as_ref() else {
+            return WatchStatus::default();
+        };
+        let Some(watch) = open.watch.as_ref() else {
+            return WatchStatus::default();
+        };
+        let p = watch.progress();
+        WatchStatus {
+            watching: watch.degraded.is_none(),
+            walking: p.walking,
+            dirs: p.dirs,
+            unreadable: p.unreadable,
+            over_limit: p.over_limit,
+            degraded: watch.degraded.as_ref().map(|d| match d {
+                notes_fs::Degraded::Unsupported(m) | notes_fs::Degraded::WatchLimit(m) => m.clone(),
+            }),
+        }
+    }
+
     // ---- search (0.1c) --------------------------------------------------
 
     /// Drop the quick-open path cache. Called by everything that changes the
@@ -1331,27 +1384,43 @@ impl WorkspaceService {
     /// out from under it.
     fn invalidate_paths(&self) {
         if let Some(open) = self.open.as_ref() {
-            *open.paths.lock().unwrap() = None;
+            open.paths.lock().unwrap().stale = true;
         }
     }
 
-    /// Every note path in the workspace, built once and cached.
-    fn note_paths(&self) -> Result<Vec<RelPath>> {
+    /// Fuzzy match over paths, from memory — and **never blocking**.
+    ///
+    /// The list is built on its own thread. A call made while it is still
+    /// filling matches what exists so far and says so, which is the answer that
+    /// keeps `Ctrl+P` instant on a folder of hundreds of thousands of
+    /// directories (`docs/DECISIONS-0.1c.md` D-09).
+    pub fn quick_open(&self, query: &str, limit: usize) -> Result<search::QuickOpen> {
         let open = self.open()?;
-        if let Some(cached) = open.paths.lock().unwrap().as_ref() {
-            return Ok(cached.clone());
-        }
-        let mut out = Vec::new();
-        collect_notes(&open.fs, &RelPath::root(), &open.extra_ignore, &mut out)?;
-        out.sort();
-        *open.paths.lock().unwrap() = Some(out.clone());
-        Ok(out)
-    }
+        let show_hidden = open
+            .registry
+            .settings
+            .show_hidden
+            .unwrap_or(self.settings.files.show_hidden);
 
-    /// Fuzzy match over paths, from memory. Reads no file and needs no index —
-    /// scope §10 keeps it independent of both the scanner and, at 0.2, of FTS5.
-    pub fn quick_open(&self, query: &str, limit: usize) -> Result<Vec<search::QuickMatch>> {
-        Ok(search::quick_match(&self.note_paths()?, query, limit))
+        let mut state = open.paths.lock().unwrap();
+        if state.index.is_none() || state.stale {
+            // Dropping the previous index cancels its walk.
+            state.index = Some(index::PathIndex::start(
+                open.fs.root(),
+                open.extra_ignore.clone(),
+                show_hidden,
+            ));
+            state.stale = false;
+        }
+        let snapshot = state.index.as_ref().expect("just set").snapshot();
+        drop(state);
+
+        Ok(search::QuickOpen {
+            matches: search::quick_match(&snapshot.paths, query, limit),
+            indexed: snapshot.paths.len(),
+            building: snapshot.building,
+            unreadable: snapshot.unreadable,
+        })
     }
 
     /// Start a content search. **Starting one cancels the previous**, because
@@ -1433,26 +1502,6 @@ enum Resolution {
 /// Persist the registry. One place, so every caller writes it the same way.
 pub(crate) fn store_registry(dir: &Path, registry: &Registry) -> Result<()> {
     state::store(&paths::registry_file(dir), registry)
-}
-
-/// Collect every note path under `dir`, honouring the workspace's ignore rules.
-fn collect_notes(
-    fs: &LocalFs,
-    dir: &RelPath,
-    extra: &[String],
-    out: &mut Vec<RelPath>,
-) -> Result<()> {
-    for e in fs.list(dir)? {
-        if ignore::is_hidden(&e, false, extra) {
-            continue;
-        }
-        match e.kind {
-            notes_model::EntryKind::Dir => collect_notes(fs, &e.path, extra, out)?,
-            notes_model::EntryKind::File if e.is_note => out.push(e.path),
-            _ => {}
-        }
-    }
-    Ok(())
 }
 
 /// `.notes/config.json`'s `ignore` list, when the user has turned it on.

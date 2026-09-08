@@ -23,10 +23,26 @@ import { useWorkspace } from "./workspace";
  */
 const TICK_MS = 300;
 const POLL_MS = 5000;
+/**
+ * How often the watcher's coverage is re-read while it is still installing
+ * watches. It stops on its own the moment the walk finishes, so this interval
+ * exists for a few seconds on a large workspace and never afterwards.
+ */
+const WATCH_MS = 400;
 
 interface SyncState {
   /** Why the workspace is being polled instead of watched, when it is. */
   degraded: string | null;
+  /**
+   * How far the watcher has got. `null` until the first reading.
+   *
+   * `watch_start` returns as soon as the **root** is watched, which is what
+   * keeps opening a workspace under a second; the rest of the tree is walked on
+   * a background thread. That makes coverage a thing with a middle — partly
+   * watched — and the status bar shows it rather than pretending the two ends
+   * are the only states (docs/DECISIONS-0.1c.md D-09).
+   */
+  watch: ipc.WatchStatus | null;
   start: () => Promise<void>;
   stop: () => void;
   /** A full scan, now. */
@@ -36,6 +52,7 @@ interface SyncState {
 let tick: ReturnType<typeof setInterval> | null = null;
 let poll: ReturnType<typeof setInterval> | null = null;
 let onFocus: (() => void) | null = null;
+let watchPoll: ReturnType<typeof setInterval> | null = null;
 /** One reconciliation at a time: a slow scan must not queue up behind itself. */
 let running = false;
 
@@ -105,6 +122,7 @@ function parentOf(path: ipc.RelPath): ipc.RelPath {
 
 export const useSync = create<SyncState>((set, get) => ({
   degraded: null,
+  watch: null,
 
   async start() {
     get().stop();
@@ -116,6 +134,24 @@ export const useSync = create<SyncState>((set, get) => ({
     } catch (e) {
       set({ degraded: ipc.asCoreError(e).code });
     }
+
+    // Coverage, until the walk is done. Polling rather than an event because
+    // the reading is three counters the interface renders whole: there is no
+    // moment to be notified *of*, only a number that is still climbing.
+    const coverage = async () => {
+      try {
+        const w = await ipc.watchStatus();
+        set({ watch: w });
+        if (!w.walking && watchPoll) {
+          clearInterval(watchPoll);
+          watchPoll = null;
+        }
+      } catch {
+        // Between workspaces there is nothing to report.
+      }
+    };
+    void coverage();
+    watchPoll = setInterval(() => void coverage(), WATCH_MS);
 
     tick = setInterval(() => void run(false), TICK_MS);
     // The 5 s poll runs whether or not there is a watcher: a watch can be lost
@@ -129,9 +165,11 @@ export const useSync = create<SyncState>((set, get) => ({
   stop() {
     if (tick) clearInterval(tick);
     if (poll) clearInterval(poll);
+    if (watchPoll) clearInterval(watchPoll);
     if (onFocus) window.removeEventListener("focus", onFocus);
-    tick = poll = null;
+    tick = poll = watchPoll = null;
     onFocus = null;
+    set({ watch: null });
   },
 
   async scan() {

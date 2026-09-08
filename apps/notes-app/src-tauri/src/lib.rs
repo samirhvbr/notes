@@ -80,6 +80,7 @@ pub fn run() {
             commands::note_create,
             commands::dir_create,
             commands::watch_start,
+            commands::watch_status,
             commands::reconcile_tick,
             commands::reconcile_all,
             commands::entry_rename,

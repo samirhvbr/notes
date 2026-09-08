@@ -525,6 +525,49 @@ and is reconciled by the 5 s poll and the scan on focus ([ADR-027](decisions.md)
 The poll and the focus scan run whether or not there is a watcher, so a watch
 silently lost degrades to 5 s rather than to nothing.
 
+### The one-second rule, and what runs in the background
+
+**`workspace_open` returns and the tree appears in under one second, at any
+size.** This is an acceptance criterion, not an aspiration
+([ADR-034](decisions.md), `ACCEPTANCE-0.1b.md` §6, `ACCEPTANCE-0.1c.md` §3), and
+it is stated in this section because reconciliation is where it was broken.
+
+Everything that has to walk the **whole tree** runs off the critical path — on
+its own thread, cancellable, with its progress visible in the status bar:
+
+| Work | Where | Reported as |
+|---|---|---|
+| one watch per directory | `notes-fs::watch`, thread `notes-watch` | `WatchStatus { walking, dirs, unreadable, over_limit }` |
+| the quick-open path list | `notes-core::index`, thread `notes-index` | `QuickOpen { indexed, building, unreadable }` |
+
+Both walks use an explicit stack and `symlink_metadata`, so a symlinked
+directory is never descended into and a loop cannot be entered. Both **count and
+skip** a directory they cannot read rather than failing: one unreadable
+subdirectory is a number in the status bar, never a reason to stop indexing or
+to demote a workspace to polling.
+
+The watcher does not descend into `node_modules`, `target`, `vendor`, `dist`,
+`build`, `.git`, `.svn`, `.hg`, `.cache` or `__pycache__`. That list is **not**
+`IGNORE_DEFAULT` (§16) and must not be confused with it: `IGNORE_DEFAULT` decides
+what the user *sees*, and a watch is a finite kernel resource of which a
+machine-generated tree can consume hundreds of thousands. A change inside a
+skipped directory still arrives through the 5 s scan
+(`DECISIONS-0.1c.md` D-08).
+
+A full watch table degrades **only the excess**. Watches already installed keep
+working, the remainder is counted in `over_limit`, and the banner names the
+number and the `sysctl` that raises the limit — rather than the whole workspace
+dropping to polling, which is what happened before.
+
+**Why this is a rule and not a note.** Opening a folder of ~160 repositories
+froze the Welcome screen for over two minutes. The tree was not at fault: on
+20 962 directories, `open_workspace` plus listing the root costs **1.13 ms**,
+because the tree is lazy. `start_watch` cost **503 ms** and the first
+`quick_open` **550 ms**, and both paid it inside a `#[tauri::command]` holding
+`Mutex<WorkspaceService>` — so every other command, `tree_list` included, waited
+behind them. `tools/gen-deep.sh` and `crates/notes-core/tests/deep.rs` keep that
+measurement reproducible.
+
 ---
 
 ## 9. Identity correlation
@@ -795,6 +838,13 @@ pub const IGNORE_DEFAULT: &[&str] = &[".notes", ".git", ".obsidian", ".trash"];
 Scope §7.6 requires this list by default, and `.notes/` is off by default, so the
 list cannot live there — a default that only exists once the user opts in is not
 a default. The user's `.gitignore` is never read as a visibility policy.
+
+**`node_modules/` and `target/` are not in it, and that is deliberate.** They
+hold real Markdown, and hiding a folder by name is the application deciding
+which of the user's files are real. They *are* in the watcher's skip list (§8),
+which is a different list answering a different question — a watch is a finite
+kernel resource; visibility is not ([DECISIONS-0.1c.md](DECISIONS-0.1c.md)
+D-08).
 
 ### `.notes/config.json`
 

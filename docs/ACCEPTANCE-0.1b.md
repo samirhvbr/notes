@@ -22,6 +22,7 @@
 | 3 | Create/duplicate never overwrite; a colliding move asks for a resolution | **met** — automated |
 | 4 | `fixtures/xss/` in the preview runs no script and loads no external resource | **met** — automated, every file under all four settings |
 | 5 | Delete reports `Trashed` or `Permanent`; never deletes without saying which | **met** — automated |
+| 6 | The tree appears in <1 s at any size; the watcher walks in the background and a directory it cannot read is counted, not fatal | **met** — automated and measured, §6 (added mid-milestone, from a bug) |
 
 **The application window has still never been launched by whoever wrote this.**
 Every result below comes from the core, the corpora and `vitest`. What that
@@ -173,6 +174,68 @@ step: delete a note from the app on a Linux desktop, then check
 `~/.local/share/Trash/files/`.
 
 ---
+
+---
+
+## 6. The tree appears in under a second, at any size
+
+**Added mid-milestone, from a bug.** The owner opened `~/x` — around 160
+repositories with `node_modules/`, `target/` and `.git/` — and the Welcome screen
+stayed on screen for **more than two minutes** before the tree appeared. That is
+not a notes workload, and it does not have to be: the rule this criterion states
+is that the application does not freeze on **any** folder
+([ADR-034](decisions.md), [DECISIONS-0.1c.md](DECISIONS-0.1c.md) D-09).
+
+Two halves belong to 0.1b, because both are the watcher's:
+
+**Automated** — `notes-core`, `tests/deep.rs`:
+
+| Test | What it holds to |
+|---|---|
+| `::the_tree_appears_in_well_under_a_second` | opening a workspace of 2 160 directories and listing its root, **under 1 s** |
+| `::starting_the_watcher_returns_immediately_and_walks_behind` | `start_watch` returns in under a fifth of the walk it then waits for, over **7 200 directories** |
+| `::an_unreadable_directory_does_not_demote_the_workspace` | a mode-000 subdirectory is **counted and skipped**; `degraded` stays `None` and the rest stays watched |
+
+The assertion on `start_watch` is a **ratio against the walk measured in the
+same test**, not a millisecond budget, and that is deliberate: at this corpus
+size a synchronous walk costs ~30 ms, which any absolute budget worth writing
+would let through. The regression it exists to catch was verified by putting it
+back — restoring the inline walk fails the test with
+*"start_watch returned in 33.09 ms of a 58.45 ms walk over 7200 directories —
+it is walking the tree inline"*.
+
+**Measured on the real shape**, `tools/gen-deep.sh` plus
+`cargo test -p notes-core --test deep -- --ignored --nocapture`, against
+**20 962 directories** with a mode-000 directory and a symlink loop in it:
+
+| Step | Before | After |
+|---|---|---|
+| `open_workspace` + list root | 1.13 ms | 1.13 ms |
+| `start_watch` | **502.72 ms**, inline, mutex held | under 1 ms, walk in the background |
+| first `quick_open` | **549.88 ms**, inline, mutex held | under 1 ms, partial answer |
+| with the unreadable directory in place | everything aborted; `quick_open` returned `Err(PermissionDenied)` | 1 directory counted, everything else served |
+
+The tree was never the problem — it costs a millisecond on 21 000 directories,
+because it is lazy and reads one directory at a time. The freeze was two
+whole-tree walks on the critical path, each inside a `#[tauri::command]` holding
+`Mutex<WorkspaceService>`, so `tree_list` did not run slowly: it did not run at
+all until they finished.
+
+**Not verified: that the status bar reads correctly while it fills.** The
+counters are asserted in the core; the sentence a person reads is not. The
+manual step, which the owner walks against the installed `.deb`:
+
+```bash
+tools/gen-deep.sh                 # or simply open ~/x, or any checkout-heavy folder
+# Open it from the app. Expect: the tree on screen at once, not after a wait;
+# the status bar saying "indexing folders… N watched" and then falling silent;
+# and, on a machine whose watch table fills, a banner naming how many folders
+# were left out and the sysctl that raises the limit.
+```
+
+**What this milestone's fixtures could not have caught.** `fixtures/large` is
+10 000 notes, flat, and lists in 37 ms. The axis that broke was **directories**,
+and nothing in the project measured it until `fixtures/deep` did.
 
 ## Scope items
 

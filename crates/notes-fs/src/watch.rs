@@ -14,8 +14,10 @@
 //! anything.
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{channel, Receiver, RecvTimeoutError, Sender};
+use std::sync::Arc;
 use std::time::Duration;
 
 use notes_model::{CoreError, RelPath};
@@ -25,6 +27,54 @@ use notify::{RecursiveMode, Watcher as _};
 /// that the acceptance criterion — *"editar no VS Code com o app aberto atualiza
 /// a aba em <1s"* — has most of its second left over.
 const DEBOUNCE: Duration = Duration::from_millis(200);
+
+/// Directories the watcher does not descend into.
+///
+/// **This is not the visibility list.** `notes-core`'s `IGNORE_DEFAULT` decides
+/// what the user *sees*, and `node_modules/` and `target/` are deliberately not
+/// in it — they hold real Markdown, and hiding a folder by name is the
+/// application deciding which of the user's files are real
+/// (`docs/DECISIONS-0.1c.md` D-08).
+///
+/// Watching is a different question with a different currency: an inotify watch
+/// is a finite kernel resource, one per directory, and a machine-generated tree
+/// can hold hundreds of thousands of them. A change inside one still reaches the
+/// application through the five-second poll and the focus scan — the same
+/// degradation any unwatched path has — so the cost of skipping is latency, and
+/// the cost of not skipping is the watch table.
+const WATCH_SKIP: &[&str] = &[
+    "node_modules",
+    "target",
+    "vendor",
+    "dist",
+    "build",
+    ".git",
+    ".svn",
+    ".hg",
+    ".cache",
+    "__pycache__",
+];
+
+/// What the watcher has managed so far. Read while it is still walking.
+#[derive(Debug, Default)]
+pub struct WatchCounters {
+    pub walking: AtomicBool,
+    pub dirs: AtomicUsize,
+    /// Directories that could not be read or watched — a permission, a mount
+    /// that vanished. Counted and skipped; never a reason to stop.
+    pub unreadable: AtomicUsize,
+    /// Directories left unwatched because the platform's watch table is full.
+    pub over_limit: AtomicUsize,
+}
+
+/// A snapshot of the above, for a caller that has to render it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WatchProgress {
+    pub walking: bool,
+    pub dirs: usize,
+    pub unreadable: usize,
+    pub over_limit: usize,
+}
 
 /// Why a workspace is not being watched.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -43,9 +93,11 @@ pub enum Degraded {
 pub struct Watch {
     rx: Receiver<BTreeSet<RelPath>>,
     stop: Sender<()>,
-    /// Set when the watch could not be established. The caller is expected to
-    /// poll instead, and the UI to say why.
+    /// Set when **no** watch could be established at all. A directory that
+    /// cannot be watched is not this: it is counted in `counters.unreadable`
+    /// and the rest of the workspace is watched normally.
     pub degraded: Option<Degraded>,
+    counters: Arc<WatchCounters>,
 }
 
 impl Watch {
@@ -57,6 +109,17 @@ impl Watch {
             rx,
             stop,
             degraded: Some(reason),
+            counters: Arc::new(WatchCounters::default()),
+        }
+    }
+
+    /// What the walk has managed so far. Safe to call while it is still running.
+    pub fn progress(&self) -> WatchProgress {
+        WatchProgress {
+            walking: self.counters.walking.load(Ordering::Relaxed),
+            dirs: self.counters.dirs.load(Ordering::Relaxed),
+            unreadable: self.counters.unreadable.load(Ordering::Relaxed),
+            over_limit: self.counters.over_limit.load(Ordering::Relaxed),
         }
     }
 
@@ -91,16 +154,28 @@ impl Drop for Watch {
     }
 }
 
-/// Start watching `root`, recursively.
+/// Start watching `root`.
 ///
-/// Returns a [`Watch`] whose `degraded` field is set rather than an `Err` when
-/// the platform cannot watch: *not being able to watch is a state of the
-/// workspace*, not a failure of the call, and the application keeps working by
-/// polling.
+/// **Returns immediately.** The walk that installs one watch per directory
+/// happens on the watcher's own thread, and `progress()` reports it while it
+/// runs. That ordering is the whole point: `notify`'s `RecursiveMode::Recursive`
+/// does the same walk *inside the call*, and on a folder of 21 000 directories
+/// that call took **503 ms** — with the service mutex held, so the tree could not
+/// be listed until it finished. On a folder of a few hundred thousand it is
+/// minutes, which is what the owner saw (`docs/DECISIONS-0.1c.md` D-09).
+///
+/// The walk is ours rather than `notify`'s for the second reason too: a
+/// recursive add fails **whole** on the first directory it cannot read, and one
+/// unreadable subdirectory then demotes an entire workspace to polling. Here a
+/// directory that cannot be read or watched is counted and skipped.
+///
+/// Symlinked directories are never descended into — the fixture has a loop, and
+/// a walk that follows one does not return.
 pub fn watch(root: &Path) -> Watch {
     let (batches, rx) = channel::<BTreeSet<RelPath>>();
     let (stop, stopped) = channel::<()>();
     let (raw_tx, raw_rx) = channel::<notify::Result<notify::Event>>();
+    let counters = Arc::new(WatchCounters::default());
 
     let mut watcher = match notify::recommended_watcher(move |res| {
         // A send failure means the debouncer thread is gone, which happens
@@ -110,17 +185,26 @@ pub fn watch(root: &Path) -> Watch {
         Ok(w) => w,
         Err(e) => return Watch::none(classify(&e)),
     };
-    if let Err(e) = watcher.watch(root, RecursiveMode::Recursive) {
+
+    // The root itself, synchronously: if even this cannot be watched there is
+    // nothing to watch, and the caller should poll.
+    if let Err(e) = watcher.watch(root, RecursiveMode::NonRecursive) {
         return Watch::none(classify(&e));
     }
+    counters.dirs.store(1, Ordering::Relaxed);
+    counters.walking.store(true, Ordering::Relaxed);
 
-    let root = root.to_path_buf();
+    let root_buf = root.to_path_buf();
+    let walk_counters = Arc::clone(&counters);
     std::thread::Builder::new()
         .name("notes-watch".into())
         .spawn(move || {
             // The watcher is moved into the thread so it lives exactly as long
             // as the loop does.
-            let _watcher = watcher;
+            let mut watcher = watcher;
+            add_watches_below(&mut watcher, &root_buf, &walk_counters);
+            walk_counters.walking.store(false, Ordering::Relaxed);
+
             let mut pending: BTreeSet<RelPath> = BTreeSet::new();
             loop {
                 if stopped.try_recv().is_ok() {
@@ -129,7 +213,13 @@ pub fn watch(root: &Path) -> Watch {
                 match raw_rx.recv_timeout(DEBOUNCE) {
                     Ok(Ok(event)) => {
                         for p in event.paths {
-                            if let Some(rel) = relativise(&root, &p) {
+                            // A directory that appears after the walk needs its
+                            // own watch, or nothing inside it is ever seen.
+                            if p.is_dir() && !skip_dir(&p) {
+                                let _ = watcher.watch(&p, RecursiveMode::NonRecursive);
+                                walk_counters.dirs.fetch_add(1, Ordering::Relaxed);
+                            }
+                            if let Some(rel) = relativise(&root_buf, &p) {
                                 pending.insert(rel);
                             }
                         }
@@ -157,14 +247,74 @@ pub fn watch(root: &Path) -> Watch {
         rx,
         stop,
         degraded: None,
+        counters,
     }
 }
 
-/// Turn an absolute path from the platform into a workspace-relative one.
+/// Walk `root` and install one non-recursive watch per directory.
 ///
-/// **Our own temporary files are dropped here** (`ARCHITECTURE.md` §8): every
-/// atomic save creates and renames a `.<name>.tmp`, and reporting those would
-/// make the application watch itself work.
+/// Errors are per directory and never stop the walk. A watch-table exhaustion
+/// stops *adding* — there is nothing to be gained by asking again for every
+/// remaining directory — but everything already watched keeps working, which is
+/// the difference between a degraded workspace and a dead one.
+fn add_watches_below(
+    watcher: &mut notify::RecommendedWatcher,
+    root: &Path,
+    counters: &Arc<WatchCounters>,
+) {
+    let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
+    let mut table_full = false;
+
+    while let Some(dir) = stack.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(e) => e,
+            Err(_) => {
+                counters.unreadable.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            // `symlink_metadata`, so a symlinked directory is not descended
+            // into and a loop cannot be entered.
+            let Ok(meta) = std::fs::symlink_metadata(&path) else {
+                continue;
+            };
+            if !meta.is_dir() || skip_dir(&path) {
+                continue;
+            }
+            if table_full {
+                counters.over_limit.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+            match watcher.watch(&path, RecursiveMode::NonRecursive) {
+                Ok(()) => {
+                    counters.dirs.fetch_add(1, Ordering::Relaxed);
+                    stack.push(path);
+                }
+                Err(e) if is_watch_limit(&e) => {
+                    table_full = true;
+                    counters.over_limit.fetch_add(1, Ordering::Relaxed);
+                }
+                Err(_) => {
+                    counters.unreadable.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+    }
+}
+
+fn skip_dir(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .map(|n| WATCH_SKIP.contains(&n))
+        .unwrap_or(true)
+}
+
+fn is_watch_limit(e: &notify::Error) -> bool {
+    matches!(classify(e), Degraded::WatchLimit(_))
+}
+
 fn relativise(root: &Path, path: &Path) -> Option<RelPath> {
     let rest = path.strip_prefix(root).ok()?;
     if rest.as_os_str().is_empty() {

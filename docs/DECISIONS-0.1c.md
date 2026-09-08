@@ -6,7 +6,8 @@
 > which gap it closed, and **what the alternative is** if the owner disagrees.
 >
 > The structural ones are promoted to [`decisions.md`](decisions.md) as
-> **ADR-030 … ADR-032**; the rest are here so that none of them is invisible.
+> **ADR-030 … ADR-032** and **ADR-034**; the rest are here so that none of them
+> is invisible.
 
 ---
 
@@ -142,3 +143,118 @@ one loaded document.
 documents, which is the shape it will need if two notes are ever visible at
 once — and which puts the write protocol, the draft rules and the conflict state
 back in play for a navigation feature.
+
+---
+
+## D-08 — `node_modules/` and `target/` are **not** hidden; they are **not watched**
+
+**Decided.** `IGNORE_DEFAULT` keeps the four entries it has — `.notes`, `.git`,
+`.obsidian`, `.trash` — and gains neither `node_modules/` nor `target/`. A
+separate list, `WATCH_SKIP` in `notes-fs::watch`, decides what the **watcher**
+descends into, and that one holds `node_modules`, `target`, `vendor`, `dist`,
+`build`, `.git`, `.svn`, `.hg`, `.cache` and `__pycache__`.
+
+**The question, and the rule that answers it.** The owner asked whether the two
+go into the default ignores, and said the answer is a product call decided by the
+one-second rule (D-09) — that not ignoring them is acceptable as long as the
+tree still appears in under a second. It does: on `fixtures/deep`, a corpus of
+**20 962 directories** shaped like the folder that froze the application,
+`open_workspace` plus listing the root costs **1.13 ms**, because the tree is
+lazy and reads one directory at a time. Directory count is not what the tree
+pays for. So the rule does not force the hiding, and the default answer to
+"should the application hide some of the user's files by name" is no.
+
+It matters that `node_modules/` is not empty of notes. The fixture puts a
+`README.md` in every one of its 3 840 packages precisely because that is true of
+a real checkout: hiding the folder hides real Markdown the user might be looking
+for, and a note-taking application that decides which of your notes are real is
+making a decision that is not its to make. `.git/` is different in kind — it is
+a database, and its contents are not documents — which is why it is in the
+visibility list and `node_modules/` is not.
+
+Watching is a different question with a different currency. An inotify watch is
+a finite kernel resource, one per directory, and this machine's
+`max_user_watches` is **65 536**. A single `~/x` overruns it, and the cost of
+overrunning is not paid by `node_modules/` — it is paid by the user's actual
+notes, which stop being watched because a dependency tree got there first. What
+a skipped directory loses is *latency*, not correctness: a change inside one
+still arrives through the five-second scan and the focus scan. Losing five
+seconds of freshness inside `target/debug/deps` is not a loss.
+
+**Alternative if you disagree.** Put both in `IGNORE_DEFAULT` and the two lists
+collapse into one. It is one line, and it is reversible; what it costs is that
+the user's `node_modules/*/README.md` stops existing as far as the application
+is concerned, with no way to see it short of a setting. The reverse alternative —
+watch everything, skip nothing — is also one line, and it costs the watch table
+on any workspace with a build directory in it.
+
+---
+
+## D-09 — The tree in under a second, and everything that needs the whole tree in the background
+
+**Decided.** See [ADR-034](decisions.md). `workspace_open` returns and the tree
+appears in **under one second at any size**. Everything that has to walk the
+whole tree — the watcher's per-directory watches, the quick-open path list —
+runs on its own thread, is cancellable, and reports its progress to the status
+bar. Recorded here with the measurements, because this decision came out of a
+bug and the numbers are the argument.
+
+**What was actually wrong.** The owner opened `~/x` — around 160 repositories,
+each with `node_modules/`, `target/` and `.git/` — and the Welcome screen stayed
+on screen for **more than two minutes** before the tree appeared, with a banner
+saying `Permission denied (os error 13)` about one subdirectory. The obvious
+suspicion was the tree, and the obvious suspicion was wrong.
+`tools/gen-deep.sh` builds the same shape locally and
+`crates/notes-core/tests/deep.rs` times each step of opening it:
+
+```
+directories:        20962
+open_workspace:        0.70 ms
+list root:             0.43 ms   (160 entries)
+start_watch:         502.72 ms   (degraded: None)
+quick_open first:    549.88 ms   (20 matches)
+to a usable tree:      1.13 ms
+everything:         1053.73 ms
+```
+
+The tree costs a millisecond. `start_watch` and `quick_open` cost half a second
+**each**, and both of them cost it inside a `#[tauri::command]` that holds
+`Mutex<WorkspaceService>` — so `tree_list` did not run slowly, it did not run at
+all until they finished. At 21 000 directories that is a second; `~/x` has an
+order of magnitude more, and it was minutes. The freeze was never a tree
+problem. It was two whole-tree walks on the critical path, serialised behind one
+mutex.
+
+The same fixture found a second bug that had nothing to do with time. With its
+mode-000 directory in place — the shape of the owner's `.../www/web1/ead` —
+everything aborted in under a millisecond and `quick_open` returned
+`Err(Io { op: "read_dir", kind: PermissionDenied })`. One unreadable
+subdirectory made quick open return **nothing at all** for a workspace of
+21 000 directories, and `notify`'s recursive add did the same thing to the
+watcher: it fails whole on the first directory it cannot read, and the whole
+workspace was then demoted to polling because of one folder.
+
+**What changed.** Three things, and each is a rule rather than a patch:
+
+1. **The walks moved off the command.** `watch()` watches the root
+   synchronously — if even that fails there is nothing to watch — and spawns a
+   thread that installs the rest one directory at a time. `PathIndex::start`
+   does the same for quick open, and `quick_open` matches whatever exists so
+   far, returning `building: true` beside it. A partial answer that says it is
+   partial is a better answer than a frozen window.
+2. **A directory that cannot be read is counted and skipped.** Never fatal,
+   never a reason to demote the workspace. The count goes to the status bar.
+   `notify`'s `RecursiveMode::Recursive` cannot express this, which is why the
+   walk is ours.
+3. **A full watch table degrades only the excess.** When `add_watches_below`
+   hits the limit it stops asking, counts the remainder in `over_limit`, and
+   keeps every watch already installed. The banner names the number and the
+   `sysctl` that raises it. Previously the workspace went to polling entirely.
+
+Symlinked directories are never descended into, in either walk — the fixture has
+a loop, and it exists because a walk that follows one does not return.
+
+**Alternative if you disagree.** Keep the walks synchronous and put a spinner on
+the Welcome screen. It is honest about the wait and it needs no threads; what it
+does not do is make the wait shorter, and on the owner's own folder the wait was
+two minutes.

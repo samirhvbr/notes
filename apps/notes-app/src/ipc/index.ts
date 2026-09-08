@@ -35,6 +35,8 @@ import type { OpenedNote } from "./generated/OpenedNote";
 import type { RelPath } from "./generated/RelPath";
 import type { SaveResult } from "./generated/SaveResult";
 import type { QuickMatch } from "./generated/QuickMatch";
+import type { QuickOpen } from "./generated/QuickOpen";
+import type { WatchStatus } from "./generated/WatchStatus";
 import type { SearchHit } from "./generated/SearchHit";
 import type { SearchId } from "./generated/SearchId";
 import type { SearchMode } from "./generated/SearchMode";
@@ -50,9 +52,9 @@ export type {
   BaseRev, ChangeKind, ConflictChoice, ConflictKind, ConflictSnapshot,
   Conflicts, CoreError, CoreEvent, DeleteKind, Deleted, DocStatus, DraftChoice,
   DraftInfo, DraftReason, Document, Entry, Eol, Heading, Link, LinkKind, NoteId,
-  OpenedNote, QuickMatch, Reconciled, RelPath, Rendered, SaveResult, SearchHit, SearchId,
-  SearchMode, SearchOpts, SearchProgress, Session, Settings, Tab,
-  Span, Task, WorkspaceInfo, WorkspaceEntry,
+  OpenedNote, QuickMatch, QuickOpen, Reconciled, RelPath, Rendered, SaveResult,
+  SearchHit, SearchId, SearchMode, SearchOpts, SearchProgress, Session, Settings,
+  Tab, Span, Task, WatchStatus, WorkspaceInfo, WorkspaceEntry,
 };
 
 /** Diagnostics, and the only shape here that is not generated. */
@@ -181,6 +183,15 @@ export const markdownTrustSet = (
 export const watchStart = () => invoke<string | null>("watch_start");
 
 /**
+ * How much of the workspace the watcher has managed to cover.
+ *
+ * `watch_start` returns as soon as the root is watched; the rest of the tree is
+ * walked on a background thread, so this is polled beside `reconcile_tick` to
+ * keep the status bar honest while it fills (0.1b).
+ */
+export const watchStatus = () => invoke<WatchStatus>("watch_status");
+
+/**
  * One watcher-driven tick. **The dirty list comes from here**, because the
  * buffers live in this process and the core does not hold them.
  */
@@ -219,7 +230,7 @@ export const draftResolve = (noteId: NoteId, choice: DraftChoice) =>
 
 /** Fuzzy match over paths, from memory — safe on every keystroke (0.1c). */
 export const quickOpen = (query: string, limit: number) =>
-  invoke<QuickMatch[]>("quick_open", { query, limit });
+  invoke<QuickOpen>("quick_open", { query, limit });
 
 /** Start a content scan. Starting one cancels the previous. */
 export const searchStart = (query: string, opts: SearchOpts) =>

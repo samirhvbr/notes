@@ -284,6 +284,23 @@ fn trim_context(line: &str) -> String {
 // Quick open
 // ---------------------------------------------------------------------------
 
+/// What quick open answers with.
+///
+/// `building` is not decoration: the list is walked on a thread, so a call made
+/// while it fills matches a **partial** workspace, and an interface that showed
+/// that as "no such note" would be lying. `indexed` and `unreadable` give it the
+/// numbers to say so.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct QuickOpen {
+    pub matches: Vec<QuickMatch>,
+    #[ts(type = "number")]
+    pub indexed: usize,
+    pub building: bool,
+    #[ts(type = "number")]
+    pub unreadable: usize,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct QuickMatch {

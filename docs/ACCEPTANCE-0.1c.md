@@ -24,6 +24,7 @@ a scan (`ignore` + `regex`) and that FTS5 takes over word search at 0.2, and
 |---|---|---|
 | 1 | First result in `fixtures/large` in <500 ms, and cancellable | **met** — measured |
 | 2 | Reopening restores workspace, tabs, active tab and cursor | **met in the core and the store** — the visible half is C10, unwalked |
+| 3 | Quick open answers immediately from an index built in the background, and says when it is partial | **met** — automated and measured, §3 (added mid-milestone, from a bug) |
 
 ---
 
@@ -86,6 +87,48 @@ being restored. A test asserts exactly that.
 
 **What no test covers** is that the restored caret is where the user left it *on
 screen*. That is C10.
+
+---
+
+## 3. Quick open answers immediately, from an index built in the background
+
+**Added mid-milestone, from the same bug as
+[ACCEPTANCE-0.1b.md §6](ACCEPTANCE-0.1b.md)** — the Welcome screen frozen for
+over two minutes on `~/x`. The watcher's half of that is 0.1b's; this is quick
+open's half, and it is the one that was doing the most damage.
+
+**Automated** — `notes-core`,
+`tests/deep.rs::quick_open_answers_immediately_and_admits_it_is_still_indexing`,
+over **7 200 directories** with a mode-000 directory and a symlink loop in place:
+
+- the first call returns in under a fifth of the index build it then waits for —
+  a **ratio against the build measured in the same test**, not a millisecond
+  budget, so the assertion says what the rule says: answering does not include
+  walking. Restoring the inline build fails it with *"the first quick_open took
+  84.54 ms of a 84.54 ms index build over 7200 directories — it is walking the
+  tree inline"*;
+- an answer given while the walk is still running carries `building: true` and
+  the count indexed so far, and the palette shows that instead of "nothing
+  matches";
+- the unreadable directory is **counted, and the workspace is still searched**.
+  This is the second bug the deep fixture found and it was not a timing bug:
+  before this change, one mode-000 subdirectory made `quick_open` return
+  `Err(Io { op: "read_dir", kind: PermissionDenied })` for a workspace of 21 000
+  directories — quick open returned nothing at all, for the whole folder;
+- every `README.md` under `node_modules/` is indexed. The watcher's skip list is
+  **not** the visibility list, and `node_modules/` and `target/` are deliberately
+  absent from `IGNORE_DEFAULT` ([DECISIONS-0.1c.md](DECISIONS-0.1c.md) D-08).
+
+**Measured on the real shape**, `tools/gen-deep.sh` plus
+`cargo test -p notes-core --test deep -- --ignored --nocapture`, **20 962
+directories**: the first `quick_open` cost **549.88 ms** before and under a
+millisecond after, and it cost it inside a `#[tauri::command]` holding
+`Mutex<WorkspaceService>` — which is why the *tree* was what appeared to hang.
+
+**Not verified: what the palette looks like while the index fills.** On a
+workspace large enough for the window to exist, `Ctrl+P` in the first second
+shows a partial list under the line *"still indexing — N notes so far"*. C1 and
+C3 cover the palette itself; nobody has watched it fill.
 
 ---
 

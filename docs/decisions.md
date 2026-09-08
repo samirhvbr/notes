@@ -758,7 +758,8 @@ event, which nothing currently needs.
 
 ## ADR-027 — Not being able to watch is a state of the workspace, not a failure
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · amended by
+[ADR-034](#adr-034--the-tree-appears-in-under-a-second-at-any-size-whole-tree-work-is-background-work) — coverage has a middle, and it is reported with numbers
 
 **Context.** `ARCHITECTURE.md` §11 already says several backends have no
 watcher — SMB, NFS, exFAT, a SAF tree at 0.4 — and §8 says Linux can run out of
@@ -895,7 +896,8 @@ caller to remember.
 
 ## ADR-032 — Quick open matches a cached path list, and the tree invalidates it
 
-**Status:** `ACCEPTED` · 08/09/2026
+**Status:** `ACCEPTED` · 08/09/2026 · amended by
+[ADR-034](#adr-034--the-tree-appears-in-under-a-second-at-any-size-whole-tree-work-is-background-work) — the list is built in the background, and a partial one answers
 
 **Context.** `Ctrl+P` has to answer on every keystroke. Walking a 10 000-note
 workspace takes tens of milliseconds — fine once, ruinous per character — and
@@ -983,3 +985,63 @@ cheap side of that same asymmetry.
 **What this ADR does not claim.** It fixes the failure that was observed. Whether
 the *original* Wayland black-window reports share this mechanism is not
 established here, and ADR-022's account of them is left standing.
+
+---
+
+## ADR-034 — The tree appears in under a second at any size; whole-tree work is background work
+
+**Status:** `ACCEPTED` · 08/09/2026 · amends
+[ADR-027](#adr-027--not-being-able-to-watch-is-a-state-of-the-workspace-not-a-failure)
+and [ADR-032](#adr-032--quick-open-matches-a-cached-path-list-and-the-tree-invalidates-it)
+
+**Context.** The owner opened `~/x` — around 160 repositories with
+`node_modules/`, `target/` and `.git/` — and the Welcome screen stayed on screen
+for over two minutes before the tree appeared. That folder is not a notes
+workload, and it does not have to be: **the application may not freeze on any
+folder.**
+
+The measurement is in `docs/DECISIONS-0.1c.md` D-09 and reproduces with
+`tools/gen-deep.sh` plus `cargo test -p notes-core --test deep -- --ignored`. On
+20 962 directories, opening the workspace and listing the root cost **1.13 ms**
+together — the lazy tree was never the problem — while `start_watch` cost
+**502 ms** and the first `quick_open` **550 ms**, each walking the entire tree
+inside a `#[tauri::command]` holding `Mutex<WorkspaceService>`. Every other
+command, `tree_list` included, waited behind them. On a folder ten times the
+size, so did the user.
+
+**Decision.** Three rules, and the first is an acceptance criterion:
+
+1. **`workspace_open` returns and the tree appears in under one second, at any
+   size.** `crates/notes-core/tests/deep.rs` asserts it against the deep fixture;
+   `docs/ACCEPTANCE-0.1b.md` and `docs/ACCEPTANCE-0.1c.md` carry it with the
+   number.
+2. **Anything that needs the whole tree runs off the critical path** — on its own
+   thread, cancellable, with its progress visible in the status bar. That is the
+   watcher's per-directory walk and quick open's path list today, and it is the
+   rule any future whole-tree work is held to.
+3. **Partial is a state, and it is reported with numbers.** A directory that
+   cannot be read is counted and skipped, never fatal. A full watch table
+   degrades **only the excess**: the watches already installed keep working, the
+   remainder is counted, and the banner says how many and which `sysctl` raises
+   the limit.
+
+Rule 3 is the amendment to ADR-027. That ADR made "watched" and "polled" the two
+states of a workspace; the truth has a middle — mostly watched, with a named
+number of directories that are not — and the interface now says so instead of
+collapsing it to the worse of the two ends. Rule 2 is the amendment to ADR-032:
+the cached path list is still a cached path list, but it is **built in the
+background** and `quick_open` answers from a partial one with `building: true`
+beside it, rather than blocking on the first call.
+
+**Consequences.** Quick open can answer from an incomplete index for the first
+few seconds on a very large workspace, and says so in the palette. The watcher
+does not descend into `node_modules/`, `target/` and their kin
+(`docs/DECISIONS-0.1c.md` D-08) — changes there arrive via the 5 s scan instead
+of instantly. Both walks skip symlinked directories, which the deep fixture's
+loop exists to check.
+
+The freeze had one more property worth keeping in view: it was invisible in
+every fixture the project had. `fixtures/large` measures 10 000 **notes** and
+lists them in 37 ms. The axis that broke was **directories**, and nothing
+measured it until `fixtures/deep` did. A performance criterion is only as good
+as the shape it is measured on.
