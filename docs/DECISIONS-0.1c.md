@@ -279,8 +279,12 @@ stopped the workspace from being watched at all before.
 
 `over_limit: 0` because this machine's `max_user_watches` is 1 048 576 and the
 folder needs 49 937. A default Linux ships 8 192 or 65 536, where the same
-folder would leave tens of thousands of directories over the limit — which is
-the state the banner exists to name, and which nothing here has exercised.
+folder would leave tens of thousands of directories over the limit — the state
+the banner exists to name, and **the one thing in this milestone that nothing
+exercises**: the inotify sysctls are not writable from an unprivileged user
+namespace on this kernel, so the limit cannot be lowered to meet it. The
+classification that decides the sentence is asserted; the behaviour behind it is
+code review (`ACCEPTANCE-0.1b.md` §6).
 
 
 **Alternative if you disagree.** Keep the walks synchronous and put a spinner on

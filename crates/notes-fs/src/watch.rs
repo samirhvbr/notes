@@ -447,4 +447,39 @@ mod tests {
             Some(RelPath::root())
         );
     }
+
+    /// The one sentence a user can act on.
+    ///
+    /// `notify` reports the exhausted watch table as an ordinary I/O error, so
+    /// the errno is the only thing separating "this kernel has run out of
+    /// watches" — which a `sysctl` fixes — from "this path does not exist",
+    /// which it does not. Getting that wrong costs the user the one instruction
+    /// that would have helped, so it is asserted rather than assumed.
+    ///
+    /// The **behaviour** on a full table — degrade only the excess, keep the
+    /// watches already installed — is not exercised anywhere: this machine's
+    /// `max_user_watches` is 1 048 576, `~/x` needs 49 937, and the inotify
+    /// sysctls are not writable from an unprivileged user namespace on this
+    /// kernel. `ACCEPTANCE-0.1b.md` §6 records that as not verified.
+    #[test]
+    fn a_full_watch_table_is_told_apart_from_a_missing_path_and_names_the_sysctl() {
+        let enospc = notify::Error::io(std::io::Error::from_raw_os_error(28));
+        match classify(&enospc) {
+            Degraded::WatchLimit(m) => {
+                assert!(
+                    m.contains("fs.inotify.max_user_watches"),
+                    "the message carries the command that fixes it: {m}"
+                );
+            }
+            other => panic!("ENOSPC must be the watch limit, got {other:?}"),
+        }
+        assert!(is_watch_limit(&enospc), "and the walk stops adding on it");
+
+        let missing = notify::Error::io(std::io::Error::from_raw_os_error(2));
+        assert!(
+            matches!(classify(&missing), Degraded::Unsupported(_)),
+            "ENOENT is not the watch limit and must not offer the sysctl"
+        );
+        assert!(!is_watch_limit(&missing));
+    }
 }

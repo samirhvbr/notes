@@ -247,10 +247,21 @@ throughout. The `unreadable: 1` is `.../www/web1/ead` — the directory whose
 `Permission denied (os error 13)` was in the banner. It is a number now, and it
 stopped the workspace from being watched at all before.
 
-`over_limit: 0` because this machine's `max_user_watches` is 1 048 576 and the
-folder needs 49 937. A default Linux ships 8 192 or 65 536, where the same
-folder would leave tens of thousands of directories over the limit — which is
-the state the banner exists to name, and which nothing here has exercised.
+**Not verified: a workspace that overruns the watch table.** `over_limit: 0`
+above because this machine's `max_user_watches` is 1 048 576 and `~/x` needs
+49 937. A default Linux ships 8 192 or 65 536, where the same folder leaves tens
+of thousands of directories over the limit — the state the banner exists to
+name.
+
+Reaching it deliberately would mean lowering the sysctl, and the inotify limits
+are not writable from an unprivileged user namespace on this kernel; the ENOSPC
+suite does that trick for the disk, and it does not work here. What **is**
+asserted is the half that decides which sentence the user reads:
+`watch.rs::a_full_watch_table_is_told_apart_from_a_missing_path_and_names_the_sysctl`
+— errno 28 classifies as `WatchLimit` and its message carries
+`fs.inotify.max_user_watches`, errno 2 does not and must not offer a command
+that would not help. The behaviour behind it — keep the watches installed, count
+the remainder, do not demote — is code review, not a test.
 
 The tree was never the problem — it costs a millisecond on 21 000 directories,
 because it is lazy and reads one directory at a time. The freeze was two

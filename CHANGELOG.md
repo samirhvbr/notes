@@ -8,6 +8,25 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.6 - the watch-limit sentence is asserted; the behaviour behind it is not
+
+The one claim in this milestone that nothing exercised. `notify` reports an
+exhausted watch table as an ordinary I/O error, so errno 28 is the only thing
+separating "this kernel has run out of watches" — which a `sysctl` fixes — from
+"this path does not exist", which it does not. Getting that wrong costs the user
+the single instruction that would have helped, so it is now asserted: errno 28
+classifies as `WatchLimit` and its message carries
+`fs.inotify.max_user_watches`; errno 2 does not, and must not offer a command
+that would not help.
+
+**What is still not verified is the behaviour on a full table** — keep the
+watches already installed, count the remainder, do not demote the workspace.
+Reaching that state means lowering `max_user_watches`, which is 1 048 576 here
+against the 49 937 `~/x` needs, and the inotify sysctls are not writable from an
+unprivileged user namespace on this kernel. The ENOSPC suite does exactly that
+trick for a full disk; it does not work for this. Recorded as not verified in
+`ACCEPTANCE-0.1b.md` §6 rather than left to look tested.
+
 ## 0.11.5 - the folder that froze it, measured on the folder that froze it
 
 `fixtures/deep` is a reconstruction. `~/x` is the original, and
