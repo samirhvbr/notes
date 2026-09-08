@@ -192,9 +192,18 @@ Two halves belong to 0.1b, because both are the watcher's:
 
 | Test | What it holds to |
 |---|---|
-| `::the_tree_appears_in_well_under_a_second` | opening a workspace of 2 160 directories and listing its root, **under 1 s** |
-| `::starting_the_watcher_returns_immediately_and_walks_behind` | `start_watch` returns in under a fifth of the walk it then waits for, over **7 200 directories** |
-| `::an_unreadable_directory_does_not_demote_the_workspace` | a mode-000 subdirectory is **counted and skipped**; `degraded` stays `None` and the rest stays watched |
+| `notes-core`, `deep.rs::the_tree_appears_in_well_under_a_second` | opening a workspace of 2 160 directories and listing its root, **under 1 s** |
+| `notes-core`, `deep.rs::starting_the_watcher_returns_immediately_and_walks_behind` | `start_watch` returns in under a fifth of the walk it then waits for, over **7 200 directories** |
+| `notes-core`, `deep.rs::an_unreadable_directory_does_not_demote_the_workspace` | a mode-000 subdirectory is **counted and skipped**; `degraded` stays `None` and the rest stays watched |
+| `notes-fs`, `watch_walk.rs::the_walk_reports_its_progress_and_finishes` | the counters the status bar reads are real: over 300 directories walked, and `walking` turns off |
+| `notes-fs`, `watch_walk.rs::dropping_the_watch_stops_the_walk_where_it_is` | **cancellable**: a `Watch` dropped into an 8 000-directory walk stops it there rather than finishing a workspace nobody has open |
+
+The mode-000 tests **probe before they assert**. Root reads such a directory
+anyway — `CAP_DAC_OVERRIDE` — and the Arch CI job runs the suite as root, so a
+test that asserted regardless would be asserting about the runner. It creates a
+mode-000 directory, checks that reading it actually fails, and skips with a
+reason when it does not. The per-directory counters are Linux's, for the same
+reason the walk is (`DECISIONS-0.1c.md` D-10).
 
 The assertion on `start_watch` is a **ratio against the walk measured in the
 same test**, not a millisecond budget, and that is deliberate: at this corpus
@@ -221,9 +230,16 @@ whole-tree walks on the critical path, each inside a `#[tauri::command]` holding
 `Mutex<WorkspaceService>`, so `tree_list` did not run slowly: it did not run at
 all until they finished.
 
-**Not verified: that the status bar reads correctly while it fills.** The
-counters are asserted in the core; the sentence a person reads is not. The
-manual step, which the owner walks against the installed `.deb`:
+**Where the numbers appear.** The walk's progress is the status bar's, because
+it is transient — *"indexing folders… N watched"*, gone the moment the walk
+ends. The two states that **settle** are banners: a full watch table names how
+many directories did not fit and the `sysctl` that raises the limit, and an
+unreadable folder names how many were skipped. A count in a corner of the status
+bar is not something a user can act on; a sentence with the command in it is.
+
+**Not verified: that either reads correctly on screen.** The counters are
+asserted in the core; the sentence a person reads is not. The manual step, which
+the owner walks against the installed `.deb`:
 
 ```bash
 tools/gen-deep.sh                 # or simply open ~/x, or any checkout-heavy folder

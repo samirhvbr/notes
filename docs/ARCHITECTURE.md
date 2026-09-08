@@ -566,6 +566,15 @@ working, the remainder is counted in `over_limit`, and the banner names the
 number and the `sysctl` that raises the limit — rather than the whole workspace
 dropping to polling, which is what happened before.
 
+Where each number surfaces follows from whether it settles: the **status bar**
+carries the walk's progress, which is transient and gone when the walk ends;
+**banners** carry `over_limit` and `unreadable`, which do not go away and need a
+sentence and a command rather than a corner.
+
+Both background walks are **cancellable**, and dropping their owner is what
+cancels them — a `Watch` for the watcher, a `PathIndex` for quick open. Closing
+a workspace must not leave a thread walking a folder nobody has open.
+
 **Why this is a rule and not a note.** Opening a folder of ~160 repositories
 froze the Welcome screen for over two minutes. The tree was not at fault: on
 20 962 directories, `open_workspace` plus listing the root costs **1.13 ms**,

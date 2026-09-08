@@ -8,6 +8,31 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.4 - the walk is actually cancellable, and the numbers moved to the banner
+
+Two gaps between what ADR-034 says and what 0.11.0 shipped.
+
+**"Cancellable" was true of the quick-open index and not of the watcher.**
+`PathIndex` stops when it is dropped; the watcher's walk ran to completion
+whatever happened to the `Watch`, so closing a workspace or opening another left
+a thread installing inotify watches on a folder nobody had open — minutes of it
+on a large tree. `add_watches_below` now checks the stop channel once per
+directory, which is the granularity it already works at.
+
+Asserted by what it does rather than by a thread's death, which is not
+observable: `Watch::counters()` hands out the live counters, the test drops the
+`Watch` three directories into an 8 000-directory walk and reads the count it
+stopped at. Removing the check again fails it — *"the walk stopped where it was
+rather than finishing: 8001 directories"*.
+
+**The over-limit and unreadable counts moved from the status bar to a banner.**
+The rule the milestone set is that a full watch table degrades only the excess
+and **says the number**; a count in the corner of a status bar is not something
+a user can act on. The banner names how many directories did not fit and the
+`sysctl` that raises the limit, and separately how many folders could not be
+read. What stays in the status bar is the walk's progress, which is transient
+and gone the moment it ends — the one reading that would be noise as a banner.
+
 ## 0.11.3 - two tests that asserted about the runner instead of the code
 
 The 0.11.0 criteria were green here and red on two of the four CI platforms, and

@@ -59,18 +59,17 @@ export function StatusBar() {
 }
 
 /**
- * One short phrase for the watcher's coverage, or nothing when it is complete.
+ * The watcher's coverage **while it is still filling**, and nothing once it is.
  *
- * A partly watched workspace is not a failure and is not a success: the
- * unwatched part still reaches the application through the five-second scan,
- * a few seconds later than the rest. Both numbers are named, because "degraded"
- * without a count is a word the user can do nothing with.
+ * This is the transient half: opening a workspace returns as soon as the tree
+ * can be drawn, and the walk that installs the watches carries on behind it
+ * (ADR-034), so the bar says so rather than leaving the user to wonder whether
+ * an unwatched folder is a bug. The two states that *settle* — a full watch
+ * table, a folder that cannot be read — are banners in `App.tsx`, because they
+ * need a number and a sentence rather than a corner of the status bar.
  */
 function coverage(w: WatchStatus): string | null {
-  if (w.walking) return t("watch.walking", { dirs: w.dirs });
-  if (w.over_limit > 0) return t("watch.overLimit", { count: w.over_limit });
-  if (w.unreadable > 0) return t("watch.unreadable", { count: w.unreadable });
-  return null;
+  return w.walking ? t("watch.walking", { dirs: w.dirs }) : null;
 }
 
 /** `code` is the contract; the message is never read from the backend. */

@@ -131,6 +131,13 @@ impl Watch {
         }
     }
 
+    /// The live counters, for a caller that has to read them **after** the
+    /// `Watch` is gone — which is how cancelling the walk is asserted at all:
+    /// a thread's death is not observable, and the count it stopped at is.
+    pub fn counters(&self) -> Arc<WatchCounters> {
+        Arc::clone(&self.counters)
+    }
+
     /// What the walk has managed so far. Safe to call while it is still running.
     pub fn progress(&self) -> WatchProgress {
         WatchProgress {
@@ -234,7 +241,12 @@ pub fn watch(root: &Path) -> Watch {
             // as the loop does.
             let mut watcher = watcher;
             if PER_DIRECTORY {
-                add_watches_below(&mut watcher, &root_buf, &walk_counters);
+                // Cancellable, and it has to be: dropping a `Watch` — closing a
+                // workspace, opening another — must not leave a thread walking
+                // a folder nobody is going to ask about. The stop channel is
+                // the same one the event loop below reads, so a `Watch` dropped
+                // three directories into a large walk stops there.
+                add_watches_below(&mut watcher, &root_buf, &walk_counters, &stopped);
                 walk_counters.walking.store(false, Ordering::Relaxed);
             }
 
@@ -293,16 +305,25 @@ pub fn watch(root: &Path) -> Watch {
 /// stops *adding* — there is nothing to be gained by asking again for every
 /// remaining directory — but everything already watched keeps working, which is
 /// the difference between a degraded workspace and a dead one.
+///
+/// `stopped` is checked once per directory, so dropping the `Watch` ends the
+/// walk rather than leaving it to finish a workspace nobody has open.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn add_watches_below(
     watcher: &mut notify::RecommendedWatcher,
     root: &Path,
     counters: &Arc<WatchCounters>,
+    stopped: &Receiver<()>,
 ) {
     let mut stack: Vec<PathBuf> = vec![root.to_path_buf()];
     let mut table_full = false;
 
     while let Some(dir) = stack.pop() {
+        // Once per directory rather than once per entry: a `try_recv` is cheap
+        // and a directory is the granularity the walk works at anyway.
+        if stopped.try_recv().is_ok() {
+            return;
+        }
         let entries = match std::fs::read_dir(&dir) {
             Ok(e) => e,
             Err(_) => {

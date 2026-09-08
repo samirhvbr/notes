@@ -45,6 +45,7 @@ export default function App() {
   const startSync = useSync((s) => s.start);
   const stopSync = useSync((s) => s.stop);
   const degraded = useSync((s) => s.degraded);
+  const watch = useSync((s) => s.watch);
   const [env, setEnv] = useState<ipc.EnvReport | null>(null);
   const [palette, setPalette] = useState<PaletteMode | null>(null);
   const [searching, setSearching] = useState(false);
@@ -254,6 +255,23 @@ export default function App() {
           {degraded && (
             <div className="banner">
               <span>{t("watch.degraded", { reason: degraded })}</span>
+            </div>
+          )}
+          {/* Partly watched is its own state, and it is stated with a number.
+              A full watch table costs only the directories that did not fit
+              (ADR-034), and the sysctl that raises it is the one thing the user
+              can do about it — so the count and the command go together. */}
+          {!degraded && watch && watch.over_limit > 0 && (
+            <div className="banner">
+              <span>{t("watch.overLimit", { count: watch.over_limit })}</span>
+            </div>
+          )}
+          {/* And a folder the app cannot read is reported rather than silently
+              missing from the watch — one of them is not a reason to stop
+              watching the other twenty thousand. */}
+          {!degraded && watch && watch.unreadable > 0 && (
+            <div className="banner">
+              <span>{t("watch.unreadable", { count: watch.unreadable })}</span>
             </div>
           )}
           {wsError && <div className="banner warn">{errorText(wsError)}</div>}
