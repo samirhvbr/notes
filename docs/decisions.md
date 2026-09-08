@@ -624,7 +624,11 @@ be visible: it is why the status bar has seven states rather than two.
 
 ## ADR-022 — The WebKitGTK dmabuf workaround is applied automatically on Wayland with NVIDIA
 
-**Status:** `ACCEPTED` · 07/09/2026
+**Status:** `ACCEPTED` · 07/09/2026 · **amended** by
+[ADR-033](#adr-033--the-dmabuf-workaround-keys-on-the-nvidia-driver-not-on-the-display-server):
+the Wayland half of the condition was wrong. WebKitGTK uses the DMA-BUF renderer
+on X11 too, the fault is in NVIDIA's GBM rather than in a compositor, and
+requiring Wayland cost a window on X11. Everything else below stands
 
 **Context.** WebKitGTK on Wayland with the NVIDIA driver has a long history of a
 black or flickering window. The mitigation —
@@ -915,3 +919,67 @@ chosen over tracking which paths moved, because a stale quick-open list offers a
 note that is not there, which is worse than rebuilding a list. The scoring will
 disagree with someone's expectation eventually; it is small enough to read and
 change, which is the property that matters.
+
+---
+
+## ADR-033 — The dmabuf workaround keys on the NVIDIA driver, not on the display server
+
+**Status:** `ACCEPTED` · 08/09/2026 · amends
+[ADR-022](#adr-022--the-webkitgtk-dmabuf-workaround-is-applied-automatically-on-wayland-with-nvidia)
+
+**Context.** ADR-022 said "detect Wayland and an NVIDIA driver". The Wayland half
+was wrong, and it was wrong in the direction that costs a window.
+
+WebKitGTK has used the DMA-BUF renderer on **X11 as well since 2.42**. The fault
+the workaround exists for is in NVIDIA's GBM — creating the buffer — not in a
+compositor, so it occurs on both display servers. Observed on Debian 13 / X11 /
+NVIDIA, with the environment variable unset:
+
+```text
+[notes] dmabuf: not needed — session is not wayland
+src/nv_gbm.c:288: GBM-DRV error (nv_gbm_create_device_native): …failed (ret=-1)
+KMS: DRM_IOCTL_MODE_CREATE_DUMB failed: Permission denied
+Failed to create GBM buffer of size 1100x720: Permission denied
+[notes] window main: close requested
+[notes] window main: destroyed
+```
+
+The workaround declined to apply, and the next four lines are the failure it
+exists to prevent. **This is the window that disappeared on *Open Folder***
+(`docs/DECISIONS-0.1b.md` D-20): the GBM buffer for a new surface cannot be
+created, the window is destroyed, and Tauri ends its event loop with status `0` —
+which is why it never looked like a crash. It had nothing to do with the file
+chooser; the chooser was merely the first thing that asked for a surface.
+
+The reason it took this long is worth recording, because it is a hazard and not
+an accident: **the owner's shell already exported
+`WEBKIT_DISABLE_DMABUF_RENDERER`.** `linux.rs` correctly refuses to override a
+value the user set, so every run before this one logged *"left alone — already
+set"*, the workaround never ran, and no comparison was ever made. A masked
+symptom produced a plausible mechanism (a GTK chooser taking its parent down)
+built on a false premise.
+
+**Decision.** On Linux, the **proprietary NVIDIA driver alone** decides. The
+display server is no longer an input to `decide` — not weighted differently,
+removed, because it never bore on the failure.
+
+`nouveau` does not count, and is distinguished by what each driver *creates*
+rather than by a name: `/proc/driver/nvidia/version` is written by the
+proprietary kernel module and by nothing else; `/sys/module/nvidia/` is that
+module's own sysfs directory, while nouveau's is `nouveau`; `nvidia-smi` on
+`PATH` is a weaker hint and is never shipped by nouveau. Nouveau's GBM works, so
+disabling the renderer there would cost compositing performance for no reason.
+Both are reported in the diagnostics panel, so a user can see which is loaded.
+
+**Consequences.** Every Linux machine with the proprietary driver now turns the
+DMA-BUF renderer off, X11 included — a real performance cost on hardware where
+the bug may never have shown, accepted because the asymmetry is absolute: applying
+it needlessly is slower compositing, and not applying it is no window at all. The
+`off` setting remains for anyone who measures the difference and wants it back.
+
+A false positive from `nvidia-smi` present without a loaded driver lands on the
+cheap side of that same asymmetry.
+
+**What this ADR does not claim.** It fixes the failure that was observed. Whether
+the *original* Wayland black-window reports share this mechanism is not
+established here, and ADR-022's account of them is left standing.

@@ -8,6 +8,45 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.10.2 - the record catches up with the cause
+
+Three documents said something the run at `0.10.1` disproved.
+
+**ADR-033** amends ADR-022. The Wayland half of its condition was wrong, and the
+log is quoted in full as the evidence rather than summarised. It records what the
+change costs — every Linux machine with the proprietary driver now turns the
+DMA-BUF renderer off, X11 included, which is a real performance cost on hardware
+where the bug may never have shown — and why that is the right side of the
+trade: applying it needlessly is slower compositing, not applying it is no
+window. It also says what it does **not** claim: whether the original Wayland
+black-window reports share this mechanism is not established, and ADR-022's
+account of those is left standing.
+
+**D-20 is marked resolved and wrong.** Its reading — a GTK file chooser taking
+its parent down — fitted the evidence and was not the cause, and the reason is
+named: every run behind it had `WEBKIT_DISABLE_DMABUF_RENDERER` already exported
+in the owner's shell, so the workaround never ran and its absence could not be
+observed. A masked symptom produces a plausible mechanism. The GTK hypothesis and
+the portal workaround are left as written rather than edited away, because a
+decision log that deletes its wrong turns stops being evidence of how the
+conclusion was reached.
+
+**`SPIKE-0.0.md` had a fabricated line.** It reported `nvidia false` for this
+machine and concluded criterion 1 could not be exercised here. The machine has a
+GTX 1060 with all four proprietary modules loaded and `/proc/driver/nvidia/version`
+present; the detection said `true` all along, and what was false was the
+document. It had been written from expectation rather than from a run, and that
+is the failure mode the whole spike document exists to prevent.
+
+Debian 13 / X11 / NVIDIA is now a checklist section of its own with both boxes
+answered — the failure reproduced with the old rule, and fixed by the new one —
+plus one box left open on purpose: turning the workaround `off` should bring the
+failure back, and until someone sees that, "the workaround fixed it" is inference
+rather than observation. The Arch boxes stop asserting `session wayland`, since
+the session is reported and no longer required.
+
+`ACCEPTANCE-0.1b.md` and `ACCEPTANCE-0.1c.md` are untouched, as instructed.
+
 ## 0.10.1 - the dmabuf rule required Wayland, and the failure never did
 
 The window that disappeared on *Open Folder* was found, and it was not the file

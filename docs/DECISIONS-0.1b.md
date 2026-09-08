@@ -393,6 +393,25 @@ listing, which nothing currently needs.
 
 ## D-20 — The window that disappears on Open Folder: instrumented, not fixed
 
+> **Resolved on 08/09/2026, and this entry's reading of the evidence was wrong.**
+> It is not the file chooser. WebKitGTK uses the DMA-BUF renderer on X11 as well
+> as Wayland, and NVIDIA's GBM fails on both; the dmabuf workaround was declining
+> to apply because it required Wayland, so the first surface the application
+> asked for could not be created and the window was destroyed —
+> [ADR-033](decisions.md#adr-033--the-dmabuf-workaround-keys-on-the-nvidia-driver-not-on-the-display-server).
+>
+> The false premise is worth naming: **every run behind this entry had
+> `WEBKIT_DISABLE_DMABUF_RENDERER` already exported in the owner's shell**, so
+> the workaround never ran and its absence could not be observed. A masked
+> symptom produced a mechanism that fitted the evidence and was not the cause.
+> The instrumentation this entry chose to add is what eventually named the event
+> — `close requested`, then `destroyed`.
+>
+> The GTK-parenting hypothesis and the portal workaround below were **not**
+> applied and are not needed. They are left as written, because a decision log
+> that edits away its wrong turns stops being evidence of how the conclusion was
+> reached.
+
 **Decided.** Log the window lifecycle (`CloseRequested`, `Destroyed`,
 `Focused`) from `src-tauri`. Do **not** change the file-dialog backend yet, and
 record why.

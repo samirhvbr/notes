@@ -46,13 +46,22 @@ than by hope. **That proves the decision, not the rendering.**
 
 ### What this machine reports at startup
 
+> **Corrected on 08/09/2026.** This section previously read `nvidia false` and
+> concluded that criterion 1 could not be exercised here. **That was written
+> from expectation rather than from a run**, and it was wrong: the machine has a
+> GeForce GTX 1060 with `nvidia`, `nvidia_drm`, `nvidia_modeset` and `nvidia_uvm`
+> loaded, and `/proc/driver/nvidia/version` present. The detection reported
+> `true` all along; what was false was this document.
+
+Run on 08/09/2026 with `WEBKIT_DISABLE_DMABUF_RENDERER` unset, after ADR-033:
+
 ```
-session   x11
-nvidia    false
-dmabuf    not applied — session is not wayland
+[notes] dmabuf: applied — proprietary nvidia driver detected
+[notes] window main: focused=true
 ```
 
-Which is correct, and is also why criterion 1 cannot be closed here.
+No GBM error, and the window renders. With the **pre-ADR-033** rule, the same
+machine produced the failure recorded in the checklist below.
 
 ### Not verified here, and not claimed
 
@@ -87,16 +96,45 @@ not after reasoning that it should work.**
 > environment proves nothing about criterion 1. **Unset the variable before
 > testing**, or the first box below is unanswerable.
 
+### Debian 13 · X11 · NVIDIA proprietary — **verified, and it failed**
+
+This is the machine the project is developed on, and until 08/09/2026 it was
+being reported as if it had no NVIDIA driver. It is a checklist item now, with
+both boxes answered.
+
+- [x] **The failure reproduces with the pre-ADR-033 rule** — the workaround
+      declines to apply on X11, and the next four lines are the reason it exists:
+
+      [notes] dmabuf: not needed — session is not wayland
+      src/nv_gbm.c:288: GBM-DRV error (nv_gbm_create_device_native): …failed (ret=-1)
+      KMS: DRM_IOCTL_MODE_CREATE_DUMB failed: Permission denied
+      Failed to create GBM buffer of size 1100x720: Permission denied
+      [notes] window main: close requested
+      [notes] window main: destroyed
+
+      Status `0`, because Tauri ends its loop when the last window is gone. This
+      is the "window disappears on Open Folder" of `DECISIONS-0.1b.md` D-20, and
+      the chooser was only the first thing to ask for a surface.
+
+- [x] **It is fixed by ADR-033** — with the driver alone deciding, the same
+      machine logs `applied — proprietary nvidia driver detected`, produces no
+      GBM error, and renders.
+
+- [ ] **With `settings.linux.webkit_dmabuf_workaround = "off"`**, the failure
+      returns. Unwalked: it would confirm that the workaround, and not something
+      else that changed, is what fixed it.
+
 ### Arch Linux · Wayland · NVIDIA
 
-- [ ] The diagnostics panel reads `session wayland`, `nvidia true`, and
-      **`dmabuf APPLIED`** — the panel prints the word, so this is read, not
-      inferred.
+- [ ] The diagnostics panel reads `nvidia true` and **`dmabuf APPLIED`** — the
+      panel prints the word, so this is read, not inferred. The session is shown
+      too and is **no longer part of the condition** (ADR-033); it is reported,
+      not required.
 - [ ] The window renders correctly: no black window, no flicker, on launch and
       after resize.
-- [ ] With `NOTES_NO_DMABUF_WORKAROUND=1` the panel says the workaround was
-      skipped — and whatever the window then does is the observation that says
-      whether the workaround is still needed on current WebKitGTK.
+- [ ] With `settings.linux.webkit_dmabuf_workaround = "off"` the panel says the
+      workaround was skipped — and whatever the window then does is the
+      observation that says whether it is still needed on current WebKitGTK.
 - [ ] Built against the **current** `webkit2gtk-4.1` on rolling, not Debian's.
 
 ### iPhone (iOS 17+)
