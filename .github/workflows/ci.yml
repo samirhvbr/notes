@@ -14,7 +14,7 @@ jobs:
     name: contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
 
       # docs/ARCHITECTURE.md §12: "No `fs:*` permission exists in the file. A PR
@@ -80,7 +80,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -124,7 +124,7 @@ jobs:
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - name: system dependencies
         run: |
           pacman -Syu --noconfirm
@@ -139,7 +139,7 @@ jobs:
       run:
         working-directory: apps/notes-app
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -162,7 +162,7 @@ jobs:
     if: github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'run-crash-loop')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: tools/crash-save-loop.sh

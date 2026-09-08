@@ -8,6 +8,13 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.7 - the other five checkouts the Dependabot PR could not have seen
+
+`#1` was opened at 18:42 on 07/09 and `ci.yml` was written at `0.7.0`, two hours
+later. So merging it bumped `release.yml` and left the five checkouts in the file
+that did not exist yet — the repository ended with two versions of one action,
+which is worse than one old version because nothing reports it.
+
 ## 0.9.6 - the three things milestone 0.1a left in the queue
 
 Housekeeping, and one of the three is a rule this repository wrote about itself
