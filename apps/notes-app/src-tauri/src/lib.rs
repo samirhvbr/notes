@@ -23,6 +23,25 @@ pub fn run() {
     eprintln!("[notes] dmabuf: {}", decision.explanation);
 
     tauri::Builder::default()
+        // Window lifecycle, logged.
+        //
+        // A window that disappears with the process exiting **0** is not a
+        // crash: Tauri ends its event loop when the last window is gone, so
+        // "closed" and "destroyed by something else" are indistinguishable from
+        // outside. This says which, and who asked — without it the next
+        // occurrence is as undiagnosable as the first.
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } => {
+                eprintln!("[notes] window {}: close requested", window.label());
+            }
+            tauri::WindowEvent::Destroyed => {
+                eprintln!("[notes] window {}: destroyed", window.label());
+            }
+            tauri::WindowEvent::Focused(f) => {
+                eprintln!("[notes] window {}: focused={f}", window.label());
+            }
+            _ => {}
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())

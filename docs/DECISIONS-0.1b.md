@@ -388,3 +388,77 @@ which walks the tree for exactly that.
 a second registry, persisted, with its own staleness — and diff against it. It
 buys "a file appeared while the app was closed" as an event rather than as a
 listing, which nothing currently needs.
+
+---
+
+## D-20 — The window that disappears on Open Folder: instrumented, not fixed
+
+**Decided.** Log the window lifecycle (`CloseRequested`, `Destroyed`,
+`Focused`) from `src-tauri`. Do **not** change the file-dialog backend yet, and
+record why.
+
+**What is known.**
+
+The owner ran the application, clicked *Open Folder…*, and the window vanished.
+The process exited **`0`**, with an empty `stderr` beyond the startup line. That
+is not a crash: no panic, no signal. Tauri ends its event loop when the last
+window is gone, so an exit of `0` means **the window was destroyed and the
+application shut down normally** — which is what a parent window being taken
+down with its child dialog looks like from outside.
+
+What the dependency tree says, and it is consistent with that reading:
+
+| Evidence | Reading |
+|---|---|
+| `ashpd` is **absent** from `Cargo.lock` | `rfd` 0.16 is using the **GTK3 backend directly**, not the XDG Desktop Portal |
+| `rfd` pulls `raw-window-handle`, `gtk-sys`, `gobject-sys` | the chooser is parented to the Tauri window — `transient-for` |
+| `busctl --user` lists ten portal services and `gtk.portal` is installed | the portal **is available on this machine and is not being used** |
+
+So the configuration in play is a GTK3 file chooser parented to a `GtkWindow`
+that also hosts a WebKitGTK WebView, sharing one GTK main loop. When the chooser
+is destroyed, the parent following it produces precisely the observed signature.
+
+**What is not known, and why it is not claimed.**
+
+**It did not reproduce under automation.** The window could not be raised on this
+window manager — `xdotool windowactivate` returns `_NET_ACTIVE_WINDOW failed`,
+and neither `windowraise` nor `wmctrl -a` moves it — so synthetic clicks landed
+on whichever window was in front. An earlier claim in this session that the
+failure had been "reproduced" was wrong for that reason, and is corrected here
+rather than left standing. Two runs that opened the chooser programmatically,
+without a click, both survived.
+
+A mechanism consistent with the evidence is not a proven one, and changing the
+dialog backend to fix a failure that cannot be triggered on demand would leave
+nothing to verify the change against.
+
+**The instrumentation is the deliverable.** `CloseRequested` and `Destroyed` are
+indistinguishable from outside the process and answer different questions: the
+first says something asked the window to close — a window manager, a person, or a
+`transient-for` parent following its child — and the second says it was
+destroyed outright. The next occurrence names which, and that is what a second
+attempt needs.
+
+**The workaround, written down so it is not rediscovered.** Force `rfd` onto the
+portal by declaring it in `apps/notes-app/src-tauri/Cargo.toml`; Cargo unifies
+features, so `tauri-plugin-dialog`'s own `rfd` picks it up:
+
+```toml
+rfd = { version = "0.16", default-features = false, features = ["xdg-portal", "tokio"] }
+```
+
+The portal runs the chooser **out of process**, so no GTK parenting is involved
+and the failure cannot occur by this mechanism. Its costs are real, and are why
+it is not applied blind: it changes behaviour on every Linux desktop, it returns
+portal-mediated paths, and with no portal running there is no GTK fallback — the
+picker would stop working for a user who has no symptom today.
+
+**Alternative if you disagree.** Apply the workaround now and treat the absence
+of further reports as evidence. That is defensible for a symptom this severe; it
+is not measurement, and this entry says which is which.
+
+**A note that invalidates a different test.** The owner's environment already
+exports `WEBKIT_DISABLE_DMABUF_RENDERER`, and `linux.rs` correctly refuses to
+override a value the user set — it logged *"left alone — already set"* on every
+run above. **Milestone 0.0's first acceptance criterion was therefore not
+exercised by any of them**, and `docs/SPIKE-0.0.md` now says so.

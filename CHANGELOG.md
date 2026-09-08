@@ -8,6 +8,42 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.5 - the window that vanishes: instrumented, and one wrong claim withdrawn
+
+The owner clicked *Open Folder…* and the window disappeared. The process exited
+**`0`** with an empty `stderr` — so **not a crash**: no panic, no signal. Tauri
+ends its loop when the last window is gone, which means the window was destroyed
+and the application shut down normally. That is what a parent following its child
+dialog down looks like from outside.
+
+The dependency tree agrees with that reading and is stated as evidence rather
+than as a conclusion: `ashpd` is absent, so `rfd` is on the **GTK3 backend**, not
+the portal; it pulls `raw-window-handle`, so the chooser is parented
+`transient-for` to the Tauri window; and the XDG portal is installed and running
+on this machine but unused. A GTK3 chooser parented to the `GtkWindow` that hosts
+the WebView, in one main loop.
+
+**It did not reproduce, and an earlier claim that it had is withdrawn here.** The
+window manager refuses to raise the window — `xdotool windowactivate` returns
+`_NET_ACTIVE_WINDOW failed`, `windowraise` and `wmctrl -a` do nothing — so
+synthetic clicks were landing on whatever was in front. Two runs that opened the
+chooser programmatically both survived. A mechanism consistent with the evidence
+is not a proven one, and swapping the dialog backend to fix a failure that cannot
+be triggered on demand leaves nothing to verify against.
+
+So the deliverable is the instrumentation: the window lifecycle is logged, and
+`CloseRequested` and `Destroyed` answer different questions that are
+indistinguishable from outside the process — something *asked* the window to
+close, or it was destroyed outright. The next occurrence names which. The
+workaround is written out in `docs/DECISIONS-0.1b.md` D-20 with its costs, so it
+is not rediscovered and not applied blind.
+
+One finding invalidates a different test. The owner's shell already exports
+`WEBKIT_DISABLE_DMABUF_RENDERER`, and `linux.rs` correctly refuses to override a
+value the user set — every run logged *"left alone — already set"*. **Milestone
+0.0's first acceptance criterion was not exercised by any of these runs**, and
+`docs/SPIKE-0.0.md` now says to unset the variable before answering that box.
+
 ## 0.9.4 - the six flows behind a dialog the WebView does not have
 
 `window.prompt` in five places and `window.confirm` in one: new note, new

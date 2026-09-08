@@ -81,6 +81,12 @@ Which is correct, and is also why criterion 1 cannot be closed here.
 Nothing below can be done from this machine. **Mark a box only after seeing it,
 not after reasoning that it should work.**
 
+> **Note from 08/09/2026.** The owner's shell already exports
+> `WEBKIT_DISABLE_DMABUF_RENDERER`, and `linux.rs` correctly refuses to override
+> a value the user set — it logs *"left alone — already set"*. A run in that
+> environment proves nothing about criterion 1. **Unset the variable before
+> testing**, or the first box below is unanswerable.
+
 ### Arch Linux · Wayland · NVIDIA
 
 - [ ] The diagnostics panel reads `session wayland`, `nvidia true`, and
