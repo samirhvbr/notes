@@ -8,6 +8,25 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.11 - one build at a time, because the burst was starving CI
+
+An operational consequence of yesterday's release pipeline, observed rather than
+predicted: every commit is a version, every version gets a Release, and
+`build.yml` queued a nine-minute build for each. Three ran concurrently while
+the CI job that actually gates the work sat queued behind an AppImage.
+
+The concurrency group is now `build` with `cancel-in-progress`. A burst of
+commits produces one build — the newest. What it costs is that an intermediate
+version can end up with no artifacts, and that is the right trade: nobody
+installs the middle of a working session, and what has to be installable is
+exactly the one this rule always builds. Filling an older one in afterwards is a
+manual `workflow_dispatch` with its version as the input.
+
+Cancelling mid-run needed the completion check to get stricter. It looked for a
+`.deb`, which a run cancelled halfway will have already uploaded; it now looks
+for the `.SRCINFO`, which the Arch job uploads last. Every upload already used
+`--clobber`, so rebuilding over a partial set is safe.
+
 ## 0.11.10 - the churn test measured the runner, not the rule
 
 `an_index_that_is_still_building_is_not_restarted_by_a_change` was green here

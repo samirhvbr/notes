@@ -845,6 +845,16 @@ all. `build.yml` triggers on `workflow_run` rather than `on: release`, because
 `release.yml` creates the Release with the built-in `GITHUB_TOKEN` and GitHub
 fires no workflow events for what a `GITHUB_TOKEN` did.
 
+**One build at a time, and the newest wins.** Every commit is a version and
+every version gets a Release, so a working session produces a burst of them;
+`build.yml`'s concurrency group is `build` with `cancel-in-progress`, or each
+queues a nine-minute build and the burst starves CI of runners while the tests
+sit behind an AppImage. The cost is that an intermediate version can end up with
+no artifacts, which is the right trade: what has to be installable is the
+newest, and that is the one this rule always builds. Completion is judged by the
+`.SRCINFO` — the last thing uploaded — so a cancelled run is rebuilt rather than
+mistaken for a finished one, and every upload uses `--clobber`.
+
 | Target | Artifact | Signing | Status |
 |---|---|---|---|
 | Debian / Ubuntu | `.deb` (built on `ubuntu-22.04` for the oldest glibc still supported), AppImage | none required | **shipping** |

@@ -87,8 +87,12 @@ docker run --rm -v "$PWD:/src:ro" archlinux:latest bash -c '
   the build and re-run `build.yml`; it refuses to upload twice, so a re-run
   after a partial upload is safe.
 - **`build.yml` did nothing.** It only runs when a Release for `version.md`'s
-  version exists and does not already carry a `.deb`. The job named *what to
-  build* says which of those two it was, as a notice.
+  version exists and does not already carry its `.SRCINFO`. The job named *what
+  to build* says which of those two it was, as a notice.
+- **An older version has no artifacts.** Expected during a working session: one
+  build runs at a time and a newer version cancels it, so intermediate releases
+  can be empty. The newest is always built. To fill one in afterwards, run
+  `build.yml` by hand with its version as the input.
 - **A version was released with the wrong number in the package.** The bundle
   version is stamped from `version.md`; if they disagree, someone committed a
   stamped `tauri.conf.json`. CI rejects that, so the more likely cause is a

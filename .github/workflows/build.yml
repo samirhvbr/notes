@@ -32,8 +32,18 @@ permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.event.workflow_run.head_sha || github.sha }}
-  cancel-in-progress: false
+  # One build at a time, and **the newest wins**. Every commit is a version and
+  # every version gets a Release (ADR-011), so a working session produces a
+  # burst of them; without this, each queued a nine-minute build and the burst
+  # starved CI of runners while the tests everyone actually waits on sat in the
+  # queue behind an AppImage.
+  #
+  # What it costs is that an intermediate version can end up with no artifacts.
+  # That is the right trade: nobody installs the middle of a working session,
+  # and what has to be installable is the newest — which is exactly the one this
+  # rule always builds.
+  group: build
+  cancel-in-progress: true
 
 jobs:
   # One place decides what is being built, so no job re-derives it and gets a
@@ -75,10 +85,13 @@ jobs:
             echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
 
-          # And artifacts are attached once. A re-run must not upload a second
-          # copy of a `.deb` somebody may already have downloaded.
+          # Artifacts are attached once — but "once" means *completely*. The
+          # sentinel is the `.SRCINFO`, which the Arch job uploads last: a run
+          # cancelled or failed halfway leaves a `.deb` and no `.SRCINFO`, and
+          # checking for the `.deb` would call that finished. Every upload uses
+          # `--clobber`, so rebuilding over a partial set is safe.
           if gh release view "$version" --repo "$GITHUB_REPOSITORY" \
-               --json assets --jq '.assets[].name' | grep -q '\.deb$'; then
+               --json assets --jq '.assets[].name' | grep -q '\.SRCINFO$'; then
             echo "::notice::Release '$version' already carries its artifacts"
             echo "build=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
