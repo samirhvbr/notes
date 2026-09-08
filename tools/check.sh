@@ -53,6 +53,7 @@ step "generated types"      bash -c '
   [ -z "$(git ls-files --others --exclude-standard -- apps/notes-app/src/ipc/generated)" ]'
 step "no fs capability"     bash -c '
   ! grep -rqE "\"fs:[a-z-]+\"" apps/notes-app/src-tauri/capabilities/'
+step "no blocking dialogs" tools/no-blocking-dialogs.sh
 step "i18n keys match"      python3 -c '
 import json,sys
 en=json.load(open("apps/notes-app/src/i18n/en.json"))

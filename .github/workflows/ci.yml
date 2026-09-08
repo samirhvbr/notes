@@ -51,6 +51,12 @@ jobs:
           test -n "$(ls -A apps/notes-app/src/ipc/generated)" || { echo "::error::nothing was generated"; exit 1; }
           echo "generated types are in step with the Rust"
 
+      # A browser's blocking script dialog compiles, ships, and does nothing in
+      # the WebView — six flows of 0.1b were behind one, and no core test could
+      # have known.
+      - name: no blocking script dialogs in the frontend
+        run: tools/no-blocking-dialogs.sh
+
       # Every user-visible string is a key, and a key missing from either
       # catalogue is a blank label in one language (scope §9).
       - name: the i18n catalogues have the same keys

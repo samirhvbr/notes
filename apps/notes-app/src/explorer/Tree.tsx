@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useWorkspace } from "../stores/workspace";
 import { useEditor } from "../stores/editor";
 import { t } from "../i18n";
+import { askConfirm, askText } from "../app/dialog";
 import * as ipc from "../ipc";
 import { ROOT, type Entry, type RelPath } from "../ipc";
 
@@ -122,7 +123,13 @@ function Actions({
 
   const rename = () =>
     run(async () => {
-      const name = window.prompt(t("tree.rename.prompt"), entry.name);
+      const name = await askText({
+        title: t("tree.rename"),
+        label: t("tree.rename.prompt"),
+        initial: entry.name,
+        confirmLabel: t("dialog.rename"),
+        validate: (v) => (v.trim() ? null : t("dialog.nameRequired")),
+      });
       if (!name || name === entry.name) return;
       const moved = await ipc.entryRename(entry.path, name);
       await refresh(parent);
@@ -132,7 +139,12 @@ function Actions({
 
   const move = () =>
     run(async () => {
-      const dir = window.prompt(t("tree.move.prompt"), parent);
+      const dir = await askText({
+        title: t("tree.move"),
+        label: t("tree.move.prompt"),
+        initial: parent,
+        confirmLabel: t("dialog.move"),
+      });
       if (dir === null) return;
       const target = (dir.trim() === "/" ? "" : dir.trim()) as RelPath;
       const moved = await ipc.entryMove(entry.path, target);
@@ -150,7 +162,13 @@ function Actions({
 
   const remove = () =>
     run(async () => {
-      if (!window.confirm(t("tree.delete.confirm", { name: entry.name }))) return;
+      const sure = await askConfirm({
+        title: t("tree.delete"),
+        body: t("tree.delete.confirm", { name: entry.name }),
+        confirmLabel: t("dialog.delete"),
+        danger: true,
+      });
+      if (!sure) return;
       const gone = await ipc.entryDelete(entry.path);
       await refresh(parent);
       const doc = useEditor.getState().doc;

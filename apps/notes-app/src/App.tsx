@@ -3,6 +3,8 @@ import { Editor } from "./editor/Editor";
 import { Tree } from "./explorer/Tree";
 import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
+import { Dialog } from "./app/Dialog";
+import { askText } from "./app/dialog";
 import { Preview } from "./preview/Preview";
 import { Compare } from "./conflict/Compare";
 import { t } from "./i18n";
@@ -93,7 +95,12 @@ export default function App() {
   }, [doc?.conflict, comparing, setComparing]);
 
   const newNote = useCallback(async () => {
-    const name = window.prompt(t("tree.newNote"));
+    const name = await askText({
+      title: t("tree.newNote"),
+      label: t("dialog.name"),
+      confirmLabel: t("dialog.create"),
+      validate: (v) => (v.trim() ? null : t("dialog.nameRequired")),
+    });
     if (!name) return;
     try {
       const e = await ipc.noteCreate(ipc.ROOT, name);
@@ -105,7 +112,12 @@ export default function App() {
   }, [refresh, fail]);
 
   const newFolder = useCallback(async () => {
-    const name = window.prompt(t("tree.newFolder"));
+    const name = await askText({
+      title: t("tree.newFolder"),
+      label: t("dialog.name"),
+      confirmLabel: t("dialog.create"),
+      validate: (v) => (v.trim() ? null : t("dialog.nameRequired")),
+    });
     if (!name) return;
     try {
       await ipc.dirCreate(ipc.ROOT, name);
@@ -208,6 +220,7 @@ export default function App() {
         </main>
       </div>
 
+      <Dialog />
       <StatusBar />
     </div>
   );

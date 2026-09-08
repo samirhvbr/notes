@@ -8,6 +8,37 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.4 - the six flows behind a dialog the WebView does not have
+
+`window.prompt` in five places and `window.confirm` in one: new note, new
+folder, the workspace name, rename, move and delete. **Those are a browser's
+blocking script dialogs, and the WebView this ships in is not a browser** —
+WebKitGTK, WKWebView and WebView2 each answer somewhere between "does nothing"
+and "blocks the WebView's own loop". Behind one of them a flow is dead without a
+sound.
+
+Six flows of the milestone that just shipped were behind one, and **no test could
+have caught it**: every 0.1b criterion is an assertion about `notes-core`, and
+these live only in the interface. `0.9.0` said it in one line — *nobody has
+launched the window* — and it took launching it to find them.
+
+They are replaced by the application's own modal: one surface, one at a time,
+promise-based, Escape cancels and Enter confirms because those are the keys the
+dialogs it replaces already taught. Focus moves in on open and **returns to
+whatever had it on close**, since a modal that strands keyboard navigation is a
+regression in an application that is keyboard-first. The text variant validates
+before resolving, so an empty name is refused in the dialog rather than by a
+round trip to the core.
+
+The native file picker stays native. Choosing a folder is the operating system's
+job, and that is the one dialog `@tauri-apps/plugin-dialog` should own.
+
+**`tools/no-blocking-dialogs.sh` fails the build if they come back**, in
+`npm run lint`, in `npm run build`, in `tools/check.sh` and in CI. It has **no
+exclusions** — which is why the file that documents the ban does not spell the
+tokens, rather than exempting itself. The rule was checked by putting one back:
+it bit.
+
 ## 0.9.3 - the git hooks are regenerated from repodocs
 
 Both hooks of the standard are rewritten from repodocs, and `tools/release.sh`

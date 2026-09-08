@@ -81,5 +81,13 @@
   "tree.delete.trashed": "{name} foi para a lixeira, então dá para trazer de volta.",
   "tree.delete.permanent": "{name} foi excluído em definitivo — este sistema de arquivos não tem lixeira.",
   "notice.dismiss": "Fechar",
-  "watch.degraded": "Mudanças feitas por outros programas aparecem a cada poucos segundos, não na hora: {reason}"
+  "watch.degraded": "Mudanças feitas por outros programas aparecem a cada poucos segundos, não na hora: {reason}",
+  "dialog.cancel": "Cancelar",
+  "dialog.create": "Criar",
+  "dialog.rename": "Renomear",
+  "dialog.move": "Mover",
+  "dialog.delete": "Excluir",
+  "dialog.name": "Nome",
+  "dialog.nameRequired": "É preciso dar um nome.",
+  "welcome.createName": "Nome da nova pasta"
 }

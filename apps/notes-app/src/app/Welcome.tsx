@@ -1,6 +1,7 @@
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
+import { askText } from "./dialog";
 import * as ipc from "../ipc";
 import { useWorkspace } from "../stores/workspace";
 import type { WorkspaceEntry } from "../ipc";
@@ -19,7 +20,13 @@ export function Welcome() {
     if (typeof picked !== "string") return;
     try {
       if (create) {
-        const name = window.prompt("Workspace name", "notes");
+        const name = await askText({
+          title: t("welcome.create"),
+          label: t("welcome.createName"),
+          initial: "notes",
+          confirmLabel: t("dialog.create"),
+          validate: (v) => (v.trim() ? null : t("dialog.nameRequired")),
+        });
         if (!name) return;
         await adopt(await ipc.workspaceCreate(picked, name));
       } else {

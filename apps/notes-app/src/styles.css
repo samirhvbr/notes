@@ -368,3 +368,49 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .cm-searchMatch { background: #3a2c1f; }
 .cm-searchMatch-selected { background: #5a4527; }
 .cm-selectionMatch { background: #2a3350; }
+
+/* ---- modal dialogs ----------------------------------------------------- */
+/* The application's own, because the WebView is not a browser and the script
+   dialogs it replaces are dead there (src/app/dialog.ts). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: #000000a8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 24px;
+}
+
+.dialog {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 16px 48px #00000080;
+  width: min(460px, 100%);
+  padding: 18px 20px 16px;
+}
+.dialog h2 { margin: 0 0 10px; font-size: 15px; font-weight: 600; }
+.dialog p { margin: 0 0 12px; color: var(--fg-dim); }
+.dialog label {
+  display: block;
+  font-size: 12px;
+  color: var(--fg-dim);
+  margin-bottom: 4px;
+}
+.dialog input {
+  width: 100%;
+  font: inherit;
+  color: var(--fg);
+  background: #131317;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+.dialog input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.dialog input[aria-invalid="true"] { border-color: var(--bad); }
+.dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.dialog .primary { border-color: var(--accent); }
+.dialog .danger { border-color: var(--bad); color: #ffd7dd; }
