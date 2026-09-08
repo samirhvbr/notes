@@ -8,6 +8,29 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.6 - the three things milestone 0.1a left in the queue
+
+Housekeeping, and one of the three is a rule this repository wrote about itself
+and then broke.
+
+**The scaffold row leaves the queue.** *"Scaffold milestone 0.1 — the Cargo
+workspace, `apps/notes-app/`, the first crates"* has described something that
+exists since `0.7.4`. The `QUEUE-RULE` says a document leaves when the thing it
+describes exists, and that removing it is **the last step of the commit that
+carries the work** — never a step of its own. It became a step of its own because
+`.continue/` was closed to that milestone's work, which is the right instruction
+and this is its cost, paid late.
+
+**`.continue/ARCHITECTURE.md` says on its first line that it is superseded** and
+names `docs/ARCHITECTURE.md`. It opened with *"PROPOSTA, aguardando revisão"* —
+a document that had been answered months of commits ago still asking to be read
+as current. Kept rather than deleted, because it is where the questions were
+asked and its §5 is the list the live document answered; a status line is the
+difference between a record and a trap.
+
+**Dependabot #1 is merged**: `actions/checkout` 5 → 7, open since the repository
+was created.
+
 ## 0.9.5 - the window that vanishes: instrumented, and one wrong claim withdrawn
 
 The owner clicked *Open Folder…* and the window disappeared. The process exited

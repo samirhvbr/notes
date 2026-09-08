@@ -1,6 +1,12 @@
 # ARCHITECTURE — Notes
 
-Documento **v0.1 — PROPOSTA, aguardando revisão**. 2026-09-07.
+> **SUPERSEDIDO — não construa contra este arquivo.** O documento vivo é
+> [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), alinhado ao
+> `SCOPE_final.md` v2.0 e `ACTIVE` desde o `0.7.0`. Este ficou como registro de
+> **onde as perguntas foram feitas** — o §5 abaixo é a lista que o documento
+> vivo respondeu.
+
+Documento **v0.1 — PROPOSTA**. 2026-09-07.
 
 Fecha as decisões que o `SCOPE_final.md` §20 delega a este arquivo, **na ordem em
 que o marco 0.1a precisa delas**. Cada seção traz as alternativas consideradas e
