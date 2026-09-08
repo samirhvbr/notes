@@ -13,6 +13,17 @@ pub const IGNORE_DEFAULT: &[&str] = &[".notes", ".git", ".obsidian", ".trash"];
 /// `extra` comes from `.notes/config.json` when the user turns portable
 /// settings on. **It extends the list and can never shrink it** — a config file
 /// that can unhide `.git/` is a foot-gun with no use case.
+/// The name-only half of the rule, for callers that have a name and no `Entry`
+/// — the search walk, which sees directory entries before it knows what they
+/// are.
+///
+/// It answers the part that never depends on a setting: `IGNORE_DEFAULT`, any
+/// dot-entry, and our own temporary files. Search does not offer "show hidden",
+/// because a hit inside `.git/` is never what was being looked for.
+pub fn is_hidden_name(name: &str) -> bool {
+    IGNORE_DEFAULT.contains(&name) || name.starts_with('.')
+}
+
 pub fn is_hidden(entry: &Entry, show_hidden: bool, extra: &[String]) -> bool {
     let name = entry.name.as_str();
     if IGNORE_DEFAULT.contains(&name) || extra.iter().any(|e| e == name) {

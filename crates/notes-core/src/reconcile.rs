@@ -501,6 +501,9 @@ impl super::WorkspaceService {
     /// Returns an empty result immediately when nothing has been seen and
     /// nothing is queued, so a poll loop costs a channel read.
     pub fn tick(&mut self, dirty: &[NoteId]) -> super::Result<Reconciled> {
+        // A file that appeared or vanished outside the app changes the tree
+        // as surely as one we renamed ourselves.
+        self.invalidate_paths();
         let paths = self.watched_paths();
         let queued = self
             .open()?
@@ -533,6 +536,9 @@ impl super::WorkspaceService {
     /// A full scan — what a window regaining focus, a tab switch or a manual
     /// refresh triggers (`ARCHITECTURE.md` §8).
     pub fn reconcile_all(&mut self, dirty: &[NoteId]) -> super::Result<Reconciled> {
+        // A file that appeared or vanished outside the app changes the tree
+        // as surely as one we renamed ourselves.
+        self.invalidate_paths();
         self.reconcile(&BTreeSet::new(), dirty)
     }
 

@@ -12,6 +12,7 @@ that lists everything stops being read.
 
 | Document | What it answers |
 |---|---|
+| [ACCEPTANCE-0.1c.md](ACCEPTANCE-0.1c.md) | **Milestone 0.1c's criteria, written from its first commit** — the two acceptance criteria and, from the same moment, the thirteen interface flows that no core test can reach. |
 | [ACCEPTANCE-0.1b.md](ACCEPTANCE-0.1b.md) | **Every 0.1b acceptance criterion against a named test or a documented manual step** — the watcher, identity across an external rename, the sanitizer census over `fixtures/xss/`, the trash — plus what the preview IR actually costs, measured, and the list of what nobody has looked at because the window has never been launched. |
 | [DECISIONS-0.1b.md](DECISIONS-0.1b.md) | **Calls made while building 0.1b** — including the two that were deliberately *not* made on the way past, because they touch a permission or a dependency and belong to the owner. |
 | [ACCEPTANCE-0.1a.md](ACCEPTANCE-0.1a.md) | **Every 0.1a acceptance criterion against a named test or a documented manual step**, with the measurements. All eight are met; the full-disk half of §5 became automated during 0.1b. |

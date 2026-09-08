@@ -13,6 +13,7 @@ pub mod paths;
 pub mod preview;
 pub mod reconcile;
 pub mod registry;
+pub mod search;
 pub mod settings;
 mod state;
 
@@ -158,12 +159,22 @@ struct Open {
     recon: std::sync::Mutex<reconcile::Recon>,
     /// The running watch, when the backend has one.
     watch: Option<notes_fs::Watch>,
+    /// Every note path in the workspace, for quick open.
+    ///
+    /// Built on first use and dropped whenever the tree changes — rebuilding a
+    /// 10 000-note list takes tens of milliseconds, and doing it per keystroke
+    /// is what would make `Ctrl+P` stop feeling instant.
+    paths: std::sync::Mutex<Option<Vec<RelPath>>>,
 }
 
 pub struct WorkspaceService {
     data_dir: PathBuf,
     open: Option<Open>,
     settings: Settings,
+    /// One search at a time. Starting another cancels the first, and dropping a
+    /// `Search` stops its walk — otherwise every keystroke in the search box
+    /// would leave a thread scanning the corpus for nobody.
+    search: Option<search::Search>,
 }
 
 impl WorkspaceService {
@@ -185,6 +196,7 @@ impl WorkspaceService {
             data_dir,
             open: None,
             settings,
+            search: None,
         })
     }
 
@@ -345,6 +357,7 @@ impl WorkspaceService {
             suspended: BTreeSet::new(),
             recon: std::sync::Mutex::new(reconcile::Recon::default()),
             watch: None,
+            paths: std::sync::Mutex::new(None),
         });
 
         Ok(WorkspaceInfo {
@@ -735,6 +748,9 @@ impl WorkspaceService {
     /// never enters identity correlation. Renaming a folder carries every note
     /// beneath it, for the same reason.
     pub fn rename_entry(&mut self, path: &RelPath, new_name: &str) -> Result<Entry> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         let parent = path.parent().ok_or_else(|| CoreError::InvalidPath {
             path: path.to_string(),
             reason: "the workspace root cannot be renamed from inside it".into(),
@@ -749,6 +765,9 @@ impl WorkspaceService {
     /// `ARCHITECTURE.md` §7.1 cannot arise here; it is left in the contract for
     /// the mobile adapters of 0.4, where it can.
     pub fn move_entry(&mut self, path: &RelPath, to_dir: &RelPath) -> Result<Entry> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         let name = path.file_name().to_string();
         let to = to_dir.join(&name)?;
         if to == *path {
@@ -818,6 +837,9 @@ impl WorkspaceService {
     /// *"criar/duplicar nunca sobrescreve destino existente"*, and the numbered
     /// fallback is what makes that keepable rather than a refusal.
     pub fn duplicate_entry(&mut self, path: &RelPath) -> Result<Entry> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         if self.open()?.read_only {
             return Err(CoreError::Unavailable {
                 root: self.open()?.registry.root.clone(),
@@ -912,6 +934,9 @@ impl WorkspaceService {
     /// with it leave the registry — their identity has nothing left to name —
     /// and the ids come back so open tabs can be closed.
     pub fn delete_entry(&mut self, path: &RelPath) -> Result<Deleted> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         if self.open()?.read_only {
             return Err(CoreError::Unavailable {
                 root: self.open()?.registry.root.clone(),
@@ -1229,6 +1254,9 @@ impl WorkspaceService {
     }
 
     pub fn create_note(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         // Validate what the user typed **before** the extension is appended.
         // Otherwise `trailing-dot.` becomes `trailing-dot..md`, which is legal
         // — so the app would silently accept a name it had just been asked to
@@ -1256,6 +1284,9 @@ impl WorkspaceService {
     }
 
     pub fn create_dir(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
+        // The tree is about to change shape; quick open must not offer a
+        // path that is no longer there.
+        self.invalidate_paths();
         let path = dir.join(name)?;
         self.check_name(name, &path)?;
         self.open()?.fs.create_dir(&path)?;
@@ -1289,6 +1320,79 @@ impl WorkspaceService {
                     path: path.to_string(),
                 });
             }
+        }
+        Ok(())
+    }
+
+    // ---- search (0.1c) --------------------------------------------------
+
+    /// Drop the quick-open path cache. Called by everything that changes the
+    /// shape of the tree, so `Ctrl+P` never offers a note that has been renamed
+    /// out from under it.
+    fn invalidate_paths(&self) {
+        if let Some(open) = self.open.as_ref() {
+            *open.paths.lock().unwrap() = None;
+        }
+    }
+
+    /// Every note path in the workspace, built once and cached.
+    fn note_paths(&self) -> Result<Vec<RelPath>> {
+        let open = self.open()?;
+        if let Some(cached) = open.paths.lock().unwrap().as_ref() {
+            return Ok(cached.clone());
+        }
+        let mut out = Vec::new();
+        collect_notes(&open.fs, &RelPath::root(), &open.extra_ignore, &mut out)?;
+        out.sort();
+        *open.paths.lock().unwrap() = Some(out.clone());
+        Ok(out)
+    }
+
+    /// Fuzzy match over paths, from memory. Reads no file and needs no index —
+    /// scope §10 keeps it independent of both the scanner and, at 0.2, of FTS5.
+    pub fn quick_open(&self, query: &str, limit: usize) -> Result<Vec<search::QuickMatch>> {
+        Ok(search::quick_match(&self.note_paths()?, query, limit))
+    }
+
+    /// Start a content search. **Starting one cancels the previous**, because
+    /// the caller is a search box and the previous query is no longer wanted.
+    pub fn search_start(
+        &mut self,
+        query: &str,
+        opts: search::SearchOpts,
+    ) -> Result<search::SearchId> {
+        let root = self.open()?.fs.root().to_path_buf();
+        // Dropping the old `Search` cancels its walk.
+        self.search = None;
+        let s = search::Search::start(&root, query, opts)?;
+        let id = s.id();
+        self.search = Some(s);
+        Ok(id)
+    }
+
+    /// Take the hits found since the last poll.
+    ///
+    /// An id that is not the running search answers `done` with nothing rather
+    /// than an error: by the time a late poll arrives the user has already typed
+    /// again, and that is not a failure.
+    pub fn search_poll(&self, id: search::SearchId) -> Result<search::SearchProgress> {
+        match self.search.as_ref() {
+            Some(s) if s.id() == id => Ok(s.poll()),
+            _ => Ok(search::SearchProgress {
+                id,
+                hits: Vec::new(),
+                files_scanned: 0,
+                total_hits: 0,
+                done: true,
+                cancelled: true,
+                truncated: false,
+            }),
+        }
+    }
+
+    pub fn search_cancel(&mut self, id: search::SearchId) -> Result<()> {
+        if self.search.as_ref().is_some_and(|s| s.id() == id) {
+            self.search = None;
         }
         Ok(())
     }
@@ -1329,6 +1433,26 @@ enum Resolution {
 /// Persist the registry. One place, so every caller writes it the same way.
 pub(crate) fn store_registry(dir: &Path, registry: &Registry) -> Result<()> {
     state::store(&paths::registry_file(dir), registry)
+}
+
+/// Collect every note path under `dir`, honouring the workspace's ignore rules.
+fn collect_notes(
+    fs: &LocalFs,
+    dir: &RelPath,
+    extra: &[String],
+    out: &mut Vec<RelPath>,
+) -> Result<()> {
+    for e in fs.list(dir)? {
+        if ignore::is_hidden(&e, false, extra) {
+            continue;
+        }
+        match e.kind {
+            notes_model::EntryKind::Dir => collect_notes(fs, &e.path, extra, out)?,
+            notes_model::EntryKind::File if e.is_note => out.push(e.path),
+            _ => {}
+        }
+    }
+    Ok(())
 }
 
 /// `.notes/config.json`'s `ignore` list, when the user has turned it on.

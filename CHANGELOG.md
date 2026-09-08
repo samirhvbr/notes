@@ -8,6 +8,48 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.9.10 - milestone 0.1c starts with search in the core, and its acceptance document
+
+**First result in `fixtures/large` in 11.4 ms, cancel in 650 ns** — two orders of
+magnitude under the criterion, measured over 10 000 notes and 197 MiB.
+
+The shape is what makes it hold rather than the language: the walk is parallel,
+hits are pushed **as they are found** instead of collected and returned at the
+end, and every worker reads the cancel flag before each file — so cancelling is
+bounded by one file, not by the workspace. Dropping a `Search` cancels it, which
+is why typing a second query cannot leave the first one scanning 197 MiB for
+nobody.
+
+Quick open is deliberately a **different thing** and not a cheap query over the
+same scanner: it matches paths from a list held in memory and never opens a
+file. The list is built once and dropped whenever the tree changes shape — every
+create, rename, move, duplicate, delete, and any reconciliation that saw a file
+appear or vanish. Rebuilding it for ten thousand notes costs tens of
+milliseconds, which is fine once and ruinous per keystroke. Its scoring is small
+and explainable rather than clever: a subsequence, a bonus for consecutive
+characters and for landing at the start of a segment, and the file name ranked
+ahead of the directory, because `Ctrl+P` is how someone reaches for a file they
+can name.
+
+Sixteen tests cover what the timing does not: a literal query is **not** read as
+a pattern (`(a.b)` finds `(a.b)`), regex mode is separate and named, case
+sensitivity is opt-in, an invalid pattern is refused instead of scanning for
+nothing, only notes are searched, `.git/` is never a hit, and — scope §10 —
+**search reads the disk, so a buffer typed and not saved is not reported as
+found.** A test asserts exactly that, because it is the fact the interface has to
+tell the user rather than let them infer.
+
+`docs/ACCEPTANCE-0.1c.md` exists **from this first commit**, with its "verified
+in the running app" section already written and **thirteen rows, none ticked**.
+0.1b shipped five green criteria over six dead flows because every criterion was
+an assertion about the core; a section that only appears once the work is
+finished is a section that agrees with whatever was built.
+
+`notes-index`, SQLite, FTS5 and the `registry.db` move are **not** in this
+milestone. §17 puts them at 0.2, §10 says the 0.1c search is a scan and that FTS5
+takes over word search at 0.2, and ADR-015 is `ACTIVE` saying the registry moves
+at 0.2. The acceptance document says so where a reader will look for it.
+
 ## 0.9.9 - the contracts job ran a suite twice and threw away the reason it failed
 
 CI went red on `contracts` while `rust (ubuntu-latest)` — which runs the same
