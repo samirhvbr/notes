@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use notes_core::{
-    Document, DraftChoice, DraftInfo, DraftReason, OpenedNote, Rendered, SaveResult, Session,
-    Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
+    ConflictChoice, Conflicts, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote, Rendered,
+    SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
 };
 use notes_model::{BaseRev, CoreError, Entry, NoteId, RelPath};
 use serde::Serialize;
@@ -140,6 +140,53 @@ pub fn note_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> 
 #[tauri::command]
 pub fn dir_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> {
     svc(&app)?.create_dir(&dir, &name)
+}
+
+/// Re-read a note from disk. The caller decides when a buffer is clean enough
+/// to be replaced; this command does not.
+#[tauri::command]
+pub fn note_reload(app: State<'_, App>, note_id: NoteId) -> R<OpenedNote> {
+    svc(&app)?.reload_note(note_id)
+}
+
+/// Forget the per-note state a closed tab no longer needs. **Does not touch the
+/// draft** — a draft outlives the tab by design.
+#[tauri::command]
+pub fn note_close(app: State<'_, App>, note_id: NoteId) -> R<()> {
+    svc(&app)?.close_note(note_id)
+}
+
+/// Rewrite a note's line endings, because the user asked. The old bytes go to
+/// `conflicts/` first.
+#[tauri::command]
+pub fn note_convert_eol(
+    app: State<'_, App>,
+    note_id: NoteId,
+    eol: notes_model::Eol,
+) -> R<OpenedNote> {
+    svc(&app)?.convert_eol(note_id, eol)
+}
+
+// ---- conflicts ---------------------------------------------------------
+
+/// Keep mine · use the disk's · save as a copy. **"Compare" is not here**: it
+/// changes nothing on disk and reads two strings the frontend already holds, so
+/// it is a screen rather than a command (`docs/ARCHITECTURE.md` §17.1).
+#[tauri::command]
+pub fn conflict_resolve(
+    app: State<'_, App>,
+    note_id: NoteId,
+    text: String,
+    base_rev: BaseRev,
+    choice: ConflictChoice,
+) -> R<OpenedNote> {
+    svc(&app)?.resolve_conflict(note_id, &text, &base_rev, choice)
+}
+
+/// Everything kept in `conflicts/`, and what it costs on disk.
+#[tauri::command]
+pub fn conflict_list(app: State<'_, App>) -> R<Conflicts> {
+    svc(&app)?.list_conflicts()
 }
 
 // ---- markdown ----------------------------------------------------------

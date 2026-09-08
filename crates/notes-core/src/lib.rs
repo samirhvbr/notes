@@ -5,6 +5,7 @@
 //! closed, and what lets every rule below be tested with `cargo test` and no
 //! Tauri (`ARCHITECTURE.md` §14).
 
+pub mod conflicts;
 pub mod drafts;
 pub mod ignore;
 mod lock;
@@ -25,6 +26,7 @@ use notes_model::{
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+pub use conflicts::{ConflictChoice, ConflictSnapshot, Conflicts, Side};
 pub use drafts::{DraftInfo, DraftReason};
 pub use preview::{Asset, Document, Rendered};
 pub use registry::{Registry, WorkspaceEntry, WorkspacesIndex};
@@ -269,6 +271,13 @@ impl WorkspaceService {
         state::store(&paths::workspaces_index(&self.data_dir), &index)?;
         if !read_only {
             state::store(&paths::registry_file(&dir), &registry)?;
+        }
+
+        // Prune resolved conflict snapshots on the way in, once per open. It
+        // reads directory entries and their timestamps and nothing else, so it
+        // costs nothing on a workspace that has never had a conflict.
+        if !read_only {
+            conflicts::prune(&dir, self.settings.files.conflict_retention_days);
         }
 
         let extra_ignore = read_portable_ignore(fs.root());
@@ -660,6 +669,286 @@ impl WorkspaceService {
             .is_some_and(|o| o.suspended.contains(&note_id))
     }
 
+    // ---- conflicts ------------------------------------------------------
+
+    /// Take a note out of conflict, keeping the version that was not chosen.
+    ///
+    /// **"Compare" is not here, and that is deliberate** — `ARCHITECTURE.md`
+    /// §17.1 settled it: comparing changes nothing on disk and reads two strings
+    /// the frontend is already holding, so it is a screen rather than a command.
+    /// The three that *do* something are below, and each one writes the version
+    /// it is discarding into `conflicts/` **before** it acts (§4.3). Resolving a
+    /// conflict is the one moment a user can lose a morning by answering a
+    /// dialog quickly.
+    ///
+    /// `SaveAsCopy` returns the **copy**, opened: the tab the user was typing in
+    /// goes on holding their text, which is now a file of its own, and the note
+    /// they were editing is left exactly as the other program wrote it.
+    pub fn resolve_conflict(
+        &mut self,
+        note_id: NoteId,
+        text: &str,
+        base_rev: &BaseRev,
+        choice: ConflictChoice,
+    ) -> Result<OpenedNote> {
+        let (dir, path) = {
+            let open = self.open()?;
+            if open.read_only {
+                return Err(CoreError::ReadOnly {
+                    note_id,
+                    reason: ReadOnlyReason::Workspace,
+                });
+            }
+            let rec = open
+                .registry
+                .record(note_id)
+                .ok_or_else(|| CoreError::NotFound {
+                    path: note_id.to_string(),
+                })?;
+            (open.dir.clone(), rec.path.clone())
+        };
+
+        let mut guard = lock::acquire(&paths::lock_file(&dir))?;
+        let resolved = guard.with(|| -> Result<Resolution> {
+            let open = self.open.as_ref().expect("checked above");
+            let disk = open.fs.read(&path).ok();
+            let disk_rev = disk.as_ref().map(|b| BaseRev {
+                size: b.len() as u64,
+                mtime_ns: open.fs.stat(&path).map(|s| s.mtime_ns).unwrap_or(0),
+                hash: notes_fs::hash(b),
+            });
+            // The shape the file has *now* decides the bytes written, exactly as
+            // in `save_note`: the disk is the authority on what the file is.
+            let profile = match &disk {
+                Some(b) => TextProfile::detect(b).0,
+                None => TextProfile {
+                    encoding: notes_model::Encoding::Utf8,
+                    bom: false,
+                    eol: notes_model::Eol::Lf,
+                    final_newline: text.ends_with('\n'),
+                },
+            };
+            if let (Some(reason), true) = (profile.read_only_reason(), disk.is_some()) {
+                return Err(CoreError::ReadOnly { note_id, reason });
+            }
+            let rev = disk_rev.clone().unwrap_or_else(|| base_rev.clone());
+
+            match choice {
+                ConflictChoice::KeepLocal => {
+                    if let Some(bytes) = &disk {
+                        conflicts::snapshot(
+                            &dir,
+                            note_id,
+                            &path,
+                            conflicts::Side::Disk,
+                            &rev,
+                            choice,
+                            bytes,
+                        )?;
+                    }
+                    // `expect: None` on purpose. The user has just been shown
+                    // both versions and said which one wins; re-checking the
+                    // base revision here would refuse the very thing they
+                    // answered. Everything they are overwriting is in
+                    // `conflicts/` one line above.
+                    let encoded = profile.encode(text);
+                    match open.fs.write_atomic(&path, &encoded, None) {
+                        Ok(_) => {}
+                        Err(CoreError::Io {
+                            kind: notes_model::IoKind::NotFound,
+                            ..
+                        }) => {
+                            // Removed externally. `KeepLocal` is the user asking
+                            // for it back, which is the only circumstance in
+                            // which this application recreates a path it did not
+                            // create (scope §12 forbids doing it *on its own*).
+                            open.fs.create_new(&path, &encoded)?;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                    Ok(Resolution::Reopen(path.clone()))
+                }
+
+                ConflictChoice::UseDisk => {
+                    conflicts::snapshot(
+                        &dir,
+                        note_id,
+                        &path,
+                        conflicts::Side::Local,
+                        base_rev,
+                        choice,
+                        text.as_bytes(),
+                    )?;
+                    if disk.is_none() {
+                        // Accepting a deletion. The buffer is safe in
+                        // `conflicts/`, and the tab has nothing left to show.
+                        return Ok(Resolution::Gone);
+                    }
+                    Ok(Resolution::Reopen(path.clone()))
+                }
+
+                ConflictChoice::SaveAsCopy => {
+                    let copy = self.copy_name(&path)?;
+                    open.fs.create_new(&copy, &profile.encode(text))?;
+                    Ok(Resolution::Reopen(copy))
+                }
+            }
+        })??;
+
+        // Whatever happened, this note is no longer suspended and its draft has
+        // served its purpose: the buffer is on disk, or in `conflicts/`, or
+        // both.
+        let open = self.open_mut()?;
+        open.suspended.remove(&note_id);
+        drafts::discard(&paths::drafts_dir(&dir), note_id)?;
+
+        match resolved {
+            Resolution::Reopen(p) => self.open_note(&p),
+            Resolution::Gone => Err(CoreError::NotFound {
+                path: path.to_string(),
+            }),
+        }
+    }
+
+    /// `nome (local).md`, or `nome (local 2).md` when that is taken.
+    ///
+    /// Scope §12 names the first form. The numbered fallback exists because
+    /// `create_new` never overwrites, and a second conflict on the same note
+    /// otherwise has nowhere to go.
+    fn copy_name(&self, path: &RelPath) -> Result<RelPath> {
+        let parent = path.parent().unwrap_or_else(RelPath::root);
+        let name = path.file_name();
+        let (stem, ext) = match name.rfind('.') {
+            Some(i) if i > 0 => (&name[..i], &name[i..]),
+            _ => (name, ""),
+        };
+        for n in 1..1000 {
+            let candidate = if n == 1 {
+                format!("{stem} (local){ext}")
+            } else {
+                format!("{stem} (local {n}){ext}")
+            };
+            let rel = parent.join(&candidate)?;
+            if self.check_collision(&rel).is_ok() {
+                return Ok(rel);
+            }
+        }
+        Err(CoreError::AlreadyExists {
+            path: format!("{stem} (local …){ext}"),
+        })
+    }
+
+    /// Everything kept in `conflicts/`, and what it costs.
+    pub fn list_conflicts(&self) -> Result<Conflicts> {
+        Ok(conflicts::list(&self.open()?.dir))
+    }
+
+    // ---- reload, close, convert -----------------------------------------
+
+    /// Re-read a note from disk, discarding nothing: the caller decides when a
+    /// buffer is clean enough to be replaced. Reconciliation calls it after an
+    /// external change to a note whose buffer has no edits (§8).
+    pub fn reload_note(&mut self, note_id: NoteId) -> Result<OpenedNote> {
+        let path = self
+            .open()?
+            .registry
+            .record(note_id)
+            .ok_or_else(|| CoreError::NotFound {
+                path: note_id.to_string(),
+            })?
+            .path
+            .clone();
+        self.open_note(&path)
+    }
+
+    /// Forget the per-note state a closed tab no longer needs.
+    ///
+    /// **The draft is not touched.** A draft outlives the tab on purpose: it is
+    /// removed by a confirmed write or by the user saying discard, and by
+    /// nothing else (§4.2).
+    pub fn close_note(&mut self, note_id: NoteId) -> Result<()> {
+        self.open_mut()?.suspended.remove(&note_id);
+        Ok(())
+    }
+
+    /// Rewrite a note's line endings, **because the user asked**.
+    ///
+    /// This is the one command in the application that changes a file the user
+    /// did not edit, and it exists for one situation: a mixed-EOL note opens
+    /// read-only (`ReadOnlyReason::MixedEol`), and without a way to convert it
+    /// the application would be refusing to edit a file while offering no way
+    /// forward. The old bytes go to `conflicts/` first, so an unwanted
+    /// conversion is recoverable like any other resolution.
+    pub fn convert_eol(&mut self, note_id: NoteId, eol: notes_model::Eol) -> Result<OpenedNote> {
+        if eol == notes_model::Eol::Mixed {
+            return Err(CoreError::InvalidPath {
+                path: note_id.to_string(),
+                reason: "mixed line endings are what conversion exists to remove".into(),
+            });
+        }
+        let (dir, path) = {
+            let open = self.open()?;
+            if open.read_only {
+                return Err(CoreError::ReadOnly {
+                    note_id,
+                    reason: ReadOnlyReason::Workspace,
+                });
+            }
+            let rec = open
+                .registry
+                .record(note_id)
+                .ok_or_else(|| CoreError::NotFound {
+                    path: note_id.to_string(),
+                })?;
+            (open.dir.clone(), rec.path.clone())
+        };
+
+        let mut guard = lock::acquire(&paths::lock_file(&dir))?;
+        guard.with(|| -> Result<()> {
+            let open = self.open.as_ref().expect("checked above");
+            let bytes = open.fs.read(&path)?;
+            let (profile, text) = TextProfile::detect(&bytes);
+            // A file that is not UTF-8 has no line endings to convert; guessing
+            // an encoding is what scope §7.5 forbids.
+            let Some(text) = text else {
+                return Err(CoreError::ReadOnly {
+                    note_id,
+                    reason: ReadOnlyReason::NotUtf8,
+                });
+            };
+            let rev = BaseRev {
+                size: bytes.len() as u64,
+                mtime_ns: open.fs.stat(&path)?.mtime_ns,
+                hash: notes_fs::hash(&bytes),
+            };
+            conflicts::snapshot(
+                &dir,
+                note_id,
+                &path,
+                conflicts::Side::Disk,
+                &rev,
+                ConflictChoice::KeepLocal,
+                &bytes,
+            )?;
+            // **`detect` does not normalise a mixed file**, and that is the
+            // one thing this function has to know: it rewrites `\r\n` only when
+            // the whole file is CRLF, because for every other profile the
+            // editor's text and the file's text agree. A mixed file is the
+            // exception, so the flattening happens here — `\r\n` first, then the
+            // lone `\r`s that made it mixed in the first place.
+            let flat = text.replace("\r\n", "\n").replace('\r', "\n");
+            let target = TextProfile {
+                eol,
+                final_newline: flat.ends_with('\n'),
+                ..profile
+            };
+            open.fs.write_atomic(&path, &target.encode(&flat), None)?;
+            Ok(())
+        })??;
+
+        self.open_note(&path)
+    }
+
     pub fn create_note(&mut self, dir: &RelPath, name: &str) -> Result<Entry> {
         // Validate what the user typed **before** the extension is appended.
         // Otherwise `trailing-dot.` becomes `trailing-dot..md`, which is legal
@@ -748,6 +1037,13 @@ impl WorkspaceService {
         self.settings = s;
         Ok(())
     }
+}
+
+/// What `resolve_conflict` decided to do once the lock is released.
+enum Resolution {
+    Reopen(RelPath),
+    /// The note is gone and the user accepted that.
+    Gone,
 }
 
 /// Persist the registry. One place, so every caller writes it the same way.

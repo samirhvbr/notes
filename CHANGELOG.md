@@ -197,6 +197,55 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.8.2 - the three ways out of a conflict, each keeping the version it did not choose
+
+Scope §12 lists four resolutions — *comparar · manter o meu · usar o do disco ·
+salvar como `nome (local).md`* — and `ARCHITECTURE.md` §17.1 had already settled
+that **compare is not one of them**: it changes nothing on disk and reads two
+strings the frontend is already holding, so it is a screen rather than a
+command. The other three are `conflict_resolve` now.
+
+**The rule they share is the reason the module exists.** Resolving a conflict is
+the one moment a user can lose a morning by answering a dialog quickly, so the
+version they did not choose is written to `conflicts/` *before* anything else
+happens: `KeepLocal` snapshots the disk and then overwrites it, `UseDisk`
+snapshots the buffer and then throws it away, `SaveAsCopy` writes the buffer to
+`nota (local).md` and leaves the note exactly as the other program wrote it —
+numbered `nota (local 2).md` when that name is taken, because `create_new` never
+overwrites and a second conflict has to have somewhere to go.
+
+`KeepLocal` passes no `base_rev` to the write, deliberately: the user has just
+been shown both versions and said which one wins, and re-checking the revision
+there would refuse the very thing they answered.
+
+**The removal case both ways.** A note deleted externally with a dirty buffer:
+`KeepLocal` recreates it — the only circumstance in which this application
+recreates a path it did not create, and only because the user asked — and
+`UseDisk` accepts the deletion, keeps the buffer in `conflicts/` anyway, and
+returns `NotFound` so the tab can close.
+
+`note_convert_eol` arrives with them, and it is the one command in this
+application that rewrites a file the user did not edit. It exists for one
+situation: a mixed-EOL note opens read-only, and without a conversion the
+application would be refusing to edit a file while offering no way forward. The
+old bytes go to `conflicts/` first. It found a real trap on the way —
+`TextProfile::detect` normalises `\r\n` only when the *whole* file is CRLF, so a
+mixed file reaches the caller with its endings intact and the flattening has to
+happen in the conversion itself.
+
+`conflicts/` follows §4.3: `<NoteId>/<iso-ts>-<local|disk>.md` with a sidecar,
+colons stripped from the timestamp because they are legal on ext4 and illegal on
+NTFS. Resolved snapshots are pruned after `files.conflict_retention_days` (30,
+`serde(default)` so an older `settings.json` still loads at schema 1), **`0`
+means keep them** rather than delete them all, and the 200 MB warning says so
+and deletes nothing — making room by throwing away the only copy of something a
+user wrote is the failure the directory exists to prevent. An *unresolved*
+conflict is a draft, and nothing prunes those.
+
+`note_reload` and `note_close` land with them: reload re-reads from disk and
+lets the caller decide when a buffer may be replaced, and close lifts the
+suspension while **leaving the draft alone** — a draft outlives its tab.
+
 ## 0.8.1 - the preview IR crosses the IPC, and the measurement that says it may
 
 `markdown_render`, `markdown_outline` and `markdown_trust_set` are commands

@@ -12,7 +12,11 @@ import type { DocStatus } from "./generated/DocStatus";
 import type { DraftChoice } from "./generated/DraftChoice";
 import type { DraftInfo } from "./generated/DraftInfo";
 import type { DraftReason } from "./generated/DraftReason";
+import type { ConflictChoice } from "./generated/ConflictChoice";
+import type { ConflictSnapshot } from "./generated/ConflictSnapshot";
+import type { Conflicts } from "./generated/Conflicts";
 import type { Document } from "./generated/Document";
+import type { Eol } from "./generated/Eol";
 import type { Heading } from "./generated/Heading";
 import type { Link } from "./generated/Link";
 import type { LinkKind } from "./generated/LinkKind";
@@ -30,9 +34,10 @@ import type { WorkspaceInfo } from "./generated/WorkspaceInfo";
 import type { WorkspaceEntry } from "./generated/WorkspaceEntry";
 
 export type {
-  BaseRev, CoreError, DocStatus, DraftChoice, DraftInfo, DraftReason, Document,
-  Entry, Heading, Link, LinkKind, NoteId, OpenedNote, RelPath, Rendered,
-  SaveResult, Session, Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
+  BaseRev, ConflictChoice, ConflictSnapshot, Conflicts, CoreError, DocStatus,
+  DraftChoice, DraftInfo, DraftReason, Document, Entry, Eol, Heading, Link,
+  LinkKind, NoteId, OpenedNote, RelPath, Rendered, SaveResult, Session,
+  Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
 };
 
 /** Diagnostics, and the only shape here that is not generated. */
@@ -86,6 +91,34 @@ export const noteFlush = (
   bufferVersion: number,
   baseRev: BaseRev,
 ) => invoke<SaveResult>("note_flush", { noteId, text, bufferVersion, baseRev });
+/** Re-read a note from disk. The caller decides when a buffer may be replaced. */
+export const noteReload = (noteId: NoteId) =>
+  invoke<OpenedNote>("note_reload", { noteId });
+
+/** Forget the per-note state a closed tab no longer needs. Leaves the draft. */
+export const noteClose = (noteId: NoteId) => invoke<void>("note_close", { noteId });
+
+/** Rewrite a note's line endings, because the user asked. Keeps the old bytes. */
+export const noteConvertEol = (noteId: NoteId, eol: Eol) =>
+  invoke<OpenedNote>("note_convert_eol", { noteId, eol });
+
+/**
+ * Keep mine · use the disk's · save as a copy.
+ *
+ * **"Compare" is not a command.** It changes nothing on disk and reads two
+ * strings this frontend is already holding, so it is a screen
+ * (docs/ARCHITECTURE.md §17.1).
+ */
+export const conflictResolve = (
+  noteId: NoteId,
+  text: string,
+  baseRev: BaseRev,
+  choice: ConflictChoice,
+) => invoke<OpenedNote>("conflict_resolve", { noteId, text, baseRev, choice });
+
+/** Everything kept in `conflicts/`, and what it costs on disk. */
+export const conflictList = () => invoke<Conflicts>("conflict_list");
+
 export const noteCreate = (dir: RelPath, name: string) =>
   invoke<Entry>("note_create", { dir, name });
 export const dirCreate = (dir: RelPath, name: string) =>

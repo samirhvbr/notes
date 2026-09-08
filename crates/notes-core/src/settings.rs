@@ -18,6 +18,19 @@ pub struct FileSettings {
     #[ts(type = "number")]
     pub autosave_ms: u64,
     pub show_hidden: bool,
+    /// How long a **resolved** conflict's snapshots are kept
+    /// (`ARCHITECTURE.md` §4.3). An *unresolved* conflict is a draft and is
+    /// never pruned. `0` disables pruning, which is what a user typing a zero
+    /// into this field means — never "delete everything".
+    ///
+    /// `serde(default)` so a `settings.json` written before this field existed
+    /// still loads at schema 1 rather than being backed up and reset.
+    #[serde(default = "conflict_retention_days")]
+    pub conflict_retention_days: u32,
+}
+
+fn conflict_retention_days() -> u32 {
+    30
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -71,6 +84,7 @@ impl Default for Settings {
             files: FileSettings {
                 autosave_ms: 750,
                 show_hidden: false,
+                conflict_retention_days: conflict_retention_days(),
             },
             markdown: MarkdownSettings {
                 default_view: "source".into(),
