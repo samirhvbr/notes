@@ -197,6 +197,15 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.9.2 - the acceptance document says the matrix is green, because now it is
+
+`ACCEPTANCE-0.1b.md` was written while CI was still red and said so: *"no CI run
+exists for this milestone yet"*. The `0.9.1` fix made the matrix green on all
+four platforms, which made that line wrong an hour after it was written. It now
+says what happened, including that the Linux leg had been red since `0.7.5` —
+scope §19's *"sem verde nos quatro, marco desktop não fecha"* is satisfied by
+that run, not by a document claiming it.
+
 ## 0.9.1 - the ENOSPC test needed the one privilege the runner has
 
 CI had been red on the Linux leg since `0.7.5`, and on that leg alone: Windows,

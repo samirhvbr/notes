@@ -19,7 +19,9 @@
 | 5 | Resto do escopo: rename/move/duplicate/delete, watcher, reconciliação | **feito** — `0.8.4` e `0.8.5` |
 | 6 | `docs/ACCEPTANCE-0.1b.md` | **feito** — `0.9.0` |
 
-**O marco fechou em `0.9.0`.** Este arquivo some no commit seguinte, ou fica
+**O marco fechou em `0.9.0`, e a matriz ficou verde nos quatro em `0.9.1`** —
+o passo do ENOSPC estava vermelho no Linux desde o `0.7.5` porque o runner do
+GitHub proíbe user namespace não privilegiado. Regra do §19 do scope cumprida. Este arquivo some no commit seguinte, ou fica
 como registro se o Samir preferir. O que ficou por verificar está em
 `docs/ACCEPTANCE-0.1b.md`, seção *Not verified* — em uma linha: **ninguém abriu
 a janela**.

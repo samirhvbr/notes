@@ -28,7 +28,8 @@ Every result below comes from the core, the corpora and `vitest`. What that
 leaves unverified is listed under *Not verified*, in the same terms 0.1a used,
 and it is the reason criterion 1 is qualified rather than ticked.
 
-`cargo test --workspace` is **262 tests**; `npm test` is 8.
+`cargo test --workspace` is **262 tests**; `npm test` is 8. The CI matrix is
+green on Ubuntu, macOS, Windows and Arch as of `0.9.1`.
 
 ---
 
@@ -227,9 +228,15 @@ again if anyone complains.
   inspection only.
 - **The trash has never been looked at in a file manager**, as §5 says.
 - **`fixtures/xss/` has never been rendered in a WebView**, as §4 says.
-- **No CI run exists for this milestone yet.** The local gate — `tools/check.sh`
-  — is green, including the Windows cross-check and the ENOSPC test; the matrix
-  on macOS, Windows and Arch has not run on this code.
+- ~~No CI run exists for this milestone yet.~~ **The matrix is green on all
+  four platforms as of `0.9.1`** — Ubuntu, macOS, Windows and the Arch container
+  against rolling `webkit2gtk-4.1` — plus the contracts job, the frontend job
+  (typecheck, `vitest`, build) and the 1 000-round crash loop. It took a
+  correction: the Linux leg had been red since `0.7.5` on the ENOSPC step alone,
+  because a GitHub runner forbids the unprivileged user namespace the test
+  mounts its filesystem in. That is the `0.9.1` entry in `CHANGELOG.md`, and the
+  scope §19 rule — *"sem verde nos quatro, marco desktop não fecha"* — is
+  satisfied by that run rather than by this one being written.
 - **Milestone 0.0 remains open**, on hardware this machine does not have
   ([SPIKE-0.0.md](SPIKE-0.0.md)). It is orthogonal to this milestone and blocks
   nothing here.
