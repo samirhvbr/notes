@@ -16,6 +16,12 @@ interface WorkspaceState {
   toggle: (dir: RelPath) => Promise<void>;
   refresh: (dir: RelPath) => Promise<void>;
   fail: (e: unknown) => void;
+  /** A short, non-error message — "moved to the trash", "duplicated as …".
+   *  Scope §7.7 requires the application to *say* which of two things it did,
+   *  and an error banner is the wrong shape for something that went right. */
+  notice: string | null;
+  note: (message: string) => void;
+  clearNote: () => void;
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
@@ -24,7 +30,11 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   expanded: new Set(),
   error: null,
 
+  notice: null,
+
   fail: (e) => set({ error: ipc.asCoreError(e) }),
+  note: (notice) => set({ notice }),
+  clearNote: () => set({ notice: null }),
 
   async restore() {
     try {

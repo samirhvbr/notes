@@ -292,14 +292,34 @@ impl FileSystem for LocalFs {
         fs::rename(&a, &b).map_err(|e| CoreError::io("rename", from, &e))
     }
 
+    /// Move to the operating system's trash when the backend has one, and say
+    /// which of the two happened.
+    ///
+    /// **The fallback is never silent** (scope §7.7): a delete that could not be
+    /// undone and one that can are different events, and `DeleteOutcome` is what
+    /// the UI has to show. `caps.trash` is the workspace's answer to *is there a
+    /// bin here* — a removable exFAT stick and a network share have none — and
+    /// a `trash` call that fails anyway degrades to a permanent delete rather
+    /// than refusing, because the user asked for the file to go.
     fn delete(&self, path: &RelPath) -> Result<DeleteOutcome> {
         let abs = self.resolve(path)?;
-        // No trash crate at 0.1a: `entry_delete` is a 0.1b command. Reporting
-        // `Permanent` is the honest answer for what this does, and scope §7.7
-        // forbids a silent fallback — the caller must show which one happened.
+        // `symlink_metadata` first: it proves the entry exists *and* refuses to
+        // follow a link, which matters more here than anywhere else.
         let meta = fs::symlink_metadata(&abs).map_err(|e| CoreError::io("stat", path, &e))?;
+
+        if self.caps.trash {
+            match trash::delete(&abs) {
+                Ok(()) => return Ok(DeleteOutcome::Trashed),
+                Err(e) => {
+                    // No bin on this backend, no session bus, a root-owned
+                    // container: all real, none of them a reason to refuse.
+                    eprintln!("[notes] trash unavailable for {path}: {e}");
+                }
+            }
+        }
+
         let r = if meta.is_dir() {
-            fs::remove_dir(&abs)
+            fs::remove_dir_all(&abs)
         } else {
             fs::remove_file(&abs)
         };

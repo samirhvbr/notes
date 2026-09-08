@@ -40,6 +40,14 @@ interface EditorState {
   resolveConflict: (choice: ConflictChoice) => Promise<void>;
   /** Rewrite this note's line endings, because the user asked. */
   convertEol: (eol: Eol) => Promise<void>;
+  /** Follow a rename or a move the application performed.
+   *
+   *  The `NoteId` did not change — the core updated the registry directly and
+   *  identity correlation was never involved — so the buffer, the cursor and
+   *  the dirty state stay exactly as they were and only the path moves. That is
+   *  scope §17's *"rename via app não reseta aba/cursor/id"* on this side of the
+   *  IPC. */
+  repath: (from: RelPath, to: RelPath) => void;
   close: () => void;
   setAutosave: (ms: number) => void;
 }
@@ -183,6 +191,19 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (!doc) return;
     if (debounce) clearTimeout(debounce);
     set({ doc: fromOpened(await ipc.noteConvertEol(doc.noteId, eol)) });
+  },
+
+  repath(from, to) {
+    const doc = get().doc;
+    if (!doc) return;
+    if (doc.path === from) {
+      set({ doc: { ...doc, path: to } });
+      return;
+    }
+    // The note was inside a folder that moved.
+    if (doc.path.startsWith(`${from}/`)) {
+      set({ doc: { ...doc, path: (to + doc.path.slice(from.length)) as RelPath } });
+    }
   },
 
   close() {

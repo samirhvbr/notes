@@ -141,6 +141,67 @@ impl Registry {
     pub fn record(&self, id: NoteId) -> Option<&NoteRecord> {
         self.notes.get(&id)
     }
+
+    /// Move every record under `from` to sit under `to`, **keeping its
+    /// `NoteId`**.
+    ///
+    /// This is what makes a rename in the application not reset a tab: scope
+    /// §17's 0.1b criterion is *"rename via app não reseta aba/cursor/id"*, and
+    /// `ARCHITECTURE.md` §9 says a rename the app performs itself never enters
+    /// identity correlation — it updates the registry directly, which is here.
+    ///
+    /// Renaming a **directory** moves every note beneath it, which is why this
+    /// takes a prefix rather than a path: the notes inside a folder the user
+    /// renamed did not change, and giving them new ids would lose their history
+    /// for a reason invisible to the person who did it.
+    ///
+    /// Returns the ids that moved.
+    pub fn repath(&mut self, from: &RelPath, to: &RelPath) -> Vec<NoteId> {
+        let from_s = from.as_str();
+        let mut moved = Vec::new();
+        for (id, rec) in self.notes.iter_mut() {
+            let p = rec.path.as_str();
+            let renamed = if p == from_s {
+                Some(to.as_str().to_string())
+            } else if let Some(rest) = p.strip_prefix(from_s) {
+                // Only a real path boundary: `arquivo2/x.md` does not live
+                // inside `arquivo/`, and a naive prefix test would move it.
+                rest.strip_prefix('/')
+                    .map(|rest| format!("{}/{}", to.as_str(), rest))
+            } else {
+                None
+            };
+            if let Some(next) = renamed {
+                if let Ok(next) = RelPath::parse(&next) {
+                    rec.path = next;
+                    rec.last_seen = crate::now();
+                    moved.push(*id);
+                }
+            }
+        }
+        moved
+    }
+
+    /// Drop every record at or under `path`. Used by delete, where the file is
+    /// gone and the identity has nothing left to name.
+    ///
+    /// Returns the ids that were dropped, so the UI can close their tabs.
+    pub fn forget(&mut self, path: &RelPath) -> Vec<NoteId> {
+        let p = path.as_str();
+        let gone: Vec<NoteId> = self
+            .notes
+            .iter()
+            .filter(|(_, r)| {
+                let q = r.path.as_str();
+                q == p || q.strip_prefix(p).is_some_and(|rest| rest.starts_with('/'))
+            })
+            .map(|(id, _)| *id)
+            .collect();
+        for id in &gone {
+            self.notes.remove(id);
+        }
+        gone
+    }
 }
 
 /// The global index. `last_workspace` is an addition to `ARCHITECTURE.md` §4's

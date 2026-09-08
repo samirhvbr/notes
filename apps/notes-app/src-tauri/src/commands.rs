@@ -9,8 +9,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use notes_core::{
-    ConflictChoice, Conflicts, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote, Rendered,
-    SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
+    ConflictChoice, Conflicts, Deleted, Document, DraftChoice, DraftInfo, DraftReason, OpenedNote,
+    Rendered, SaveResult, Session, Settings, WorkspaceEntry, WorkspaceInfo, WorkspaceService,
 };
 use notes_model::{BaseRev, CoreError, Entry, NoteId, RelPath};
 use serde::Serialize;
@@ -251,6 +251,36 @@ pub fn markdown_trust_set(
     remote_images: Option<bool>,
 ) -> R<()> {
     svc(&app)?.set_markdown_trust(raw_html, remote_images)
+}
+
+// ---- entries -----------------------------------------------------------
+
+/// Rename in place, **keeping the `NoteId`** — the tab and its cursor survive
+/// (scope §17). Renaming a folder carries every note beneath it.
+#[tauri::command]
+pub fn entry_rename(app: State<'_, App>, path: RelPath, new_name: String) -> R<Entry> {
+    svc(&app)?.rename_entry(&path, &new_name)
+}
+
+/// Move into another directory, keeping the name and the `NoteId`. A collision
+/// comes back as `AlreadyExists` naming what is in the way, so the interface can
+/// ask rather than guess.
+#[tauri::command]
+pub fn entry_move(app: State<'_, App>, path: RelPath, to_dir: RelPath) -> R<Entry> {
+    svc(&app)?.move_entry(&path, &to_dir)
+}
+
+/// Copy beside the original as `nome (copy).md`. Never overwrites, and the copy
+/// gets an identity of its own.
+#[tauri::command]
+pub fn entry_duplicate(app: State<'_, App>, path: RelPath) -> R<Entry> {
+    svc(&app)?.duplicate_entry(&path)
+}
+
+/// Delete, and say whether it went to the bin or not (scope §7.7).
+#[tauri::command]
+pub fn entry_delete(app: State<'_, App>, path: RelPath) -> R<Deleted> {
+    svc(&app)?.delete_entry(&path)
 }
 
 // ---- drafts ------------------------------------------------------------

@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 notes-model = { workspace = true }
 blake3 = { workspace = true }
+trash = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }

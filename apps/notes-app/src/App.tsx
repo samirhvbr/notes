@@ -19,6 +19,8 @@ export default function App() {
   const refresh = useWorkspace((s) => s.refresh);
   const fail = useWorkspace((s) => s.fail);
   const wsError = useWorkspace((s) => s.error);
+  const notice = useWorkspace((s) => s.notice);
+  const clearNote = useWorkspace((s) => s.clearNote);
   const doc = useEditor((s) => s.doc);
   const save = useEditor((s) => s.save);
   const keepDraft = useEditor((s) => s.keepDraft);
@@ -162,6 +164,15 @@ export default function App() {
             </div>
           )}
           {wsError && <div className="banner warn">{errorText(wsError)}</div>}
+          {/* Something went right and the user has to be told which of two
+              things it was — a delete that can be undone is not the same event
+              as one that cannot (scope §7.7). */}
+          {notice && (
+            <div className="banner">
+              <span>{notice}</span>
+              <button onClick={clearNote}>{t("notice.dismiss")}</button>
+            </div>
+          )}
 
           {comparing && doc?.conflict ? (
             <Compare />

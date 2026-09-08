@@ -265,3 +265,52 @@ in `lib.rs`, swap the `shell:allow-open` block in `capabilities/default.json` fo
 `shell_open` with `app.opener().open_url(&url, None::<&str>)`. The scheme check
 above it stays either way: the capability is what the WebView may ask for, and
 that check is what the process will do.
+
+---
+
+## D-10 — A duplicate is `nome (copy).md`, in ASCII, in every language
+
+**Decided.** `entry_duplicate` writes `nome (copy).md`, then
+`nome (copy 2).md`, and the word does not change with the interface locale.
+
+**Gap closed.** Scope §17's 0.1b criterion *"criar/duplicar nunca sobrescreve
+destino existente"* needs a name to write to, and the scope does not give one.
+
+**Why not `(cópia)`.** A filename that follows the interface language gives the
+same folder different names on two machines — the workspace is meant to be
+carried between them, put in Dropbox and cloned from Git, and a duplicate made
+on a Portuguese machine and one made on an English machine would be two files
+that mean the same thing and sort apart. The scope set the precedent itself:
+§12's resolution writes `nome (local).md`, not a translated word. ASCII also
+keeps the name portable to a filesystem that stores NFD.
+
+**Alternative if you disagree.** Change the `"copy"` argument in
+`duplicate_entry` — the helper already takes the word, because
+`nome (local).md` uses the same machinery. Making it locale-dependent means
+passing it from the frontend, which is the change you would have to accept along
+with it.
+
+---
+
+## D-11 — The trash is the `trash` crate, and a failure degrades loudly
+
+**Decided.** `LocalFs::delete` calls `trash::delete` when `caps.trash` says the
+backend has a bin, and falls back to a permanent delete when it does not or when
+the call fails. `DeleteOutcome` always says which happened, and the frontend
+shows a different sentence for each.
+
+**Gap closed.** `docs/DECISIONS-0.1a.md` D-08 recorded `Permanent` at 0.1a with
+"no trash crate yet", and `ARCHITECTURE.md` §11 promises a bin per backend.
+
+**Why the fallback exists at all.** A removable exFAT stick has no bin, a
+network share has no bin, a container with no session bus cannot reach the
+freedesktop one, and none of those is a reason to refuse a delete the user
+asked for. Scope §7.7 forbids the fallback being **silent**, not the fallback:
+"deleted permanently — this filesystem has no trash" is a different sentence
+from "moved to the trash, so it can be put back", and the user gets whichever
+one is true.
+
+**Alternative if you disagree.** Refuse the delete when the trash is
+unavailable and make the user confirm a permanent one. It is defensible and it
+is more clicks on every removable drive; the sentence above is the cheaper way
+to keep the same promise.

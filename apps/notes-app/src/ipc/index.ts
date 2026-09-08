@@ -15,6 +15,8 @@ import type { DraftReason } from "./generated/DraftReason";
 import type { ConflictChoice } from "./generated/ConflictChoice";
 import type { ConflictSnapshot } from "./generated/ConflictSnapshot";
 import type { Conflicts } from "./generated/Conflicts";
+import type { DeleteKind } from "./generated/DeleteKind";
+import type { Deleted } from "./generated/Deleted";
 import type { Document } from "./generated/Document";
 import type { Eol } from "./generated/Eol";
 import type { Heading } from "./generated/Heading";
@@ -34,10 +36,10 @@ import type { WorkspaceInfo } from "./generated/WorkspaceInfo";
 import type { WorkspaceEntry } from "./generated/WorkspaceEntry";
 
 export type {
-  BaseRev, ConflictChoice, ConflictSnapshot, Conflicts, CoreError, DocStatus,
-  DraftChoice, DraftInfo, DraftReason, Document, Entry, Eol, Heading, Link,
-  LinkKind, NoteId, OpenedNote, RelPath, Rendered, SaveResult, Session,
-  Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
+  BaseRev, ConflictChoice, ConflictSnapshot, Conflicts, CoreError, DeleteKind,
+  Deleted, DocStatus, DraftChoice, DraftInfo, DraftReason, Document, Entry, Eol,
+  Heading, Link, LinkKind, NoteId, OpenedNote, RelPath, Rendered, SaveResult,
+  Session, Settings, Span, Task, WorkspaceInfo, WorkspaceEntry,
 };
 
 /** Diagnostics, and the only shape here that is not generated. */
@@ -154,6 +156,21 @@ export const markdownTrustSet = (
   rawHtml: boolean | null,
   remoteImages: boolean | null,
 ) => invoke<void>("markdown_trust_set", { rawHtml, remoteImages });
+
+/** Rename in place, keeping the `NoteId` — the tab and its cursor survive. */
+export const entryRename = (path: RelPath, newName: string) =>
+  invoke<Entry>("entry_rename", { path, newName });
+
+/** Move into another directory. A collision is `AlreadyExists`, naming it. */
+export const entryMove = (path: RelPath, toDir: RelPath) =>
+  invoke<Entry>("entry_move", { path, toDir });
+
+/** Copy beside the original. Never overwrites; the copy is its own note. */
+export const entryDuplicate = (path: RelPath) =>
+  invoke<Entry>("entry_duplicate", { path });
+
+/** Delete, and say whether it went to the bin (scope §7.7). */
+export const entryDelete = (path: RelPath) => invoke<Deleted>("entry_delete", { path });
 
 export const draftWrite = (
   noteId: NoteId,

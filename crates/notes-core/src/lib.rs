@@ -28,6 +28,7 @@ use ts_rs::TS;
 
 pub use conflicts::{ConflictChoice, ConflictSnapshot, Conflicts, Side};
 pub use drafts::{DraftInfo, DraftReason};
+pub use notes_fs::DeleteOutcome;
 pub use preview::{Asset, Document, Rendered};
 pub use registry::{Registry, WorkspaceEntry, WorkspacesIndex};
 pub use settings::{Session, Settings, Tab};
@@ -87,6 +88,29 @@ pub enum SaveResult {
         #[ts(type = "number")]
         buffer_version: u64,
     },
+}
+
+/// Whether a delete can be undone from the operating system's bin.
+///
+/// Two different events, and scope §7.7 requires the application to say which:
+/// a silent fallback would tell a user their file is in the bin when it is not.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum DeleteKind {
+    Trashed,
+    Permanent,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct Deleted {
+    pub path: RelPath,
+    pub outcome: DeleteKind,
+    /// The notes that went with it, so their tabs can be closed. Their drafts
+    /// are **not** removed: a note deleted with unsaved edits is precisely the
+    /// case where the draft is the only copy.
+    pub note_ids: Vec<NoteId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -667,6 +691,220 @@ impl WorkspaceService {
         self.open
             .as_ref()
             .is_some_and(|o| o.suspended.contains(&note_id))
+    }
+
+    // ---- entries: rename, move, duplicate, delete ------------------------
+
+    /// Rename in place. **The `NoteId` does not change** — scope §17's 0.1b
+    /// criterion is *"rename via app não reseta aba/cursor/id"*, and
+    /// `ARCHITECTURE.md` §9 is explicit that a rename the application performs
+    /// never enters identity correlation. Renaming a folder carries every note
+    /// beneath it, for the same reason.
+    pub fn rename_entry(&mut self, path: &RelPath, new_name: &str) -> Result<Entry> {
+        let parent = path.parent().ok_or_else(|| CoreError::InvalidPath {
+            path: path.to_string(),
+            reason: "the workspace root cannot be renamed from inside it".into(),
+        })?;
+        let to = parent.join(new_name)?;
+        self.relocate(path, &to, new_name)
+    }
+
+    /// Move into another directory, keeping the name and the `NoteId`.
+    ///
+    /// One root means one volume, so the cross-volume `Unsupported` of
+    /// `ARCHITECTURE.md` §7.1 cannot arise here; it is left in the contract for
+    /// the mobile adapters of 0.4, where it can.
+    pub fn move_entry(&mut self, path: &RelPath, to_dir: &RelPath) -> Result<Entry> {
+        let name = path.file_name().to_string();
+        let to = to_dir.join(&name)?;
+        if to == *path {
+            return Err(CoreError::AlreadyExists {
+                path: to.to_string(),
+            });
+        }
+        // Moving a folder into itself would leave the tree unreachable, and the
+        // error a filesystem gives for it says nothing a user can act on.
+        if to.as_str().starts_with(&format!("{}/", path.as_str())) {
+            return Err(CoreError::InvalidPath {
+                path: to.to_string(),
+                reason: "a folder cannot be moved inside itself".into(),
+            });
+        }
+        self.relocate(path, &to, &name)
+    }
+
+    fn relocate(&mut self, from: &RelPath, to: &RelPath, name: &str) -> Result<Entry> {
+        {
+            let open = self.open()?;
+            if open.read_only {
+                return Err(CoreError::Unavailable {
+                    root: open.registry.root.clone(),
+                    reason: UnavailableReason::PermissionRevoked,
+                });
+            }
+        }
+        // The name has to be legal on every platform the workspace might be
+        // carried to, and free by the root's own case and normalisation rules —
+        // the same two checks `note_create` makes (scope §7.6). A rename that
+        // only changes case is not a collision with itself.
+        notes_model::portable_name(name).map_err(|rule| CoreError::InvalidPath {
+            path: name.to_string(),
+            reason: rule.to_string(),
+        })?;
+        if to != from {
+            self.check_collision(to)?;
+        }
+
+        let dir = self.open()?.dir.clone();
+        let kind = self.open()?.fs.stat(from)?.kind;
+        self.open()?.fs.rename(from, to)?;
+
+        let open = self.open_mut()?;
+        open.registry.repath(from, to);
+        let registry = open.registry.clone();
+        store_registry(&dir, &registry)?;
+
+        let stat = self.open()?.fs.stat(to).ok();
+        Ok(Entry {
+            name: name.to_string(),
+            is_note: kind == notes_model::EntryKind::File && to.is_note(),
+            size: (kind == notes_model::EntryKind::File)
+                .then(|| stat.map(|s| s.size))
+                .flatten(),
+            kind,
+            path: to.clone(),
+        })
+    }
+
+    /// Copy a note or a folder beside itself, as `nome (copy).md`.
+    ///
+    /// **A new file is a new note**, so the copy gets its own `NoteId` — it has
+    /// none of the original's history, and pretending otherwise would attach two
+    /// files to one identity. `create_new` throughout: scope §17's criterion is
+    /// *"criar/duplicar nunca sobrescreve destino existente"*, and the numbered
+    /// fallback is what makes that keepable rather than a refusal.
+    pub fn duplicate_entry(&mut self, path: &RelPath) -> Result<Entry> {
+        if self.open()?.read_only {
+            return Err(CoreError::Unavailable {
+                root: self.open()?.registry.root.clone(),
+                reason: UnavailableReason::PermissionRevoked,
+            });
+        }
+        let to = self.free_name(path, "copy")?;
+        let kind = self.open()?.fs.stat(path)?.kind;
+        match kind {
+            notes_model::EntryKind::File => {
+                let bytes = self.open()?.fs.read(path)?;
+                self.open()?.fs.create_new(&to, &bytes)?;
+            }
+            notes_model::EntryKind::Dir => self.copy_tree(path, &to)?,
+            // A symlink is not followed anywhere else in this application, and
+            // copying one would mean deciding whether to copy the link or its
+            // target — a decision nothing has asked for.
+            other => {
+                return Err(CoreError::Unsupported {
+                    cap: format!("duplicating a {other:?} entry"),
+                })
+            }
+        }
+        let stat = self.open()?.fs.stat(&to).ok();
+        Ok(Entry {
+            name: to.file_name().to_string(),
+            is_note: kind == notes_model::EntryKind::File && to.is_note(),
+            size: (kind == notes_model::EntryKind::File)
+                .then(|| stat.map(|s| s.size))
+                .flatten(),
+            kind,
+            path: to,
+        })
+    }
+
+    fn copy_tree(&self, from: &RelPath, to: &RelPath) -> Result<()> {
+        let open = self.open()?;
+        open.fs.create_dir(to)?;
+        for e in open.fs.list(from)? {
+            let target = to.join(&e.name)?;
+            match e.kind {
+                notes_model::EntryKind::Dir => self.copy_tree(&e.path, &target)?,
+                notes_model::EntryKind::File => {
+                    let bytes = open.fs.read(&e.path)?;
+                    open.fs.create_new(&target, &bytes)?;
+                }
+                // Skipped rather than refused: one link inside a folder is not a
+                // reason to fail a copy the user asked for, and following it
+                // would copy something from outside the workspace into it.
+                _ => continue,
+            }
+        }
+        Ok(())
+    }
+
+    /// `nome (copy).md`, or `nome (copy 2).md` when that is taken.
+    ///
+    /// **The word is ASCII and the same in every locale**, deliberately: a
+    /// filename that depended on the interface language would give the same
+    /// folder different names on two machines, and the scope's own
+    /// `nome (local).md` set the precedent (`docs/DECISIONS-0.1b.md` D-10).
+    fn free_name(&self, path: &RelPath, word: &str) -> Result<RelPath> {
+        let parent = path.parent().unwrap_or_else(RelPath::root);
+        let name = path.file_name();
+        let (stem, ext) = match name.rfind('.') {
+            Some(i) if i > 0 => (&name[..i], &name[i..]),
+            _ => (name, ""),
+        };
+        for n in 1..1000 {
+            let candidate = if n == 1 {
+                format!("{stem} ({word}){ext}")
+            } else {
+                format!("{stem} ({word} {n}){ext}")
+            };
+            let rel = parent.join(&candidate)?;
+            if self.check_collision(&rel).is_ok() {
+                return Ok(rel);
+            }
+        }
+        Err(CoreError::AlreadyExists {
+            path: format!("{stem} ({word} …){ext}"),
+        })
+    }
+
+    /// Delete, and **say which of the two happened**.
+    ///
+    /// Scope §7.7 forbids a silent fallback from the trash to a permanent
+    /// delete: those are different events for the person who did it, and
+    /// [`DeleteOutcome`] is what the interface has to show. The notes that go
+    /// with it leave the registry — their identity has nothing left to name —
+    /// and the ids come back so open tabs can be closed.
+    pub fn delete_entry(&mut self, path: &RelPath) -> Result<Deleted> {
+        if self.open()?.read_only {
+            return Err(CoreError::Unavailable {
+                root: self.open()?.registry.root.clone(),
+                reason: UnavailableReason::PermissionRevoked,
+            });
+        }
+        let dir = self.open()?.dir.clone();
+        let outcome = self.open()?.fs.delete(path)?;
+
+        let open = self.open_mut()?;
+        let note_ids = open.registry.forget(path);
+        for id in &note_ids {
+            open.suspended.remove(id);
+        }
+        let registry = open.registry.clone();
+        store_registry(&dir, &registry)?;
+
+        // The drafts stay. A note the user deleted while holding unsaved edits
+        // is exactly the case where the only copy of those edits is the draft,
+        // and §4.2 removes one on a confirmed write or on an explicit discard —
+        // never as a side effect of something else.
+        Ok(Deleted {
+            path: path.clone(),
+            outcome: match outcome {
+                notes_fs::DeleteOutcome::Trashed => DeleteKind::Trashed,
+                notes_fs::DeleteOutcome::Permanent => DeleteKind::Permanent,
+            },
+            note_ids,
+        })
     }
 
     // ---- conflicts ------------------------------------------------------

@@ -197,6 +197,44 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.8.4 - rename, move, duplicate and delete, and the identity that survives them
+
+The four entry operations of 0.1b, and the criterion they exist to satisfy:
+**a rename performed by the application never resets a tab.**
+`ARCHITECTURE.md` §9 says a rename the app performs never enters identity
+correlation — it updates the registry directly — and `Registry::repath` is that
+sentence in code. Renaming a folder carries every note beneath it, because the
+notes inside a folder someone renamed did not change and giving them new ids
+would lose their history for a reason invisible to the person who did it. The
+prefix test is on a path boundary, so `pasta2/` is not dragged along by a rename
+of `pasta/` — a naive `starts_with` corrupts the registry silently, which is why
+there is a test named after it.
+
+**Duplicate never overwrites**, per scope §17: `create_new` throughout, a copy
+gets an identity of its own because a new file is a new note, and the name is
+`nome (copy).md` → `nome (copy 2).md`, in ASCII and the same in every language
+(D-10). **Move refuses a collision and names what is in the way**, which is what
+lets the interface ask rather than guess, and a folder cannot be moved inside
+itself.
+
+**Delete has a trash now**, and says which of the two things happened. `trash`
+is a dependency from this commit; `caps.trash` decides whether to try, and a
+failure — no bin on a removable stick, no session bus in a container — degrades
+to a permanent delete with a *different sentence in the interface*, never a
+silent one (scope §7.7, D-11). The notes leave the registry; **their drafts do
+not**, because a note deleted while it held unsaved edits is precisely the case
+where the draft is the only copy of them.
+
+The tree grew a context menu for the four, and the frontend a `notice` channel
+for a thing that went right — an error banner is the wrong shape for "moved to
+the trash, so it can be put back".
+
+**The Windows cross-check earned its place again.** `tools/check.sh` failed on a
+`let mut f` that is only mutated inside a `#[cfg(unix)]` block: fine on Linux,
+`-D warnings` on Windows, and invisible to every other step of the gate. That is
+the third time this class of defect would otherwise have been found by CI, and
+the first time it was found before the push.
+
 ## 0.8.3 - Source · Preview · Split, and the conflict screen 0.1a shipped without
 
 The interface catches up with the core. `Ctrl+E` cycles Source → Preview →

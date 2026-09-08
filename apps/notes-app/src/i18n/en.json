@@ -68,5 +68,17 @@
   "conflict.mine": "Yours",
   "conflict.theirs": "On disk",
   "eol.toLf": "Convert to LF",
-  "eol.toCrLf": "Convert to CRLF"
+  "eol.toCrLf": "Convert to CRLF",
+  "tree.actions.hint": "{path} — right-click for rename, duplicate, move and delete",
+  "tree.rename": "Rename…",
+  "tree.rename.prompt": "New name",
+  "tree.move": "Move to…",
+  "tree.move.prompt": "Folder to move it into, relative to the workspace root (empty for the root)",
+  "tree.duplicate": "Duplicate",
+  "tree.duplicate.done": "Duplicated as {name}.",
+  "tree.delete": "Delete…",
+  "tree.delete.confirm": "Delete {name}?",
+  "tree.delete.trashed": "{name} was moved to the trash, so it can be put back.",
+  "tree.delete.permanent": "{name} was deleted permanently — this filesystem has no trash.",
+  "notice.dismiss": "Dismiss"
 }
