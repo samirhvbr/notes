@@ -13,5 +13,8 @@ blake3 = { workspace = true }
 trash = { workspace = true }
 notify = { workspace = true }
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true }
+
 [dev-dependencies]
 tempfile = { workspace = true }

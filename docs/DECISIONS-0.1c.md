@@ -258,3 +258,42 @@ a loop, and it exists because a walk that follows one does not return.
 the Welcome screen. It is honest about the wait and it needs no threads; what it
 does not do is make the wait shorter, and on the owner's own folder the wait was
 two minutes.
+
+---
+
+## D-10 — One watch per directory is Linux's problem, and Linux's alone
+
+**Decided.** `PER_DIRECTORY` in `notes-fs::watch` is `cfg!(target_os = "linux")`.
+On Linux the root is watched non-recursively and a background thread installs
+the rest, one directory at a time. On macOS and Windows the root is watched
+**recursively, in one call**, and there is no walk.
+
+**Why this is not one implementation for all three.** D-09 moved the walk off
+the critical path because `notify`'s recursive add is a synchronous per-directory
+walk. That is true of inotify, where a watch descriptor covers exactly one
+directory and there is no other way. It is **not** true of the other two:
+FSEvents watches a subtree from one handle, and `ReadDirectoryChangesW` takes a
+`bWatchSubtree` flag. Running our walk there would have replaced an O(1) call
+with 20 000 kernel objects on the deep fixture, and hundreds of thousands on the
+folder that started this — the same mistake as the freeze, pointing the other
+way, and it would have been introduced *by the fix for it*.
+
+The two hazards the walk exists to handle are also Linux's. A recursive add that
+fails whole on an unreadable directory is inotify's behaviour, because it is
+inotify that has to enumerate; a subtree watch never reads the tree, so it has
+nothing to fail on. `max_user_watches` is an inotify sysctl.
+
+`WATCH_SKIP` follows the same line: it exists to protect a finite watch table, so
+it applies only where there is one. A subtree watch covers `node_modules/`
+whether or not anyone wants it to, and those events are filtered by the
+reconciler like any other.
+
+**Alternative if you disagree.** One code path everywhere. It is simpler to read
+and it is what the first version of this change did; it costs a directory handle
+per directory on Windows, which on a real checkout-heavy folder is a resource
+failure rather than a slow start.
+
+**What is not verified.** This machine is Linux. The macOS and Windows branch is
+one `RecursiveMode::Recursive` call — the same one that shipped before 0.11.0 —
+and CI runs the suite on both, but nobody has watched a subtree event arrive on
+either.

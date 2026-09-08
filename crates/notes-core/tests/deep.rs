@@ -223,7 +223,7 @@ fn starting_the_watcher_returns_immediately_and_walks_behind() {
     let walked = t.elapsed();
 
     assert!(
-        returned.as_millis() < 100 && returned * 5 < walked,
+        returned.as_millis() < 100 && (!cfg!(target_os = "linux") || returned * 5 < walked),
         "start_watch returned in {} of a {} walk over {} directories — it is \
          walking the tree inline",
         ms(returned),
@@ -231,7 +231,11 @@ fn starting_the_watcher_returns_immediately_and_walks_behind() {
         tree.dirs
     );
 
-    if degraded.is_none() {
+    // Only Linux installs one watch per directory. FSEvents and
+    // `ReadDirectoryChangesW` watch a subtree with one handle, so there is no
+    // walk to observe there and asking for one would be the same mistake
+    // pointing the other way (D-10).
+    if degraded.is_none() && cfg!(target_os = "linux") {
         assert!(!status.walking, "the walk finished: {status:?}");
         assert!(status.dirs > 100, "the walk installed watches: {status:?}");
         // `node_modules/` and `target/` are skipped by the watcher and only by

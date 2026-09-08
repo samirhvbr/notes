@@ -145,17 +145,17 @@ impl Caps {
 
     /// A local POSIX or NTFS filesystem.
     ///
-    /// `native_id` is Unix-only at 0.1a: the standard library's Windows
-    /// accessors are behind an unstable feature, so a stable build cannot read
-    /// a file index. `docs/ARCHITECTURE.md` §11 already specifies what is lost —
-    /// correlation falls back to the content hash and yields a new id in more
-    /// ambiguous cases, which is the safe direction.
+    /// `native_id` holds on both: `dev`/`ino` on Unix, and on Windows the
+    /// volume serial and file index read through `GetFileInformationByHandle`
+    /// (`DECISIONS-0.1a.md` D-24, closed at 0.11.1). `preserve_mode` stays
+    /// Unix-only — NTFS ACLs are not a mode, and `ARCHITECTURE.md` §11 does not
+    /// promise them.
     pub const LOCAL: Caps = Caps {
         atomic_replace: true,
         rename: true,
         trash: true,
         watch: true,
-        native_id: cfg!(unix),
+        native_id: cfg!(any(unix, windows)),
         preserve_mode: cfg!(unix),
         create_new: true,
         same_volume_move: true,

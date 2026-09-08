@@ -34,6 +34,16 @@ trash = "5"
 # user. `ARCHITECTURE.md` §8's debouncer is written here rather than pulled in,
 # because the self-write filter it feeds is ours anyway.
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+# Windows only, and for exactly one call: `GetFileInformationByHandle`, which is
+# the only stable way to read a file's volume serial and index. The standard
+# library has the same numbers behind the unstable `windows_by_handle` feature,
+# which is what left `native_id` returning `None` on Windows at 0.1a
+# (`docs/DECISIONS-0.1a.md` D-24). Without them, identity correlation after an
+# external rename falls back to the content hash and mints a new `NoteId`.
+windows-sys = { version = "0.61", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
 
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -8,6 +8,41 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.1 - native_id on Windows, and the watcher stops being one shape for three platforms
+
+**D-24 closes.** `native_id` returned `None` on Windows from 0.1a because the
+standard library's `volume_serial_number` and `file_index` are behind the
+unstable `windows_by_handle` feature — the Windows job did not fail a test, it
+failed to build. It now reads the same two numbers through
+`GetFileInformationByHandle` (`windows-sys`, one target-gated dependency, one
+call): `access_mode(0)` so a file another process holds open still answers,
+`FILE_FLAG_BACKUP_SEMANTICS` so a directory can be opened at all, and
+`FILE_FLAG_OPEN_REPARSE_POINT` so a symlink reports its own identity rather
+than its target's — matching the `symlink_metadata` the rest of `Stat` is built
+from. `Caps::LOCAL.native_id` is `cfg!(any(unix, windows))`, which is what
+`ARCHITECTURE.md` §11's matrix has promised for NTFS all along.
+
+Because the id costs an opened handle on Windows, it is filled in by `stat` and
+**not** by `list`: `Entry` carries none, and identity correlation asks one path
+at a time. Seven tests in `crates/notes-fs/tests/identity.rs` run on all three
+platforms in CI — the capability agrees with the value, a rename keeps the id,
+identical bytes do not share one, a directory has one, and an atomic replace
+produces a new one and says so in the `Stat` it returns.
+
+**And a correction to 0.11.0.** That commit moved the watcher to one watch per
+directory on every platform. That is right on Linux, where an inotify descriptor
+covers exactly one directory and `notify`'s recursive mode is a walk it does for
+you. It is wrong everywhere else: FSEvents watches a subtree from one handle and
+`ReadDirectoryChangesW` takes a `bWatchSubtree` flag, so the walk would have
+replaced an O(1) call with 20 000 kernel objects on the deep fixture and
+hundreds of thousands on the folder that started all this — the same mistake as
+the freeze, introduced by the fix for it.
+
+`PER_DIRECTORY` is now `cfg!(target_os = "linux")`. The two hazards the walk
+handles are Linux's too: a recursive add failing whole on an unreadable
+directory is inotify enumerating, and `max_user_watches` is an inotify sysctl.
+`WATCH_SKIP` applies only where there is a watch table to protect (D-10).
+
 ## 0.11.0 - the tree in under a second, and two walks moved off the critical path
 
 Opening `~/x` — around 160 repositories with `node_modules/`, `target/` and

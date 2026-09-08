@@ -77,12 +77,22 @@ impl LocalFs {
         Ok(p)
     }
 
+    /// A complete `Stat`, native id included.
     fn stat_at(path: &Path) -> Result<Stat> {
         let meta =
             fs::symlink_metadata(path).map_err(|e| CoreError::io("stat", path.display(), &e))?;
-        Ok(Self::stat_from(&meta))
+        Ok(Stat {
+            native_id: native_id(path, &meta),
+            ..Self::stat_from(&meta)
+        })
     }
 
+    /// Size, mtime and kind — everything except the native id.
+    ///
+    /// The identity is left out because it is not free: on Windows it costs an
+    /// opened handle per file, and the only caller that wants it is identity
+    /// correlation, one path at a time. `Entry` does not carry one at all, so
+    /// paying for it while listing a directory would be paying for nothing.
     fn stat_from(meta: &fs::Metadata) -> Stat {
         let ft = meta.file_type();
         let kind = if ft.is_symlink() {
@@ -97,7 +107,7 @@ impl LocalFs {
         Stat {
             size: meta.len(),
             mtime_ns: mtime_ns(meta),
-            native_id: native_id(meta),
+            native_id: None,
             kind,
         }
     }
@@ -353,8 +363,14 @@ fn mtime_ns(meta: &fs::Metadata) -> i128 {
         .unwrap_or(0)
 }
 
+/// The filesystem's own identity for a file: what survives a rename and what a
+/// copy does not share.
+///
+/// Correlation after an external rename asks one question — *is this the same
+/// file under a different name?* — and a content hash cannot answer it for two
+/// notes with identical text. The native id can.
 #[cfg(unix)]
-fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
+fn native_id(_: &Path, meta: &fs::Metadata) -> Option<NativeId> {
     use std::os::unix::fs::MetadataExt;
     Some(NativeId::Unix {
         dev: meta.dev(),
@@ -362,26 +378,62 @@ fn native_id(meta: &fs::Metadata) -> Option<NativeId> {
     })
 }
 
-/// Windows reports no native id at 0.1a.
+/// Windows: `GetFileInformationByHandle`, which needs a handle rather than a
+/// path, so the file is opened to ask.
 ///
-/// `MetadataExt::volume_serial_number` and `file_index` sit behind the unstable
-/// `windows_by_handle` feature, so a stable build cannot call them — the Windows
-/// CI job did not fail a test, it **failed to compile**. Reading them properly
-/// means `GetFileInformationByHandle` through `windows-sys`, which is a
-/// dependency decision and belongs to 0.1b, where the first consumer — identity
-/// correlation after an external rename — arrives.
+/// The standard library exposes the same two numbers through
+/// `MetadataExt::volume_serial_number` and `file_index`, but both sit behind the
+/// unstable `windows_by_handle` feature — a stable build does not compile
+/// against them, which is why this returned `None` from 0.1a until now
+/// (`docs/DECISIONS-0.1a.md` D-24).
 ///
-/// The degradation is the one `docs/ARCHITECTURE.md` §11 already specifies:
-/// without a native id, correlation falls back to the content hash alone and
-/// yields a **new** `NoteId` in more ambiguous cases. That is the safe
-/// direction, so this costs precision on Windows renames and nothing else.
+/// The open is a query, not a read: `access_mode(0)` asks for no access at all,
+/// which is the documented way to read metadata for a file another process holds
+/// open exclusively. `FILE_FLAG_BACKUP_SEMANTICS` is what allows a **directory**
+/// to be opened this way; `FILE_FLAG_OPEN_REPARSE_POINT` makes a symlink report
+/// its own identity rather than its target's, so that this agrees with the
+/// `symlink_metadata` the rest of `stat_at` is built on.
+///
+/// A failure is `None` — the file vanished, or the volume does not keep an
+/// index. That is the same degradation `ARCHITECTURE.md` §11 already specifies
+/// for a backend without ids, and it is the safe direction: correlation falls
+/// back to the hash and mints a new `NoteId` rather than reusing the wrong one.
 #[cfg(windows)]
-fn native_id(_: &fs::Metadata) -> Option<NativeId> {
-    None
+fn native_id(path: &Path, meta: &fs::Metadata) -> Option<NativeId> {
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::Storage::FileSystem::{
+        GetFileInformationByHandle, BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT,
+    };
+
+    let mut flags = FILE_FLAG_BACKUP_SEMANTICS;
+    if meta.file_type().is_symlink() {
+        flags |= FILE_FLAG_OPEN_REPARSE_POINT;
+    }
+    let file = fs::OpenOptions::new()
+        .access_mode(0)
+        .custom_flags(flags)
+        .open(path)
+        .ok()?;
+
+    // SAFETY: `info` is written by the call and only read when it returns
+    // non-zero; the handle is owned by `file` and outlives the call.
+    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
+    let ok = unsafe { GetFileInformationByHandle(file.as_raw_handle() as _, &mut info) };
+    if ok == 0 {
+        return None;
+    }
+
+    Some(NativeId::Windows {
+        volume: u64::from(info.dwVolumeSerialNumber),
+        // One 64-bit index, delivered in two halves.
+        index: (u64::from(info.nFileIndexHigh) << 32) | u64::from(info.nFileIndexLow),
+    })
 }
 
 #[cfg(not(any(unix, windows)))]
-fn native_id(_: &fs::Metadata) -> Option<NativeId> {
+fn native_id(_: &Path, _: &fs::Metadata) -> Option<NativeId> {
     None
 }
 

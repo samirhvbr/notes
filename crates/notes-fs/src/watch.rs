@@ -28,6 +28,20 @@ use notify::{RecursiveMode, Watcher as _};
 /// a aba em <1s"* — has most of its second left over.
 const DEBOUNCE: Duration = Duration::from_millis(200);
 
+/// Whether this platform needs **one watch per directory**.
+///
+/// Linux's inotify does: a watch descriptor covers exactly one directory, so
+/// `notify`'s `RecursiveMode::Recursive` is a walk it performs on your behalf —
+/// synchronously, inside the call, failing whole on the first directory it
+/// cannot read. That walk is what this module took over.
+///
+/// macOS FSEvents and Windows' `ReadDirectoryChangesW` watch a **subtree with
+/// one handle**. Asking them for a per-directory walk would turn an O(1) call
+/// into hundreds of thousands of kernel objects — the same mistake pointing the
+/// other way — so on those platforms the root is watched recursively and there
+/// is no walk to do (`docs/DECISIONS-0.1c.md` D-10).
+const PER_DIRECTORY: bool = cfg!(target_os = "linux");
+
 /// Directories the watcher does not descend into.
 ///
 /// **This is not the visibility list.** `notes-core`'s `IGNORE_DEFAULT` decides
@@ -42,6 +56,10 @@ const DEBOUNCE: Duration = Duration::from_millis(200);
 /// application through the five-second poll and the focus scan — the same
 /// degradation any unwatched path has — so the cost of skipping is latency, and
 /// the cost of not skipping is the watch table.
+///
+/// **It only applies where `PER_DIRECTORY` does.** A subtree watch has nothing
+/// to skip: it covers what it covers for one handle, and the events it produces
+/// are filtered by the reconciler like any other.
 const WATCH_SKIP: &[&str] = &[
     "node_modules",
     "target",
@@ -156,21 +174,28 @@ impl Drop for Watch {
 
 /// Start watching `root`.
 ///
-/// **Returns immediately.** The walk that installs one watch per directory
-/// happens on the watcher's own thread, and `progress()` reports it while it
-/// runs. That ordering is the whole point: `notify`'s `RecursiveMode::Recursive`
-/// does the same walk *inside the call*, and on a folder of 21 000 directories
-/// that call took **503 ms** — with the service mutex held, so the tree could not
-/// be listed until it finished. On a folder of a few hundred thousand it is
-/// minutes, which is what the owner saw (`docs/DECISIONS-0.1c.md` D-09).
+/// **Returns immediately**, on every platform.
 ///
-/// The walk is ours rather than `notify`'s for the second reason too: a
-/// recursive add fails **whole** on the first directory it cannot read, and one
-/// unreadable subdirectory then demotes an entire workspace to polling. Here a
-/// directory that cannot be read or watched is counted and skipped.
+/// On Linux that matters and is the whole point: `notify`'s
+/// `RecursiveMode::Recursive` installs one inotify watch per directory *inside
+/// the call*, and on a folder of 21 000 directories that call took **503 ms** —
+/// with the service mutex held, so the tree could not be listed until it
+/// finished. On a folder of a few hundred thousand it is minutes, which is what
+/// the owner saw (`docs/DECISIONS-0.1c.md` D-09). Here the root is watched
+/// synchronously and the rest is installed by a thread, with `progress()`
+/// reporting it while it runs.
 ///
-/// Symlinked directories are never descended into — the fixture has a loop, and
-/// a walk that follows one does not return.
+/// The walk being ours has a second reason, and it is not about time: `notify`'s
+/// recursive add fails **whole** on the first directory it cannot read, so one
+/// unreadable subdirectory demoted an entire workspace to polling. Here such a
+/// directory is counted and skipped, and a full watch table costs only the
+/// directories that did not fit.
+///
+/// On macOS and Windows there is no walk at all — one handle watches the
+/// subtree — so the same call is O(1) and neither hazard exists (D-10).
+///
+/// Symlinked directories are never descended into: the deep fixture has a loop,
+/// and a walk that follows one does not return.
 pub fn watch(root: &Path) -> Watch {
     let (batches, rx) = channel::<BTreeSet<RelPath>>();
     let (stop, stopped) = channel::<()>();
@@ -186,13 +211,19 @@ pub fn watch(root: &Path) -> Watch {
         Err(e) => return Watch::none(classify(&e)),
     };
 
-    // The root itself, synchronously: if even this cannot be watched there is
-    // nothing to watch, and the caller should poll.
-    if let Err(e) = watcher.watch(root, RecursiveMode::NonRecursive) {
+    // The root, synchronously. If even this cannot be watched there is nothing
+    // to watch and the caller should poll. Where a subtree costs one handle,
+    // this single call is the entire watch.
+    let mode = if PER_DIRECTORY {
+        RecursiveMode::NonRecursive
+    } else {
+        RecursiveMode::Recursive
+    };
+    if let Err(e) = watcher.watch(root, mode) {
         return Watch::none(classify(&e));
     }
     counters.dirs.store(1, Ordering::Relaxed);
-    counters.walking.store(true, Ordering::Relaxed);
+    counters.walking.store(PER_DIRECTORY, Ordering::Relaxed);
 
     let root_buf = root.to_path_buf();
     let walk_counters = Arc::clone(&counters);
@@ -202,8 +233,10 @@ pub fn watch(root: &Path) -> Watch {
             // The watcher is moved into the thread so it lives exactly as long
             // as the loop does.
             let mut watcher = watcher;
-            add_watches_below(&mut watcher, &root_buf, &walk_counters);
-            walk_counters.walking.store(false, Ordering::Relaxed);
+            if PER_DIRECTORY {
+                add_watches_below(&mut watcher, &root_buf, &walk_counters);
+                walk_counters.walking.store(false, Ordering::Relaxed);
+            }
 
             let mut pending: BTreeSet<RelPath> = BTreeSet::new();
             loop {
@@ -214,8 +247,9 @@ pub fn watch(root: &Path) -> Watch {
                     Ok(Ok(event)) => {
                         for p in event.paths {
                             // A directory that appears after the walk needs its
-                            // own watch, or nothing inside it is ever seen.
-                            if p.is_dir() && !skip_dir(&p) {
+                            // own watch, or nothing inside it is ever seen. A
+                            // subtree watch already covers it.
+                            if PER_DIRECTORY && p.is_dir() && !skip_dir(&p) {
                                 let _ = watcher.watch(&p, RecursiveMode::NonRecursive);
                                 walk_counters.dirs.fetch_add(1, Ordering::Relaxed);
                             }
@@ -253,10 +287,13 @@ pub fn watch(root: &Path) -> Watch {
 
 /// Walk `root` and install one non-recursive watch per directory.
 ///
+/// Linux only — see `PER_DIRECTORY`.
+///
 /// Errors are per directory and never stop the walk. A watch-table exhaustion
 /// stops *adding* — there is nothing to be gained by asking again for every
 /// remaining directory — but everything already watched keeps working, which is
 /// the difference between a degraded workspace and a dead one.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn add_watches_below(
     watcher: &mut notify::RecommendedWatcher,
     root: &Path,
@@ -304,6 +341,7 @@ fn add_watches_below(
     }
 }
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn skip_dir(path: &Path) -> bool {
     path.file_name()
         .and_then(|n| n.to_str())
@@ -311,6 +349,7 @@ fn skip_dir(path: &Path) -> bool {
         .unwrap_or(true)
 }
 
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 fn is_watch_limit(e: &notify::Error) -> bool {
     matches!(classify(e), Degraded::WatchLimit(_))
 }

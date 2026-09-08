@@ -537,8 +537,15 @@ its own thread, cancellable, with its progress visible in the status bar:
 
 | Work | Where | Reported as |
 |---|---|---|
-| one watch per directory | `notes-fs::watch`, thread `notes-watch` | `WatchStatus { walking, dirs, unreadable, over_limit }` |
+| one watch per directory (**Linux only**) | `notes-fs::watch`, thread `notes-watch` | `WatchStatus { walking, dirs, unreadable, over_limit }` |
 | the quick-open path list | `notes-core::index`, thread `notes-index` | `QuickOpen { indexed, building, unreadable }` |
+
+**The per-directory walk is Linux's.** An inotify watch descriptor covers exactly
+one directory, so `notify`'s recursive mode is a walk it performs for you.
+FSEvents and `ReadDirectoryChangesW` watch a **subtree from one handle**: there
+the root is watched recursively in one O(1) call and there is no walk, no skip
+list and neither of the two failure modes below — running the Linux path on them
+would trade one handle for hundreds of thousands (`DECISIONS-0.1c.md` D-10).
 
 Both walks use an explicit stack and `symlink_metadata`, so a symlinked
 directory is never descended into and a loop cannot be entered. Both **count and
@@ -708,6 +715,15 @@ limitations. Unknown filesystem → most conservative row.
 Detection: Linux `statfs().f_type`; macOS `pathconf` + `statfs`; Windows
 `GetVolumeInformationW`. The result is cached in `registry.json` and
 re-probed when `root_native_id` changes.
+
+**Reading the id.** Unix takes `dev` and `ino` straight from the `stat` already
+performed. Windows needs a **handle**, so the file is opened to ask —
+`access_mode(0)` (a query, not a read, so a file another process holds open
+still answers), `FILE_FLAG_BACKUP_SEMANTICS` so that a directory can be opened
+at all, and `FILE_FLAG_OPEN_REPARSE_POINT` so a symlink reports its own identity
+rather than its target's, matching the `symlink_metadata` the rest of `Stat` is
+built from. Because that costs an open, **the id is filled in by `stat`, not by
+`list`**: `Entry` carries none, and correlation asks one path at a time.
 
 ---
 

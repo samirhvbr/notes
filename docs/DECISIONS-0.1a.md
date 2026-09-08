@@ -495,6 +495,14 @@ two platforms where it is most likely to break.
 
 ## D-24 — `native_id` is Unix-only at 0.1a
 
+> **Closed at `0.11.1`.** `native_id` reads the volume serial and file index on
+> Windows through `GetFileInformationByHandle` (`windows-sys`, one call, one
+> target-gated dependency), `Caps::LOCAL.native_id` is
+> `cfg!(any(unix, windows))`, and `crates/notes-fs/tests/identity.rs` asserts
+> the property on both platforms — a rename keeps the id, identical bytes do
+> not share one, a directory has one. The debt below stands as the record of
+> why it was deferred; the "alternative if you disagree" is what was done.
+
 **Decided.** `native_id` returns `None` on Windows and `Caps::LOCAL.native_id`
 is `cfg!(unix)`.
 
