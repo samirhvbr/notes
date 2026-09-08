@@ -371,3 +371,82 @@ fn quick_open_answers_immediately_and_admits_it_is_still_indexing() {
         );
     }
 }
+
+/// The folder that started this, on the machine it started on.
+///
+/// `fixtures/deep` is a reconstruction; this is the original. Nothing here
+/// writes to it — `open_workspace` reads, and the case probe is explicitly
+/// read-only (scope §2.3).
+///
+///     NOTES_DEEP_ROOT=~/x cargo test -p notes-core --test deep -- --ignored --nocapture
+#[test]
+#[ignore = "needs NOTES_DEEP_ROOT pointing at a real folder"]
+fn where_the_time_goes_on_a_real_folder() {
+    let Ok(root) = std::env::var("NOTES_DEEP_ROOT") else {
+        eprintln!("set NOTES_DEEP_ROOT");
+        return;
+    };
+    let root = PathBuf::from(root);
+    let data = tempfile::tempdir().unwrap();
+    let mut svc = WorkspaceService::with_data_dir(data.path()).unwrap();
+
+    let t = Instant::now();
+    svc.open_workspace(&root).unwrap();
+    let opened = t.elapsed();
+
+    let t = Instant::now();
+    let top = svc.list_dir(&RelPath::root()).unwrap();
+    let listed = t.elapsed();
+
+    let t = Instant::now();
+    let degraded = svc.start_watch().unwrap();
+    let watched = t.elapsed();
+
+    let t = Instant::now();
+    let quick = svc.quick_open("readme", 20).unwrap();
+    let asked = t.elapsed();
+
+    println!("root:              {}", root.display());
+    println!("open_workspace:   {}", ms(opened));
+    println!("list root:        {}   ({} entries)", ms(listed), top.len());
+    println!(
+        "start_watch:      {}   (degraded: {degraded:?})",
+        ms(watched)
+    );
+    println!(
+        "quick_open first: {}   ({} matches, building {}, {} indexed)",
+        ms(asked),
+        quick.matches.len(),
+        quick.building,
+        quick.indexed
+    );
+    println!("to a usable tree: {}", ms(opened + listed));
+
+    let deadline = Instant::now() + Duration::from_secs(600);
+    let t = Instant::now();
+    let mut s = svc.watch_status();
+    while s.walking && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+        s = svc.watch_status();
+    }
+    println!("watch walk done:  {}   {s:?}", ms(t.elapsed()));
+
+    let t = Instant::now();
+    let mut q = svc.quick_open("readme", 20).unwrap();
+    while q.building && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(50));
+        q = svc.quick_open("readme", 20).unwrap();
+    }
+    println!(
+        "index done:       {}   ({} notes, {} unreadable)",
+        ms(t.elapsed()),
+        q.indexed,
+        q.unreadable
+    );
+
+    assert!(
+        (opened + listed).as_secs_f64() < 1.0,
+        "opening and listing took {}, over the one-second rule",
+        ms(opened + listed)
+    );
+}

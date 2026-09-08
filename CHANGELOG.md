@@ -8,6 +8,40 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.11.5 - the folder that froze it, measured on the folder that froze it
+
+`fixtures/deep` is a reconstruction. `~/x` is the original, and
+`deep.rs::where_the_time_goes_on_a_real_folder` now measures it directly, behind
+`NOTES_DEEP_ROOT`. Nothing in it writes to the folder: `open_workspace` reads,
+and the case probe is read-only by construction (scope §2.3).
+
+```
+root:              /home/samir/x
+open_workspace:        0.42 ms
+list root:             0.17 ms   (44 entries)
+start_watch:           0.17 ms   (degraded: None)
+quick_open first:      0.05 ms   (0 matches, building true, 0 indexed)
+to a usable tree:      0.59 ms
+watch walk done:    7258.65 ms   dirs 49937 · unreadable 1 · over_limit 0
+index done:        15756.08 ms   (56622 notes, 1 unreadable)
+```
+
+Over two minutes to **0.59 ms**. The two walks that used to cost it are 7.3 s
+and 15.8 s of background work, with the window usable throughout.
+
+The `unreadable: 1` is `.../www/web1/ead` — the directory whose
+`Permission denied (os error 13)` was in the banner. It is a number now; it used
+to stop the workspace being watched at all, and to make `quick_open` return
+nothing for the whole folder.
+
+`over_limit: 0` because this machine's `max_user_watches` is 1 048 576 and the
+folder needs 49 937. A default Linux ships 8 192 or 65 536, where the same
+folder leaves tens of thousands over the limit — the state the banner exists to
+name, and the one thing in this milestone that nothing has exercised.
+
+56 622 notes indexed under `~/x`, most of them inside `node_modules/`. That is
+D-08's argument as a number: hiding the folder by name would hide all of them.
+
 ## 0.11.4 - the walk is actually cancellable, and the numbers moved to the banner
 
 Two gaps between what ADR-034 says and what 0.11.0 shipped.

@@ -224,6 +224,34 @@ it is walking the tree inline"*.
 | first `quick_open` | **549.88 ms**, inline, mutex held | under 1 ms, partial answer |
 | with the unreadable directory in place | everything aborted; `quick_open` returned `Err(PermissionDenied)` | 1 directory counted, everything else served |
 
+**And on the folder itself.** `fixtures/deep` is a reconstruction; `~/x` is the
+original, and `deep.rs::where_the_time_goes_on_a_real_folder` measures it
+directly (`NOTES_DEEP_ROOT=~/x cargo test -p notes-core --test deep -- --ignored
+--nocapture`). Nothing in that test writes to the folder — `open_workspace`
+reads, and the case probe is read-only by construction (scope §2.3):
+
+```
+root:              /home/samir/x
+open_workspace:        0.42 ms
+list root:             0.17 ms   (44 entries)
+start_watch:           0.17 ms   (degraded: None)
+quick_open first:      0.05 ms   (0 matches, building true, 0 indexed)
+to a usable tree:      0.59 ms
+watch walk done:    7258.65 ms   dirs 49937 · unreadable 1 · over_limit 0
+index done:        15756.08 ms   (56622 notes, 1 unreadable)
+```
+
+**Over two minutes to under a millisecond**, and the two walks that used to
+cost it are now 7.3 s and 15.8 s of background work with the window usable
+throughout. The `unreadable: 1` is `.../www/web1/ead` — the directory whose
+`Permission denied (os error 13)` was in the banner. It is a number now, and it
+stopped the workspace from being watched at all before.
+
+`over_limit: 0` because this machine's `max_user_watches` is 1 048 576 and the
+folder needs 49 937. A default Linux ships 8 192 or 65 536, where the same
+folder would leave tens of thousands of directories over the limit — which is
+the state the banner exists to name, and which nothing here has exercised.
+
 The tree was never the problem — it costs a millisecond on 21 000 directories,
 because it is lazy and reads one directory at a time. The freeze was two
 whole-tree walks on the critical path, each inside a `#[tauri::command]` holding
