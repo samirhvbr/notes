@@ -167,6 +167,40 @@ pub fn note_convert_eol(
     svc(&app)?.convert_eol(note_id, eol)
 }
 
+/// Open an `http(s)` URL in the operating system's browser.
+///
+/// **The scheme is checked here as well as in the capability file**, and that
+/// is not redundancy for its own sake: the capability is what the WebView may
+/// ask for, and this is what the process will do. Scope §8.4 — *"Links externos
+/// `http(s)` abrem no navegador do SO por clique. Outros esquemas recusados.
+/// Link não dispara shell."* The renderer never emits another scheme; this is
+/// the guarantee that holds even if it one day does.
+/// **`shell().open` is deprecated in favour of `tauri-plugin-opener`, and the
+/// migration is deliberately not made here.** Swapping the plugin means
+/// replacing `shell:allow-open` with `opener:allow-open-url` in
+/// `capabilities/default.json` — a permission edit and a new dependency, and
+/// scope §19 sends both to the owner rather than letting an agent make them on
+/// the way past. The call still works and the scope restriction is unchanged;
+/// `docs/DECISIONS-0.1b.md` D-09 carries the one-line change for whoever does.
+#[allow(deprecated)]
+#[tauri::command]
+pub fn shell_open(app: tauri::AppHandle, url: String) -> R<()> {
+    use tauri_plugin_shell::ShellExt;
+
+    let lower = url.trim().to_ascii_lowercase();
+    if !(lower.starts_with("http://") || lower.starts_with("https://")) {
+        return Err(CoreError::InvalidPath {
+            path: url,
+            reason: "only http and https links are opened".into(),
+        });
+    }
+    app.shell()
+        .open(&url, None)
+        .map_err(|e| CoreError::Internal {
+            message: format!("opening {url}: {e}"),
+        })
+}
+
 // ---- conflicts ---------------------------------------------------------
 
 /// Keep mine · use the disk's · save as a copy. **"Compare" is not here**: it

@@ -57,6 +57,7 @@ pub fn run() {
             commands::note_convert_eol,
             commands::conflict_resolve,
             commands::conflict_list,
+            commands::shell_open,
             commands::note_create,
             commands::dir_create,
             commands::draft_write,

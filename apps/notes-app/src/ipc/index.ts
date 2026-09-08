@@ -116,6 +116,15 @@ export const conflictResolve = (
   choice: ConflictChoice,
 ) => invoke<OpenedNote>("conflict_resolve", { noteId, text, baseRev, choice });
 
+/**
+ * Open an `http(s)` URL in the operating system's browser.
+ *
+ * A link in a note never navigates the WebView and never reaches a shell: the
+ * command checks the scheme again in Rust, and the capability file allows only
+ * `http` and `https` (scope §8.4).
+ */
+export const shellOpen = (url: string) => invoke<void>("shell_open", { url });
+
 /** Everything kept in `conflicts/`, and what it costs on disk. */
 export const conflictList = () => invoke<Conflicts>("conflict_list");
 

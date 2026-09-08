@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import * as ipc from "../ipc";
-import type { BaseRev, CoreError, DocStatus, DraftInfo, NoteId, OpenedNote, RelPath } from "../ipc";
+import type {
+  BaseRev, ConflictChoice, CoreError, DocStatus, DraftInfo, Eol, NoteId, OpenedNote, RelPath,
+} from "../ipc";
 
 /**
  * One open note.
@@ -33,6 +35,11 @@ interface EditorState {
   save: (flush?: boolean) => Promise<void>;
   keepDraft: (reason: "stale" | "exit" | "conflict") => Promise<void>;
   resolveDraft: (restore: boolean) => Promise<void>;
+  /** Keep mine · use the disk's · save as a copy. The core keeps whichever
+   *  version this does not choose (docs/ARCHITECTURE.md §4.3). */
+  resolveConflict: (choice: ConflictChoice) => Promise<void>;
+  /** Rewrite this note's line endings, because the user asked. */
+  convertEol: (eol: Eol) => Promise<void>;
   close: () => void;
   setAutosave: (ms: number) => void;
 }
@@ -152,8 +159,36 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ doc: { ...fromOpened(opened), bufferVersion: restore ? 1 : 0 } });
   },
 
-  close() {
+  async resolveConflict(choice) {
+    const doc = get().doc;
+    if (!doc) return;
     if (debounce) clearTimeout(debounce);
+    try {
+      const opened = await ipc.conflictResolve(doc.noteId, doc.text, doc.baseRev, choice);
+      set({ doc: fromOpened(opened) });
+    } catch (e) {
+      // `use_disk` on a note that was deleted externally is the user accepting
+      // the deletion: the core has kept the buffer in `conflicts/` and there is
+      // nothing left for the tab to show.
+      if (ipc.asCoreError(e).code === "not_found") {
+        set({ doc: null });
+        return;
+      }
+      throw e;
+    }
+  },
+
+  async convertEol(eol) {
+    const doc = get().doc;
+    if (!doc) return;
+    if (debounce) clearTimeout(debounce);
+    set({ doc: fromOpened(await ipc.noteConvertEol(doc.noteId, eol)) });
+  },
+
+  close() {
+    const doc = get().doc;
+    if (debounce) clearTimeout(debounce);
+    if (doc) void ipc.noteClose(doc.noteId).catch(() => {});
     set({ doc: null });
   },
 }));

@@ -215,3 +215,53 @@ it.
 comparing — the corpus then tolerates any future reordering, including one that
 matters. Or drop `<input>` from the allowlist entirely and render task markers
 as a `<span>` with a glyph, which loses the semantics a screen reader uses.
+
+---
+
+## D-08 — The preview serves raster images only; SVG waits for a decision
+
+**Decided.** `notes-asset://` serves `png`, `jpg`/`jpeg`, `gif`, `webp`, `bmp`
+and `avif`, and refuses everything else with `Unsupported`. There is a 64 MiB
+ceiling on a single asset.
+
+**Gap closed.** Scope §8.4 says *"Imagens: só relativas ao workspace, formatos
+suportados"* and never names the formats. This is the list.
+
+**Why SVG is not on it.** An `<img>` cannot execute the script inside an SVG —
+the specification forbids scripting in that context — so admitting it would
+probably be safe. *Probably safe because of a browser rule* is a different thing
+from *safe by decision*, and the format is a document rather than a picture. A
+user who wants a diagram in a note can use a raster export today; a user who
+loses their notes to a WebView quirk cannot undo it.
+
+**Alternative if you disagree.** Add `("svg", "image/svg+xml")` to `IMAGE_TYPES`
+in `notes-core/src/preview.rs`. The asset response already carries
+`default-src 'none'; sandbox` and `nosniff`, which is the second layer that
+would make it defensible; the ADR should say so.
+
+---
+
+## D-09 — `shell().open` stays deprecated rather than migrating a capability on the way past
+
+**Decided.** `shell_open` keeps `tauri_plugin_shell`'s deprecated `open`, under
+an `#[allow(deprecated)]` that names the reason. Its `http(s)`-only check is in
+the Rust as well as in the capability file.
+
+**Gap closed.** Clippy's `-D warnings` gate, which the deprecation would
+otherwise fail.
+
+**Why not migrate.** `tauri-plugin-opener` is the successor, and adopting it
+means a new dependency **and** replacing `shell:allow-open` with
+`opener:allow-open-url` in `capabilities/default.json`. Scope §19 sends a change
+that touches permissions or a central dependency to the owner rather than
+letting an agent make it in passing, and CLAUDE.md's golden rule 7 says the same
+of granting permissions. The scope of what may be opened is identical either
+way, so nothing is lost by waiting.
+
+**Alternative if you disagree** — the whole change, for whoever makes it:
+add `tauri-plugin-opener` to `src-tauri/Cargo.toml`, `.plugin(tauri_plugin_opener::init())`
+in `lib.rs`, swap the `shell:allow-open` block in `capabilities/default.json` for
+`opener:allow-open-url` with the same two `url` entries, and replace the body of
+`shell_open` with `app.opener().open_url(&url, None::<&str>)`. The scheme check
+above it stays either way: the capability is what the WebView may ask for, and
+that check is what the process will do.

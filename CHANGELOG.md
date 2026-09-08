@@ -197,6 +197,52 @@ line, so that a later reader tidying the file does not move it inside.
 `.continue/README.md` stays in English and now says why: it is the folder's
 index, not queue material.
 
+## 0.8.3 - Source · Preview · Split, and the conflict screen 0.1a shipped without
+
+The interface catches up with the core. `Ctrl+E` cycles Source → Preview →
+Split, the mode is remembered per workspace in `session.json`, and the preview
+renders through `markdown_render`.
+
+**`innerHTML` is assigned in exactly one component, and the comment above it
+says why.** The string came from `notes-markdown` behind `ammonia`; nothing else
+in this application may assign it, and that component must never render a string
+it did not get from that command. A click inside the preview never navigates: a
+relative link opens the note in-app, an anchor scrolls, an `http(s)` link goes to
+the operating system's browser through `shell_open`, which **checks the scheme
+again in Rust** — the capability is what the WebView may ask for, and the check
+is what the process will do. Blocked remote images are named in a banner with a
+button that turns them on for this workspace, because a silent gap is worse than
+a visible one.
+
+**The comparison screen is the piece 0.1a left out.** The core suspended
+autosave and wrote the draft; the interface said only that something had
+happened. Scope §12's four resolutions are now all reachable — *comparar* as a
+screen (`ARCHITECTURE.md` §17.1: it changes nothing on disk and reads two
+strings the frontend already holds), and the other three as one call to
+`conflict_resolve`. It reads the disk version with `note_reload`, which touches
+no buffer, and shows the two side by side with the differing lines aligned.
+
+**The diff is sixty lines of this repository's own**, for the reason
+`notes-markdown` writes its own slugs: a dependency that changes how a diff
+aligns changes what a user sees at the one moment they are deciding which
+version of their work to keep. Common prefix and suffix are trimmed first, so a
+one-line change in a 6 000-line note is cheap; past four million cells the
+alignment is skipped and the differing middle is shown as one block, **loudly**,
+because a window that stops responding at that moment is worse than a coarse
+answer. Eight `vitest` cases hold it, and the one that matters asserts no line
+from either version is ever lost. `npm test` joins the local gate and CI.
+
+A mixed-EOL note now offers `note_convert_eol` in its read-only banner rather
+than only explaining why it cannot be edited.
+
+Two things were deliberately **not** done on the way past, and both are in
+`docs/DECISIONS-0.1b.md`: the preview serves raster images only, because
+"probably safe because of a browser rule" is not the same as safe by decision
+(D-08); and `shell().open` stays deprecated rather than migrating to
+`tauri-plugin-opener`, because that means a new dependency and a capability
+edit, and scope §19 sends both to the owner (D-09, with the whole change written
+out for whoever makes it).
+
 ## 0.8.2 - the three ways out of a conflict, each keeping the version it did not choose
 
 Scope §12 lists four resolutions — *comparar · manter o meu · usar o do disco ·

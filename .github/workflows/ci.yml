@@ -133,6 +133,11 @@ jobs:
           cache-dependency-path: apps/notes-app/package-lock.json
       - run: npm ci
       - run: npm run typecheck
+      # `vitest` for the pieces of the frontend that are logic rather than
+      # markup (docs/ARCHITECTURE.md §14). The conflict diff is the first:
+      # it decides what a user sees at the moment they choose which version of
+      # their work to keep.
+      - run: npm test -- --run
       - run: npm run build
 
   # The acceptance criterion that needs a thousand kills. Not on every push:
