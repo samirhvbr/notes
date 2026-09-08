@@ -8,6 +8,40 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.12.5 - the editor is set in the body font, because the reading was jumping
+
+Two things the milestone's own acceptance asks for that the build did not do,
+found by launching it and looking.
+
+**Source and Preview did not share a typography.** §4.3: *"Preview: mesma
+coluna, mesma tipografia — a leitura não deve 'pular' ao alternar."* The
+preview was in the interface sans and the editor was entirely in JetBrains
+Mono, so switching between them moved every line — two fonts at one size do not
+occupy the same space, and the column that 0.12.3 carefully matched was the
+only thing that did.
+
+§5 is explicit about which way to resolve it: *"uma sans para interface e
+**corpo**, uma mono para código."* A note is body text and the editor is where
+it is written, so the editor is now set in `--font-body` and **code keeps the
+mono** — inline spans and fenced blocks, through the highlight style. The H1
+that was a large monospace heading now looks like a heading.
+
+Both stacks became tokens, which also removed the last three places a font was
+written out by hand. Nothing is downloaded: the CSP forbids a remote font, and
+an application that needs the network to look right is not local-first.
+
+**The collapse-all icon read as a close button.** `ChevronsDownUp` at 15 px is
+two chevrons pointing at each other, which is an ✕ to anyone not looking for
+it — in a toolbar, beside a tree, that is an invitation to lose your expansion
+state on purpose. It is `ListCollapse` now.
+
+Both were found the same way: building the `.deb`, launching it, and taking a
+picture of the window. Synthetic clicks still do nothing on this machine — the
+window manager refuses to raise the window and WebKit ignores events delivered
+to an unfocused one, which is the same wall `ACCEPTANCE-0.1b.md` recorded — so
+the session was **seeded through the core** instead, and the shell photographed
+with a real note open in split.
+
 ## 0.12.4 - polish, and ACCEPTANCE-0.1d.md with the twenty-five flows re-indexed
 
 Steps 4 and 5 of 0.1d.

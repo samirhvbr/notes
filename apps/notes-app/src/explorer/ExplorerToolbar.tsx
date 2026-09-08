@@ -1,4 +1,4 @@
-import { ArrowDownAZ, ArrowUpZA, ChevronsDownUp, FilePlus, FolderPlus } from "lucide-react";
+import { ArrowDownAZ, ArrowUpZA, FilePlus, FolderPlus, ListCollapse } from "lucide-react";
 import { askText } from "../app/dialog";
 import { t } from "../i18n";
 import * as ipc from "../ipc";
@@ -110,7 +110,7 @@ export function ExplorerToolbar() {
         title={t("explorer.collapse")}
         onClick={collapseAll}
       >
-        <ChevronsDownUp size={15} aria-hidden="true" />
+        <ListCollapse size={15} aria-hidden="true" />
       </button>
     </div>
   );

@@ -205,10 +205,13 @@ function EditorBody({
 const theme = EditorView.theme(
   {
     "&": { height: "100%", backgroundColor: "var(--bg)", color: "var(--fg)" },
-    ".cm-scroller": {
-      fontFamily: "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace",
-      lineHeight: "1.7",
-    },
+    // **The sans, not the mono.** §5: *"uma sans para interface e corpo, uma
+    // mono para código"* — a note is body text, and the editor is where it is
+    // written. Setting the whole editor in mono also breaks §4.3's rule that
+    // switching Source ↔ Preview must not move the text under the reader: two
+    // fonts at the same size do not occupy the same space. Code keeps the mono,
+    // below, where it belongs.
+    ".cm-scroller": { fontFamily: "var(--font-body)", lineHeight: "1.7" },
     ".cm-content": {
       caretColor: "var(--fg)",
       padding: "28px 0 40vh",
@@ -259,7 +262,11 @@ const highlight = HighlightStyle.define(
     { tag: tags.strikethrough, textDecoration: "line-through", color: "var(--fg-dim)" },
     { tag: tags.link, color: "var(--accent)" },
     { tag: tags.url, color: "var(--accent)" },
-    { tag: [tags.monospace, tags.literal], color: "var(--good)" },
+    {
+      tag: [tags.monospace, tags.literal],
+      color: "var(--good)",
+      fontFamily: "var(--font-mono)",
+    },
     { tag: tags.quote, color: "var(--fg-dim)", fontStyle: "italic" },
     { tag: tags.list, color: "var(--accent)" },
     // The punctuation Markdown is made of — `#`, `*`, backticks. Dimmed rather

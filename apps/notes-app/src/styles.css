@@ -20,6 +20,15 @@
      (D-03). One line to change, no schema, no migration. */
   --column: 700px;
 
+  /* One sans for the interface and the body, one mono for code — the same two
+     on all four platforms, so the typography does not change between the `.deb`
+     and the `.dmg` (§5). Both are stacks: nothing is downloaded, because the
+     CSP forbids a remote font and an application that needs the network to look
+     right is not local-first. */
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
   /* Roles, so nothing below this block writes a hex. `tools/contrast.sh` reads
      the tokens; a colour written inline is a colour it cannot check, and
      `tools/check.sh` fails the build if one appears. */
@@ -40,8 +49,7 @@
   --bad: #f7768e;
   --good: #9ece6a;
   --warn: #e0af68;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
-    "Helvetica Neue", sans-serif;
+  font-family: var(--font-body);
 }
 
 * { box-sizing: border-box; }
@@ -143,7 +151,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .empty { margin: auto; text-align: center; max-width: 42ch; padding: 24px; }
 .muted { color: var(--fg-dim); }
-code { font-family: "JetBrains Mono", ui-monospace, monospace; }
+code { font-family: var(--font-mono); }
 
 .err {
   flex: 0 0 auto;
@@ -435,7 +443,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 }
 .compare-line {
   display: flex; gap: 8px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -648,7 +656,7 @@ code { font-family: "JetBrains Mono", ui-monospace, monospace; }
 .hits .row:hover { background: var(--hover); }
 .hits .where { display: block; font-size: 12px; }
 .hits .context {
-  display: block; font-family: "JetBrains Mono", ui-monospace, monospace;
+  display: block; font-family: var(--font-mono);
   font-size: 12px; color: var(--fg-dim);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
