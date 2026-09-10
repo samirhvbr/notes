@@ -390,3 +390,69 @@ pub fn settings_get(app: State<'_, App>) -> R<Settings> {
 pub fn settings_set(app: State<'_, App>, settings: Settings) -> R<()> {
     svc(&app)?.set_settings(settings)
 }
+
+#[tauri::command]
+pub fn index_start(
+    app: tauri::State<'_, App>,
+    force: bool,
+) -> Result<notes_core::content_index::IndexStatus, notes_model::CoreError> {
+    svc(&app)?.index_start(force)
+}
+#[tauri::command]
+pub fn index_status(
+    app: tauri::State<'_, App>,
+) -> Result<notes_core::content_index::IndexStatus, notes_model::CoreError> {
+    svc(&app)?.index_status()
+}
+#[tauri::command]
+pub fn index_cancel(app: tauri::State<'_, App>) -> Result<(), notes_model::CoreError> {
+    svc(&app)?.index_cancel()
+}
+#[tauri::command]
+pub fn recent_notes(
+    app: tauri::State<'_, App>,
+) -> Result<Vec<notes_core::recent::RecentNote>, notes_model::CoreError> {
+    svc(&app)?.recent_notes()
+}
+
+#[tauri::command]
+pub fn reference_preview(
+    app: tauri::State<'_, App>,
+    from: notes_model::RelPath,
+    to: notes_model::RelPath,
+) -> Result<notes_core::references::ReferencePlan, notes_model::CoreError> {
+    svc(&app)?.reference_preview(&from, &to)
+}
+#[tauri::command]
+pub fn reference_apply(
+    app: tauri::State<'_, App>,
+    token: String,
+    selected: Vec<usize>,
+) -> Result<notes_core::references::ReferenceResult, notes_model::CoreError> {
+    svc(&app)?.reference_apply(&token, &selected)
+}
+
+#[tauri::command]
+pub fn knowledge_get(app: State<'_, App>) -> Result<notes_core::knowledge::Knowledge, CoreError> {
+    svc(&app)?.knowledge()
+}
+#[tauri::command]
+pub fn wiki_candidates(app: State<'_, App>, target: String) -> Result<Vec<RelPath>, CoreError> {
+    svc(&app)?.wiki_candidates(&target)
+}
+#[tauri::command]
+pub fn metadata_get(
+    app: State<'_, App>,
+    text: String,
+) -> Result<notes_core::knowledge::Metadata, CoreError> {
+    svc(&app)?.outline(&text)?;
+    Ok(notes_core::knowledge::metadata(&text))
+}
+#[tauri::command]
+pub fn attachment_import(
+    app: State<'_, App>,
+    note: RelPath,
+    bytes: Vec<u8>,
+) -> Result<notes_core::attachments::Attachment, CoreError> {
+    svc(&app)?.import_attachment(&note, &bytes)
+}

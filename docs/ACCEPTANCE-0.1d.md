@@ -43,12 +43,16 @@ them.
 
 ## 2. Automated
 
-What a machine can hold, and it is less than a fifth of the above.
+Automated behavioral coverage complements the owner walk; it does not replace it.
 
 | What | Where | Holds |
 |---|---|---|
 | Menu keyboard navigation, with focus tracked | `src/app/Menu.test.tsx`, 14 tests, in a DOM | Arrows wrap; a disabled item is never landed on; `Home`/`End`; `Enter` runs and closes; **`Escape` and `Tab` return focus to the trigger**; a click outside closes; closing is requested before the action; choosing restores the trigger before the action runs; a launched dialog returns focus there; an action can focus its own destination |
 | Modal keyboard behavior | `src/app/DialogHost.test.tsx`, 6 DOM tests | Enter activates the focused button, including Cancel; Tab wraps in both directions; text selection and submission; Escape restores focus; confirmation opens without an input-method exception; modal keystrokes do not invoke background shortcuts |
+| Welcome creation | `Welcome.test.tsx` | Initial workspace naming modal is mounted and usable; cancellation makes no create call |
+| Settings/palette focus and asynchronous results | `modal.test.tsx`, `Palette.test.tsx` | Modal Tab trapping/restoration; Quick Open refreshes while its path cache builds |
+| Divider lifecycle | `Divider.test.tsx` | Keyboard bounds/reset and drag cursor cleanup on unmount |
+| Search startup cancellation | `SearchPanel.test.tsx` | A late start response is cancelled after the panel closes |
 | Contrast and the palette | `tools/contrast.sh`, in `check.sh` and CI | 42 pairs: AA for every text/surface pair, AA for the focus ring and for disabled controls, an 8/255 sRGB step between the three dark levels — **and a build failure if any colour is written outside `:root`** |
 | No blocking dialogs | `tools/no-blocking-dialogs.sh` | A browser script dialog anywhere in the frontend fails the build. Six flows of 0.1b were behind one |
 | Switching workspace | `notes-core`, `tests/switch.rs`, 6 tests | Identity survives a switch and a restart; a dirty close is refused **and names the notes**; a clean close leaves no workspace open; every workspace opened is offered again |
@@ -141,3 +145,18 @@ worth naming:
   into `DECISIONS-0.1d.md` rather than fixed on the way past. D-01 is the one
   that matters: `ARCHITECTURE.md` §4.1 describes a registry debounce that is not
   implemented, and the day it is, `open_workspace` becomes a loss path.
+
+## 6. Completion pass in 0.14.0
+
+The initial Welcome screen now mounts its own dialog host. Settings and the
+palette share focus trapping/restoration; settings errors expose a way to close.
+Quick Open refreshes while its cache builds, and cancelling Search during its
+start request cannot leave a background search running. A divider unmounted
+mid-drag restores the body cursor/selection. Development and bundle versions
+are stamped from `version.md` (0.13.4 onward). None of these fixes ticks the
+owner's installed-release checks above.
+
+Milestone 0.2 adds a reference review after Rename/Move's destination dialog.
+U5/U6 still preserve identity, with that additional explicit step. Its core
+changes are tracked in ADR-039 and ACCEPTANCE-0.2, outside the interface-only
+boundary of 0.1d.

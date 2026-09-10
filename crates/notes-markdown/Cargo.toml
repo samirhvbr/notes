@@ -8,6 +8,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+serde_yaml_ng = "0.10"
 notes-model = { workspace = true }
 pulldown-cmark = { workspace = true }
 ammonia = { workspace = true }

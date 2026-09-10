@@ -23,9 +23,11 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [running, setRunning] = useState(false);
   const [truncated, setTruncated] = useState(false);
+  const [partial,setPartial]=useState(false);
   const [scanned, setScanned] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const idRef = useRef<SearchId | null>(null);
+  const generation = useRef(0);
   const input = useRef<HTMLInputElement | null>(null);
   const openAt = useTabs((s) => s.openAt);
   const doc = useEditor((s) => s.doc);
@@ -37,6 +39,7 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
   }, []);
 
   const stop = useCallback(() => {
+    generation.current += 1;
     const id = idRef.current;
     idRef.current = null;
     setRunning(false);
@@ -50,18 +53,24 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
     stop();
     setHits([]);
     setTruncated(false);
+    setPartial(false);
     setScanned(0);
     setError(null);
     if (!query.trim()) return;
 
+    const ticket=generation.current;
+    setRunning(true);
     let id: SearchId;
     try {
-      id = await ipc.searchStart(query, { mode, case_sensitive: caseSensitive });
+      id = await ipc.searchStart(query, { mode, case_sensitive: mode === "words" ? false : caseSensitive });
     } catch (e) {
+      if(ticket!==generation.current)return;
+      setRunning(false);
       const err = ipc.asCoreError(e);
       setError(err.code === "invalid_path" ? t("search.badPattern") : t(`error.${err.code}`));
       return;
     }
+    if(ticket!==generation.current){void ipc.searchCancel(id).catch(()=>{});return;}
     idRef.current = id;
     setRunning(true);
 
@@ -76,12 +85,15 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
         if (p.hits.length) setHits((h) => h.concat(p.hits));
         setScanned(p.files_scanned);
         setTruncated(p.truncated);
+        setPartial(p.partial);
         if (p.done) {
           idRef.current = null;
           setRunning(false);
           return;
         }
-      } catch {
+      } catch (e) {
+        if(idRef.current!==id)return;
+        setError(t(`error.${ipc.asCoreError(e).code}`));
         idRef.current = null;
         setRunning(false);
         return;
@@ -126,13 +138,15 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
             <span className="muted">{t("search.mode")}</span>
             <select value={mode} onChange={(e) => setMode(e.target.value as SearchMode)}>
               <option value="literal">{t("search.mode.literal")}</option>
+              <option value="words">{t("search.mode.words")}</option>
               <option value="regex">{t("search.mode.regex")}</option>
             </select>
           </label>
           <label>
             <input
               type="checkbox"
-              checked={caseSensitive}
+              disabled={mode === "words"}
+              checked={mode === "words" ? false : caseSensitive}
               onChange={(e) => setCaseSensitive(e.target.checked)}
             />
             {t("search.caseSensitive")}
@@ -149,6 +163,7 @@ export function SearchPanel({ onClose }: { onClose: () => void }) {
         </div>
       </form>
 
+      {partial && <p className="muted">{t("search.partial")}</p>}
       {error && <p className="bad">{error}</p>}
 
       <p className="muted note">

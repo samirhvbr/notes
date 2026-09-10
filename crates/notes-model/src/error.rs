@@ -122,6 +122,12 @@ pub enum CoreError {
         path: String,
         kind: IoKind,
     },
+    #[error("{store} schema {found} is newer than supported schema {supported}")]
+    SchemaAhead {
+        store: String,
+        found: u32,
+        supported: u32,
+    },
     #[error("internal error: {message}")]
     Internal { message: String },
 }
@@ -150,6 +156,7 @@ impl CoreError {
             CoreError::LockTimeout => "lock_timeout",
             CoreError::Unsupported { .. } => "unsupported",
             CoreError::Io { .. } => "io",
+            CoreError::SchemaAhead { .. } => "schema_ahead",
             CoreError::Internal { .. } => "internal",
         }
     }

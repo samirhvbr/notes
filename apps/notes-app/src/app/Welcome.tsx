@@ -1,3 +1,4 @@
+import { Dialog } from "./DialogHost";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
@@ -6,9 +7,11 @@ import * as ipc from "../ipc";
 import { useWorkspace } from "../stores/workspace";
 import type { WorkspaceEntry } from "../ipc";
 
-export function Welcome() {
+export function Welcome() { return <><WelcomeContent/><Dialog/></>; }
+function WelcomeContent() {
   const adopt = useWorkspace((s) => s.adopt);
   const fail = useWorkspace((s) => s.fail);
+  const error=useWorkspace(s=>s.error);
   const [recent, setRecent] = useState<WorkspaceEntry[]>([]);
 
   useEffect(() => {
@@ -40,6 +43,7 @@ export function Welcome() {
   return (
     <div className="welcome">
       <h1>{t("welcome.title")}</h1>
+      {error && <p role="alert">{t(`error.${error.code}`)}</p>}
       <p className="muted">{t("welcome.subtitle")}</p>
       <div className="actions">
         <button onClick={() => pick(false)}>{t("welcome.open")}</button>

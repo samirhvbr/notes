@@ -1,3 +1,5 @@
+import * as ipc from "../ipc";
+import {useWorkspace} from "../stores/workspace";
 import { useEffect, useRef } from "react";
 import { Annotation, EditorState } from "@codemirror/state";
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from "@codemirror/view";
@@ -72,6 +74,23 @@ export function Editor() {
         keymap.of([...searchKeymap, ...defaultKeymap, ...historyKeymap]),
         markdown({ codeLanguages: languages }),
         ...(wrapOn ? [EditorView.lineWrapping] : []),
+        EditorView.domEventHandlers({paste(event,editor){
+          const file=Array.from(event.clipboardData?.files??[]).find(f=>f.type.startsWith("image/"));
+          if(!file || readOnly)return false;
+          event.preventDefault();
+          const current=useEditor.getState().doc;
+          if(!current)return true;
+          const before=editor.state;
+          const workspace=useWorkspace.getState().info?.id;
+          if(file.size>8*1024*1024){useWorkspace.getState().fail({code:"unsupported",cap:"clipboard image over 8 MiB"});return true;}
+          void file.arrayBuffer().then(async buffer=>{
+            if(useWorkspace.getState().info?.id!==workspace)return;
+            const result=await ipc.attachmentImport(current.path,Array.from(new Uint8Array(buffer)));
+            if(useEditor.getState().doc?.noteId===current.noteId && editor.state===before && useWorkspace.getState().info?.id===workspace){editor.dispatch(editor.state.replaceSelection(result.markdown));editor.focus();}
+            else useWorkspace.getState().note(t("attachment.created",{path:result.path}));
+          }).catch(useWorkspace.getState().fail);
+          return true;
+        }}),
         EditorState.readOnly.of(readOnly),
         EditorState.lineSeparator.of("\n"),
         // The caret and the scroll position belong to the tab, not to the

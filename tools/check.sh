@@ -10,7 +10,8 @@
 # when `rustup target add x86_64-pc-windows-gnu` had never been run made the one
 # step that would have caught both compile failures the one step nobody had —
 # a check that silently opts out is not a check. The target type-checks without
-# linking, so no MSVC toolchain is involved, and the install is a one-off of a
+# linking. Bundled SQLite additionally needs a MinGW C compiler
+# (mingw-w64 on Homebrew / gcc-mingw-w64-x86-64 on Debian). The target install is a one-off of a
 # few seconds. `NOTES_NO_WINDOWS_CHECK=1` opts out deliberately; a machine with
 # no rustup and no target degrades to a warning rather than a failure, because
 # refusing to run the rest of the gate over a cross-check helps nobody.
@@ -35,7 +36,7 @@ windows_target_ready() {
 
 if why=$(windows_target_ready); then
   step "clippy (windows)"   cargo clippy --target x86_64-pc-windows-gnu \
-                              -p notes-model -p notes-fs -p notes-core -p notes-markdown \
+                              -p notes-model -p notes-fs -p notes-core -p notes-markdown -p notes-index -p notes-mcp \
                               --all-targets -- -D warnings
 else
   printf '\n== clippy (windows)\n   WARNING, not run — %s\n' "${why:-unknown}"

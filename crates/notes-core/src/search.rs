@@ -31,6 +31,7 @@ use crate::ignore::is_hidden_name;
 #[ts(export)]
 pub enum SearchMode {
     Literal,
+    Words,
     Regex,
 }
 
@@ -80,6 +81,7 @@ pub struct SearchProgress {
     /// interface can say "showing the first N" instead of implying there are no
     /// more.
     pub truncated: bool,
+    pub partial: bool,
 }
 
 /// A ceiling on hits. A query of `e` over ten thousand notes is a request to
@@ -100,6 +102,7 @@ struct Shared {
     scanned: AtomicUsize,
     total: AtomicUsize,
     truncated: AtomicBool,
+    partial: bool,
 }
 
 pub struct Search {
@@ -110,6 +113,23 @@ pub struct Search {
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 impl Search {
+    pub fn ready(mut hits: Vec<SearchHit>, partial: bool) -> Self {
+        let truncated = hits.len() > MAX_HITS;
+        hits.truncate(MAX_HITS);
+        let count = hits.len();
+        Self {
+            id: SearchId(NEXT_ID.fetch_add(1, Ordering::Relaxed)),
+            shared: Arc::new(Shared {
+                hits: Mutex::new(hits),
+                cancel: AtomicBool::new(false),
+                done: AtomicBool::new(true),
+                scanned: AtomicUsize::new(count),
+                total: AtomicUsize::new(count),
+                truncated: AtomicBool::new(truncated),
+                partial,
+            }),
+        }
+    }
     pub fn id(&self) -> SearchId {
         self.id
     }
@@ -120,6 +140,11 @@ impl Search {
     /// file, so cancelling is bounded by one file rather than by the workspace.
     pub fn start(root: &std::path::Path, query: &str, opts: SearchOpts) -> Result<Self, CoreError> {
         let pattern = match opts.mode {
+            SearchMode::Words => {
+                return Err(CoreError::Unsupported {
+                    cap: "word search requires the index".into(),
+                })
+            }
             SearchMode::Literal => regex::escape(query),
             SearchMode::Regex => query.to_string(),
         };
@@ -139,6 +164,7 @@ impl Search {
             scanned: AtomicUsize::new(0),
             total: AtomicUsize::new(0),
             truncated: AtomicBool::new(false),
+            partial: false,
         });
         let id = SearchId(NEXT_ID.fetch_add(1, Ordering::Relaxed));
 
@@ -163,6 +189,7 @@ impl Search {
             done: self.shared.done.load(Ordering::Acquire),
             cancelled: self.shared.cancel.load(Ordering::Relaxed),
             truncated: self.shared.truncated.load(Ordering::Relaxed),
+            partial: self.shared.partial,
         }
     }
 

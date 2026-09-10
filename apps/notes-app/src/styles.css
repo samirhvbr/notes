@@ -838,3 +838,40 @@ code { font-family: var(--font-mono); }
   font-weight: 600;
 }
 .welcome .recent button { display: flex; gap: 10px; align-items: baseline; }
+
+.browser-modes, .index-controls { display:flex; gap:4px; padding:8px; flex-wrap:wrap; }
+.browser-modes button { flex:1; }
+.index-controls { font-size:11px; border-top:1px solid var(--border); }
+.index-controls span { flex-basis:100%; }
+
+.reference-review { max-height:80vh; overflow:auto; width:min(700px,90vw); }
+.reference-review pre { white-space:pre-wrap; overflow-wrap:anywhere; }
+
+.knowledge-panel { padding: 8px; }
+.knowledge-panel select { max-width: 100%; }
+.knowledge-panel dt { font-weight: bold; }
+.knowledge-panel dd { margin: 0 0 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.knowledge-graph { overflow: auto; padding: 20px; }
+.knowledge-graph svg { width: 100%; max-height: 65vh; min-height: 300px; }
+.knowledge-graph line { stroke: var(--fg-dim); opacity: .5; }
+.knowledge-graph circle { fill: var(--accent); }
+.knowledge-graph text { fill: var(--fg); font-size: 11px; }
+.knowledge-graph g { cursor: pointer; }
+
+.knowledge-graph .dense text { visibility: hidden; }
+.knowledge-graph .dense g:hover text, .knowledge-graph .dense g:focus text { visibility: visible; }
+.knowledge-graph g:focus circle { stroke: var(--fg); stroke-width: 3; }
+
+.knowledge-graph input, .knowledge-panel select {
+  background: var(--bg-raised);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 7px 10px;
+  font: inherit;
+}
+.knowledge-graph input::placeholder { color: var(--fg-dim); }
+.knowledge-graph input { width: min(100%, 340px); }
+.knowledge-panel label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
+.knowledge-graph .node-hit { fill: transparent; pointer-events: all; }

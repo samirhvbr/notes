@@ -321,7 +321,7 @@ complete index.
 
 Listed because an unstated exclusion is read as an oversight:
 
-collaborative editing · a full WYSIWYG editor · canvas · graph view · plugins ·
+collaborative editing · a full WYSIWYG editor · canvas · plugins ·
 multiple themes · web publishing · an embedded AI chat · native Git integration ·
 sync · version history · user accounts · an official cloud server.
 
@@ -344,3 +344,10 @@ notes/
 The app must not get in the way of that — most concretely, it must tolerate
 `.git/` in the tree and never touch it. Native Git integration is a candidate
 for later, not a requirement now.
+
+## Local knowledge in milestone 0.3
+
+Graph view is implemented under ADR-038/041, using the same resolved links as
+backlinks. YAML properties, tags, wiki links, clipboard images and standalone
+local MCP are described in [KNOWLEDGE-0.3.md](KNOWLEDGE-0.3.md); the source
+files remain authoritative and permissions are explicit.

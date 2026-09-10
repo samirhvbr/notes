@@ -209,3 +209,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: tools/crash-save-loop.sh
+
+  ios-core:
+    name: iOS simulator core
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+      - uses: Swatinem/rust-cache@v2
+      - name: check the shared core including SQLite for iOS
+        run: cargo check --locked --target aarch64-apple-ios-sim -p notes-model -p notes-fs -p notes-markdown -p notes-index -p notes-core

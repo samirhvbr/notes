@@ -12,4 +12,4 @@ hits: Array<SearchHit>, files_scanned: number, total_hits: number, done: boolean
  * interface can say "showing the first N" instead of implying there are no
  * more.
  */
-truncated: boolean, };
+truncated: boolean, partial: boolean, };

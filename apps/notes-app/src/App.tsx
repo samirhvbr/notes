@@ -1,6 +1,9 @@
+import {Graph,WikiDialog} from "./app/Knowledge";
+import { ReferenceReview } from "./app/ReferenceReview";
+import { WorkspaceBrowser } from "./explorer/WorkspaceBrowser";
+import { IndexControls } from "./app/IndexControls";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Editor } from "./editor/Editor";
-import { Tree } from "./explorer/Tree";
 import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
 import { Dialog } from "./app/DialogHost";
@@ -8,7 +11,6 @@ import { Tabs } from "./app/Tabs";
 import { Rail } from "./app/Rail";
 import { NoteHeader } from "./app/NoteHeader";
 import { Divider } from "./app/Divider";
-import { ExplorerToolbar } from "./explorer/ExplorerToolbar";
 import { WorkspaceMenu } from "./app/WorkspaceMenu";
 import { Palette, type Command, type PaletteMode } from "./app/Palette";
 import { SettingsPanel } from "./app/Settings";
@@ -212,12 +214,9 @@ export default function App() {
             the whole window. */}
         {panel && (
           <aside className="side">
-            {panel === "files" ? (
+            {panel !== "search" ? (
               <>
-                <ExplorerToolbar />
-                <div className="side-scroll">
-                  <Tree />
-                </div>
+                <WorkspaceBrowser />
               </>
             ) : (
               <SearchPanel onClose={() => togglePanel("search")} />
@@ -225,11 +224,13 @@ export default function App() {
             {/* Where changing workspace lives from 0.1d on. Before it, the only
                 route was the Welcome screen — and the Welcome screen is gone
                 the moment a folder is open. */}
+            <IndexControls key={info.id} workspace={info.id} />
             <WorkspaceMenu />
           </aside>
         )}
 
         <main className="main">
+          {panel === "graph" ? <Graph/> : <>
           <Tabs onNew={newNote} />
           <NoteHeader />
           {doc?.draft && (
@@ -303,10 +304,13 @@ export default function App() {
               {view !== "source" && doc && <Preview />}
             </div>
           )}
+          </>}
         </main>
       </div>
 
       <Dialog />
+      <ReferenceReview />
+      <WikiDialog/>
       {palette && (
         <Palette mode={palette} commands={commands} onClose={() => setPalette(null)} />
       )}

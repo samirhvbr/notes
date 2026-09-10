@@ -4,4 +4,4 @@
  * How the query is read. `Words` belongs to 0.2 and FTS5; it is named here so
  * the interface can show three stable semantics from the start (§10).
  */
-export type SearchMode = "literal" | "regex";
+export type SearchMode = "literal" | "words" | "regex";

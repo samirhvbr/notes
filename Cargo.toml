@@ -15,6 +15,7 @@ authors = ["Samir Hanna Verza"]
 repository = "https://github.com/samirhvbr/notes"
 
 [workspace.dependencies]
+notes-index = { path = "crates/notes-index" }
 notes-model = { path = "crates/notes-model" }
 notes-fs = { path = "crates/notes-fs" }
 notes-core = { path = "crates/notes-core" }

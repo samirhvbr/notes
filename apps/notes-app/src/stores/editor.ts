@@ -213,6 +213,8 @@ export const useEditor = create<EditorState>((set, get) => ({
     if (doc.bufferVersion !== doc.savedVersion) return;
     try {
       const fresh = await ipc.noteReload(doc.noteId);
+      // A reload must not replace typing or navigation that happened during IPC.
+      if (get().doc !== doc) return;
       set({
         doc: {
           ...fromOpened(fresh),

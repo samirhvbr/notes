@@ -1,3 +1,4 @@
+import { reviewedMove } from "../app/ReferenceReview";
 import { MoreVertical } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "../stores/workspace";
@@ -171,10 +172,14 @@ function useEntryActions(entry: Entry): MenuRow[] {
         validate: (v) => (v.trim() ? null : t("dialog.nameRequired")),
       });
       if (!name || name === entry.name) return;
-      const moved = await ipc.entryRename(entry.path, name);
+      const to = (parent ? `${parent}/${name}` : name) as RelPath;
+      const moved = await reviewedMove(entry.path, to);
+      if(!moved)return;
+      if(moved.failed.length)note(t("references.failed",{count:moved.failed.length}));
       await refresh(parent);
       // The tab keeps its identity, so the open note only needs its new path.
       useEditor.getState().repath(entry.path, moved.path);
+      await useEditor.getState().reloadFromDisk();
     });
 
   const move = () =>
@@ -187,10 +192,14 @@ function useEntryActions(entry: Entry): MenuRow[] {
       });
       if (dir === null) return;
       const target = (dir.trim() === "/" ? "" : dir.trim()) as RelPath;
-      const moved = await ipc.entryMove(entry.path, target);
+      const to = (target ? `${target}/${entry.name}` : entry.name) as RelPath;
+      const moved = await reviewedMove(entry.path, to);
+      if(!moved)return;
+      if(moved.failed.length)note(t("references.failed",{count:moved.failed.length}));
       await refresh(parent);
       await refresh(target);
       useEditor.getState().repath(entry.path, moved.path);
+      await useEditor.getState().reloadFromDisk();
     });
 
   const duplicate = () =>

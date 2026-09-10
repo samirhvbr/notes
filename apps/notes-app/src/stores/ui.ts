@@ -10,11 +10,10 @@ const MODES: ViewMode[] = ["source", "preview", "split"];
  * Which panel the sidebar is showing, or `null` for a collapsed sidebar.
  *
  * The rail's icons toggle this, and clicking the icon of the panel already
- * showing collapses the sidebar (`.continue/0.1d-interface.md` §4.1). `graph`
- * is not here: it is 0.3, and the rail shows it disabled rather than pretending
- * it is a panel that could be selected (ADR-038).
+ * showing collapses the sidebar (`.continue/0.1d-interface.md` §4.1). Graph
+ * uses the main area and shares the knowledge index with backlinks.
  */
-export type Panel = "files" | "search";
+export type Panel = "files" | "search" | "graph";
 
 interface UiState {
   view: ViewMode;

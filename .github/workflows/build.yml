@@ -182,6 +182,14 @@ jobs:
           npm ci
           npm run tauri build -- --bundles deb,appimage
 
+      - name: build the standalone local MCP server
+        run: |
+          cargo build --release -p notes-mcp --locked
+          mkdir -p dist-release
+          tar -czf "dist-release/notes-mcp-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz" -C target/release notes-mcp
+          cd dist-release
+          sha256sum notes-mcp-*.tar.gz > "notes-mcp-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz.sha256"
+
       - name: the tarball the AUR package consumes
         run: packaging/linux/tarball.sh "${{ needs.what.outputs.version }}"
 

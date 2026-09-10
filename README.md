@@ -17,15 +17,18 @@ by us.
 
 ## Status
 
-**Milestone 0.1 is built and packaged for Linux.** The editor, the preview, the
-watcher, tabs, quick open, global search and the settings all exist and are
-tested; the [acceptance documents](docs/README.md) list every criterion against
-the test that holds it.
+**Milestones 0.1, 0.2 and 0.3 are implemented.** The desktop shell now includes
+Files, Recent and Outline, incremental SQLite word search, and a review of
+incoming/outgoing Markdown references before rename or move. Literal and Regex
+retain their scan semantics; editing and Quick Open do not depend on the index.
+[Local knowledge and agents](docs/KNOWLEDGE-0.3.md) adds YAML properties, tags,
+wiki links, backlinks, graph navigation, clipboard images and standalone
+`notes-mcp` with scoped permissions and guarded writes.
 
-**What has not happened is a person walking the interface.** Every criterion so
-far is an assertion about the core, and the twenty-five interface flows in
-`docs/ACCEPTANCE-0.1b.md` and `docs/ACCEPTANCE-0.1c.md` are unticked on purpose:
-a flow is verified when somebody has done it, not when a test near it passes.
+Owner verification on installed Linux releases, repeated on the following
+release, remains pending in [0.1d acceptance](docs/ACCEPTANCE-0.1d.md) and
+[0.2 acceptance](docs/ACCEPTANCE-0.2.md) and
+[0.3 acceptance](docs/ACCEPTANCE-0.3.md). Automated tests are recorded separately.
 
 macOS and Windows build and are tested in CI on every push. **No artefact is
 published for either**, because an unsigned one teaches its user to click past
@@ -34,8 +37,7 @@ the warning that exists to protect them
 membership and a code-signing certificate, and they are named in
 `.github/workflows/build.yml`.
 
-Stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6. SQLite arrives with
-the index at 0.2.
+Stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite/FTS5.
 
 ## Install
 

@@ -1,10 +1,8 @@
 # Architecture
 
-**Status: ACTIVE** — milestones 0.1a and **0.1b** have shipped. §7's 0.1b
-commands, §8 (reconciliation), §9 (identity correlation) and §10 (the Markdown
-IR) describe code that exists as of `0.9.0`. Sections tagged `[0.2]`, `[0.3]`
-and `[0.4]` remain `PROPOSED` until their milestone ships, and are here only so
-that what has shipped does not foreclose them.
+**Status: ACTIVE** through milestones 0.1d and 0.2, implemented in 0.14.0.
+Sections tagged `[0.3]` and `[0.4]` remain `PROPOSED`. Owner verification of
+installed releases is tracked separately in the acceptance documents.
 
 The decisions this document introduced are recorded as **ADR-013 … ADR-024** in
 [decisions.md](decisions.md), with **ADR-025 … ADR-029** added by 0.1b. The
@@ -52,7 +50,7 @@ notes/
 │   ├── notes-fs/                   FileSystem trait, LocalFs, root jail, atomic write, watcher
 │   ├── notes-markdown/             [0.1b] parse → Document IR, render → sanitized HTML
 │   ├── notes-core/                 WorkspaceService: registry, write protocol, reconciliation, session
-│   ├── notes-index/                [0.2] SQLite, FTS5, links, tags
+│   ├── notes-index/                [0.2] SQLite, FTS5, parsed links; tags at 0.3
 │   └── notes-mcp/                  [0.3] stdio MCP server over notes-core
 ├── packages/
 │   └── ui/                         shared React components; may stay empty until 0.4 needs it
@@ -97,7 +95,7 @@ schema change that forces a migration or reindex is a **Y** bump.
 | `notes-fs` | `FileSystem` trait; `LocalFs`; root jail; atomic replace; case-sensitivity probe; `notify` watcher normalized to `FsEvent` | know what a note is; touch the registry |
 | `notes-markdown` `[0.1b]` | `parse(&str) -> Document`; `render_html(&str, RenderOpts) -> Rendered`; link resolution; slugging; sanitization | do I/O; know about workspaces |
 | `notes-core` | `WorkspaceService` — open/close workspace, registry, text profile, write protocol, drafts, conflicts, reconciliation, identity correlation, session, settings, search-by-scan, cross-process lock | render UI strings; depend on `tauri` |
-| `notes-index` `[0.2]` | `index.db` schema, incremental indexer, FTS5, link graph, tag table | be required for opening or editing a note |
+| `notes-index` `[0.2]` | separate SQLite stores, incremental cache, FTS5, parsed document facts; graph/tags at 0.3 | be required for opening or editing a note |
 | `notes-mcp` `[0.3]` | stdio server; permission scopes; base-rev enforcement | contain any note logic not in `notes-core` |
 
 `notes-core` is the only public API. `src-tauri` and `notes-mcp` are clients of
@@ -180,7 +178,7 @@ opened:
    sensitive filesystem as insensitive refuses a legitimate name, while the
    reverse lets `note_create` pass a collision check and overwrite a note.
 
-The result is persisted in `registry.json` (`case_insensitive`) and
+The result is persisted in `registry.db` (`case_insensitive`) and
 **self-corrects in both directions** from later observations: two entries equal
 under case-fold on a root marked insensitive → flip to sensitive; a successful
 case-flipped `stat` with a matching `native_id` on a root marked sensitive →
@@ -206,14 +204,17 @@ default_data_dir() = dirs::data_dir()/notes      overridable by NOTES_DATA_DIR (
 ├── settings.json                        global settings (§4.5)
 ├── workspaces.json                      { schema, workspaces: [{ id, root, display_name, last_opened }] }
 └── workspaces/<WorkspaceId>/
-    ├── registry.json                    identity registry — OPERATIONAL (§4.1); registry.db from 0.2
+    ├── registry.db                      identity registry — OPERATIONAL (§4.1)
+    ├── registry.json.bak-1              retained legacy migration backup
+    ├── recent.json                     recently opened NoteIds — OPERATIONAL
+    ├── reference-backups/               reviewed rewrite originals and journals
     ├── drafts/<NoteId>.md               unsaved buffer snapshot — OPERATIONAL (§4.2)
     ├── drafts/<NoteId>.json             draft sidecar
     ├── conflicts/<NoteId>/<ts>-<side>.md  non-chosen version — OPERATIONAL (§4.3)
     ├── conflicts/<NoteId>/<ts>-<side>.json
     ├── session.json                     tabs, cursor, scroll — OPERATIONAL, resettable (§4.4)
     ├── write.lock                       cross-process advisory lock, ephemeral (§6)
-    ├── index.db                         [0.2] DERIVED — deleting it only costs a reindex
+    ├── index.db                         DERIVED — deleting it only costs a reindex
     └── cache/                           DERIVED
 ```
 
@@ -221,7 +222,11 @@ The three categories are the product's: **operational** data has retention and
 migration rules and is never deleted as "cache"; **derived** data is deletable
 at any time. The UI's "Clear cache" touches `index.db` and `cache/` only.
 
-### 4.1 `registry.json` (schema 1)
+### 4.1 `registry.db` (schema 1)
+
+The SQLite `registry` row stores the versioned JSON identity snapshot. The
+shape below remains illustrative; serialized field details are owned by
+`notes-core::registry`, not this example.
 
 ```json
 {
@@ -247,16 +252,19 @@ at any time. The UI's "Clear cache" touches `index.db` and `cache/` only.
 }
 ```
 
-- Written atomically (tmp + rename), debounced to at most one write per 2 s,
-  and on shutdown. `tombstones` is reserved for 0.6 and stays empty before it.
-- **0.1:** JSON. **0.2:** moves to `registry.db`, a SQLite file **separate from
-  `index.db`**, so "delete the index" can never touch identity. The move is
-  mandatory, not conditional: `[0.3]` needs a second process (`notes-mcp`)
-  updating the registry, and SQLite in WAL mode with `busy_timeout` is the
-  multi-process story; a JSON read-modify-write is not.
-- Migration rule for any `schema` change: read old → write new to `tmp` → copy
-  old to `registry.json.bak-<old-schema>` → rename. Never in place, never
-  without the backup.
+- Persisted immediately in a SQLite transaction; no registry debounce exists.
+  `BEGIN IMMEDIATE` merges changes against the caller's baseline, preserving
+  unrelated notes written by another process and refusing conflicting changes.
+- Operational `registry.db` is separate from derived `index.db`. Both use WAL,
+  a five-second busy timeout and transactional `user_version` initialization.
+  A newer schema is refused before migration or journal changes.
+- Migration retains `registry.json` and first copies `registry.json.bak-1`.
+  Once populated, the DB is authoritative. Corrupt operational state is an
+  error, never an empty registry. Future schema upgrades require a backup before
+  changing operational data; schema 1 has no later migration yet.
+- `recent.json` keeps the last 100 visited NoteIds independently of the index;
+  current paths resolve through the registry. Rewrite originals and journals
+  live in `reference-backups/` and are not cache.
 
 ### 4.2 Drafts
 
@@ -300,7 +308,7 @@ logged and ignored; the app starts with an empty session, never fails to open.
   "linux":    { "webkit_dmabuf_workaround": "auto" } }
 ```
 
-Per-workspace overrides live in `registry.json` under `settings` (not shown
+Per-workspace overrides live in `registry.db` under `settings` (not shown
 above) and, when the user enables it, in `.notes/config.json` (§16).
 
 ---
@@ -325,15 +333,12 @@ note_save(note_id, text, buffer_version, base_rev)
  1. take per-document async mutex
  2. take write.lock (§6)                                    ── LockTimeout → step 9
  3. encode: text + TextProfile → bytes (re-add BOM, EOL, final newline); hash
- 4. if hash == registry.hash and stat(disk) == registry.(size,mtime)
-       → release; return Saved { unchanged: true }          (no write, no mtime bump)
- 5. stat(disk); compare to base_rev (sent by the caller)
-       size+mtime equal                       → proceed
-       differ → read + hash
-         hash == base_rev.hash                → proceed (touch-only change; refresh base)
-         hash == new buffer hash              → convergence; update registry; return Saved
-         else                                 → CONFLICT (step 8)
- 6. fs.write_atomic(path, bytes, expect: Some(base_rev))    ── fs re-stats immediately before rename
+ 4. read + hash disk under the lock (metadata equality is not proof of content)
+       hash == new buffer hash              → convergence; return Saved unchanged
+ 5. compare disk hash to base_rev.hash (sent by the caller)
+       equal                                → proceed; refresh size/mtime
+       different                            → CONFLICT (step 8)
+ 6. fs.write_atomic(path, bytes, expect: Some(base_rev))    ── fs re-hashes immediately before rename
  7. registry: size, mtime, hash, rev += 1; arm self-write expectation (path, hash, ttl 2 s);
     delete draft if draft.buffer_version ≤ buffer_version;
     release; return Saved { base_rev, buffer_version }
@@ -728,7 +733,7 @@ limitations. Unknown filesystem → most conservative row.
 | Android SAF tree `[0.4]` | **no** | no | no → poll | document id | no | no rename-over; `write_atomic` = write new + verify + delete old + rename; permission may vanish when the document is moved |
 
 Detection: Linux `statfs().f_type`; macOS `pathconf` + `statfs`; Windows
-`GetVolumeInformationW`. The result is cached in `registry.json` and
+`GetVolumeInformationW`. The result is cached in `registry.db` and
 re-probed when `root_native_id` changes.
 
 **Reading the id.** Unix takes `dev` and `ino` straight from the `stat` already
@@ -1007,3 +1012,41 @@ numbers continue from the last ADR there.
     rolling `webkit2gtk-4.1`. (Separate subject from 11; separate ADR.)
 12. **Distribution requires signing**: no unsigned macOS or Windows artifact is
     published.
+
+## 19. Implemented index and reference commands (0.2)
+
+ADR-039 settles the crate boundary deferred by ADR-003. `notes-index` receives
+facts and text; only core traverses and reads notes through `notes-fs`. Its
+`plan()` returns cached metadata; core compares `(size, mtime)`, reads/hashes
+changed files and invokes `apply()` with whether parsing is required. An
+unchanged hash updates metadata only. The derived schema stores path metadata,
+serialized parser documents (including links/images and headings), and FTS5.
+NoteIds/revisions stay authoritative in the operational registry; independent
+SQL tag/graph tables are deferred to 0.3 rather than maintained empty.
+
+`index_start(force)`, `index_status()` and `index_cancel()` implement a worker
+thread and polled progress, not an event channel. A per-workspace `index.lock`
+serializes writers; readers use WAL. Complete scans prune missing paths;
+unreadable directories do not authorize pruning. UI polls at 500 ms and starts
+incremental checks every ten seconds while the sidebar is mounted. Saves and
+reconciliation mark results stale until the next scan. Workers remain off the
+service mutex, so note editing is independent of indexing.
+
+`recent_notes()` lists operational recent history. Existing `markdown_outline`
+parses the active buffer for Outline. `SearchMode::Words` queries FTS5; Literal
+and Regex retain their scanner. `reference_preview(from,to)` returns an opaque
+workspace-bound token and source spans; `reference_apply(token,selected)`
+validates hashes, saves originals, relocates with stable IDs and applies chosen
+edits with per-file guarded writes. This is explicitly not an atomic multi-file
+transaction. See [ACCEPTANCE-0.2.md](ACCEPTANCE-0.2.md) for semantics, recovery,
+limits and measured performance; this section supersedes earlier proposed
+0.2 command names in §7.
+
+## Milestone 0.3 implementation
+
+[KNOWLEDGE-0.3.md](KNOWLEDGE-0.3.md) specifies the implemented parser, wiki
+resolution, bounded graph, attachments and scoped stdio MCP surfaces. Index
+schema 2 invalidates old derived parser documents; registry schema stays 1.
+`notes-mcp` depends on core and has no Tauri or frontend dependency. Both
+processes use the same app-data directory, enrollment lock, identity lock and
+guarded save protocol. ADR-041 records these choices and their limits.

@@ -1,3 +1,4 @@
+import {openWiki} from "../app/Knowledge";
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as ipc from "../ipc";
 import { t } from "../i18n";
@@ -71,6 +72,8 @@ export function Preview() {
       if (!anchor) return;
       e.preventDefault();
 
+      const wiki=anchor.getAttribute("data-wiki-target");
+      if(wiki){void openWiki(wiki);return;}
       const notePath = anchor.getAttribute("data-note-path");
       if (notePath) {
         void open(notePath as ipc.RelPath).catch(fail);

@@ -24,7 +24,7 @@ that lists everything stops being read.
 | [ARCHITECTURE.md](ARCHITECTURE.md) | **The architecture this application is built against.** Repository layout, crates, core types, the app-data layout and its schemas, the command contract, `CoreError`, the inter-process lock, the markdown IR, `Caps` and distribution — every decision `.continue/SCOPE_final.md` §20 delegates. `ACTIVE`; §§7–10 describe code that exists since 0.1b, and sections for later milestones stay `PROPOSED`. |
 | [product.md](product.md) `PROPOSED` | **What notes is** — the local-first constraint the whole product hangs off, the workspace model, the file format and the promise that the app never rewrites a note it was not asked to, the interface, the editor and its view modes, autosave and write safety, search, links, and the explicit list of what the first version does not do. |
 | [architecture-v1.md](architecture-v1.md) `SUPERSEDED` | **How it is put together** — the layering rule everything is checked against, the stack, the repository layout at both levels, the filesystem abstraction and why it exists before there is a second platform, the index and `.notes/`, the local security posture, the sync model that is designed for but not built, and the server, REST and MCP surfaces. |
-| [roadmap.md](roadmap.md) `PROPOSED` | **The order it gets built in** — the seven product milestones from a desktop editor to an MCP server, what each must do before the next starts, and why each one is useful on its own. |
+| [roadmap.md](roadmap.md) `ACTIVE` through 0.3 | **The order it gets built in** — the seven product milestones from a desktop editor to an MCP server, what each must do before the next starts, and why each one is useful on its own. |
 | [versioning.md](versioning.md) | How a version is set and a commit is written. `version.md` is the sole authority and the version is the **first semver in it**; the `X`/`Y`/`Z` criteria **for this project**; `X.Y.Z - description in English` — and the host's convention instead, in a repository we do not own; **[tags and Releases](versioning.md#tags-and-releases)**; what the two git hooks check. |
 | [decisions.md](decisions.md) | **ADRs** — the chronological record of what was decided here and why, so it is not re-litigated. |
 | [security.md](security.md) | The normative security document. In a conflict with any other document, it wins. |
@@ -60,3 +60,10 @@ regenerated, and which questions are answered upstream rather than here.
 source. It is not restated here. It began as a local rule in this repository
 ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built))
 and the fleet adopted it the same day.
+
+- [Acceptance — milestone 0.2](ACCEPTANCE-0.2.md): index, search semantics, reference review, recovery and pending installed-release flows.
+
+- [Local knowledge and agents](KNOWLEDGE-0.3.md): metadata, wiki resolution, graph, clipboard import and standalone MCP configuration/recovery.
+- [Acceptance — milestone 0.3](ACCEPTANCE-0.3.md): automated evidence and pending installed-release owner flows.
+
+- [Mobile acceptance](ACCEPTANCE-0.4.md): merged compilation foundation and remaining usable-mobile scope.

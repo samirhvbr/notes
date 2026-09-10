@@ -265,8 +265,10 @@ fn an_empty_file_is_never_correlated_by_content() {
     let mut f = setup();
     std::fs::write(f.work.path().join("vazia.md"), b"").unwrap();
     let id = f.svc.open_note(&rel("vazia.md")).unwrap().note_id;
-    std::fs::remove_file(f.work.path().join("vazia.md")).unwrap();
+    // Keep both files alive until the replacement exists. Otherwise a filesystem
+    // may reuse the inode, exercising native identity instead of content matching.
     std::fs::write(f.work.path().join("sub/outra-vazia.md"), b"").unwrap();
+    std::fs::remove_file(f.work.path().join("vazia.md")).unwrap();
 
     let events = scan(&mut f, &[]);
     assert!(
@@ -275,7 +277,10 @@ fn an_empty_file_is_never_correlated_by_content() {
             .any(|e| matches!(e, CoreEvent::NoteMoved { .. })),
         "two empty files are not the same note: {events:?}"
     );
-    let _ = id;
+    assert_ne!(
+        f.svc.open_note(&rel("sub/outra-vazia.md")).unwrap().note_id,
+        id
+    );
 }
 
 /// A rename **the application performs** never enters correlation at all: the

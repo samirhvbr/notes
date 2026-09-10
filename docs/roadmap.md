@@ -1,19 +1,8 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `ACTIVE` for 0.1, `PROPOSED` from 0.2 on. Milestone **0.1 is
-> built** — the desktop editor exists, is tested on four platforms and is
-> packaged for Linux — with the interface flows still unwalked by a person
-> (`ACCEPTANCE-0.1b.md`, `ACCEPTANCE-0.1c.md`). Everything from 0.2 down is
-> still the worked-out form of a specification that lives in the queue,
-> [`../.continue/`](../.continue/README.md), and **the queue is the authority on
-> intent while both exist** — intent changes there, and this page is updated
-> when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
-> A section becomes `ACTIVE` when its code exists and works.
->
-> What is built when, and what each stage must be able to
-> do before the next one starts. What the product *is* lives in
-> [product.md](product.md); how it is put together, in
-> [architecture.md](architecture-v1.md).
+> **Status:** `ACTIVE` through 0.3, `PROPOSED` from 0.4 onward. Code through
+> local knowledge/MCP exists in 0.16.0; installed-release owner acceptance
+> remains pending. Mobile foundation is independently in PR #2.
 
 The stage numbers below are **product milestones, not repository versions.** The
 repository version is whatever `../version.md` says and moves per commit; a
@@ -29,20 +18,12 @@ milestone is reached when everything under it works. Do not read `0.3` here as
      0.1c  navigation      tabs, quick open, global search, palette, settings
      0.1d  interface       the shell: rail, sidebar, tabs, note header, status bar
 0.2  index                 SQLite, global search, external-change detection
+0.3  local knowledge       metadata, tags, wiki links, graph, images, local MCP
 0.4  mobile                iOS and Android against the same core
-0.3  Markdown depth        front matter, tags, links, backlinks, attachments
 0.5  self-hosting          Notes Server, REST API, tokens, Docker
 0.6  sync                  revisions, hashes, tombstones, conflicts, offline
-0.7  AI                    MCP server over the same API and the same scopes
+0.7  remote MCP            MCP over the server API and the same scopes
 ```
-
-**0.4 and 0.3 are out of numeric order on purpose, and the list is in build
-order** ([ADR-040](decisions.md#adr-040--milestone-04-is-pulled-ahead-of-03-and-starts-on-ios)).
-Mobile moved ahead of Markdown depth because 0.4's acceptance depends on 0.1 and
-not on 0.3, and because a second layout is cheapest written while the 0.1d shell
-is still the newest code in the repository. The numbers are milestone identities
-and do not get renumbered when the order changes — renumbering would break every
-`[0.4]` marker already sitting in the architecture and the code.
 
 Each stage is useful on its own. That is the constraint that sets the order: a
 user who stops receiving updates after 0.1 still has a working Markdown editor,
@@ -52,7 +33,7 @@ and one who stops after 0.3 has a good one.
 
 ## 0.1 — Desktop MVP
 
-> **0.1a–0.1c built; 0.1d in progress.** Shipped across `0.3.0`–`0.11.x` as
+> **0.1a–0.1d built; owner acceptance pending.** Shipped across `0.3.0`–`0.11.x` as
 > 0.1a (editor and write protocol), 0.1b (watcher, entry operations, preview,
 > conflicts) and 0.1c (tabs, quick open, global search, palette, settings,
 > `en`/`pt-BR`). Packaged for Linux: `.deb`, AppImage and the AUR `notes-bin`;
@@ -85,36 +66,35 @@ with nothing but a folder. No index, no server, no account.
 
 ## 0.2 — Index
 
-- SQLite index under `.notes/`;
-- incremental indexing;
-- workspace-wide search (name, path, content);
-- recent files;
-- external-change detection via filesystem watching;
-- tab state restored on restart;
-- command palette.
+Implemented in 0.14.0:
 
-**Done means:** deleting `.notes/` costs a reindex and nothing else — see
-[ADR-004](decisions.md#adr-004--notes-holds-only-data-that-can-be-rebuilt-and-must-be-deletable).
+- separate operational `registry.db` and derived `index.db` in app data;
+- incremental, cancellable SQLite/FTS5 indexing and explicit rebuild;
+- named Words, Literal and Regex modes, with partial results labelled;
+- Recent notes and live Outline navigation;
+- rename/move with reviewed incoming and outgoing Markdown references,
+  original-byte backups and per-file concurrency checks.
 
-## 0.3 — Markdown depth
+External reconciliation, tabs and the command palette remain from 0.1.
+**Acceptance:** reindexing changes neither note bytes nor identity, and search
+semantics never switch implicitly. See [ACCEPTANCE-0.2.md](ACCEPTANCE-0.2.md).
 
-- YAML front matter;
-- tags, from both `#tag` and front matter, related in the index;
-- internal links;
-- backlinks;
-- images and attachments;
-- tables;
-- preview improvements.
+## 0.3 — Knowledge and local agents
+
+Implemented in 0.16.0: interpreted YAML properties; inline/YAML tags outside
+code; wiki links with explicit ambiguity; backlinks and graph; paste images
+into noncolliding root attachments; standalone stdio `notes-mcp`. App/MCP
+cross-process conflict refusal and append retries are exercised by real
+process tests. See [the implemented contract](KNOWLEDGE-0.3.md) and
+[owner acceptance](ACCEPTANCE-0.3.md). Tables were already in the shared parser.
 
 ## 0.4 — Mobile
 
-> **Next, after 0.2, and started.** Moved ahead of 0.3 by
-> [ADR-040](decisions.md#adr-040--milestone-04-is-pulled-ahead-of-03-and-starts-on-ios);
-> built in this repository and in the same application, not a second one, by
-> [ADR-039](decisions.md#adr-039--mobile-is-built-in-this-repository-and-in-the-same-application).
-> **iOS first** — the Apple Developer account gates distribution, not the
-> compiler and not the Simulator, and the Android SDK is the toolchain that is
-> not installed. The core compiles for `aarch64-apple-ios-sim` as of `0.15.0`.
+**Foundation implemented in 0.17.0; the usable mobile app remains pending.**
+The reviewed PR makes trash desktop-only and adds an iOS simulator core check.
+ADRs 040/042 keep mobile in this application, starting with the iOS container.
+No generated mobile projects, layout or external-folder adapter exists yet.
+See [ACCEPTANCE-0.4.md](ACCEPTANCE-0.4.md) for the remaining scope.
 
 iOS and Android, against the same core.
 
@@ -131,14 +111,6 @@ it is here rather than at 0.1 is
 user chose" is a desktop concept, and iOS in particular has no equivalent — the
 adapter is what absorbs that, and it exists from 0.1 precisely so this stage is
 not a rewrite.
-
-**It arrives in two slices, and they fail separately.** The first is the app's
-own container — §14's "Create Workspace" — which on iOS is an ordinary POSIX
-directory that `LocalFs` already serves, so it tests the interface and nothing
-else. The second is "Open Folder": security-scoped bookmarks on iOS, SAF on
-Android, a `ScopedFileSystem` with no `watch` and a budgeted poll. That second
-slice is the one that finally answers whether ADR-008 cut the seam in the right
-place.
 
 ## 0.5 — Self-hosting
 
@@ -185,7 +157,7 @@ implementation.
 
 ## What is deliberately absent from every stage above
 
-Collaborative editing, a full WYSIWYG editor, canvas, graph view, a plugin
+Collaborative editing, a full WYSIWYG editor, canvas, a plugin
 system, multiple themes, web publishing, an embedded AI chat, native Git
 integration, user accounts on infrastructure we run, and an official cloud.
 

@@ -1214,146 +1214,123 @@ interface, and add it whenever it arrives. That avoids a disabled control
 carrying a promise, at the cost of an icon rail that has to be relaid out later
 and a user who cannot see the shape of what is coming.
 
----
 
-## ADR-039 — Mobile is built in this repository, and in the same application
+## ADR-039 — SQLite stores facts; the core owns workspace I/O
 
-**Status:** `ACCEPTED` · 09/09/2026 · owner's decision, recorded here
+**Status:** Accepted, implemented in 0.14.0 (milestone 0.2).
 
-**Context.** The question was put directly at the opening of 0.4: a separate
-repository for the mobile app, or a module here. It deserves an ADR rather than a
-preference, because the answer is load-bearing for
-[ADR-008](#adr-008--desktop-first-mobile-at-milestone-04-behind-the-same-abstraction)
-— the seam that decision bought is only worth its price if 0.4 can reach across
-it without ceremony.
+**Context.** ADR-003 deferred the index boundary until real code needed it;
+ADR-015 requires operational identity to move to a separate SQLite database.
+The user requested all of 0.1d and 0.2 together; owner acceptance still follows
+the installed-release and following-release rule.
 
-A second repository turns `FileSystem` into a published interface between two
-release trains. [versioning.md](versioning.md) already makes a change to that
-trait surface a **Y** bump; with two repositories every such change also becomes
-a tag, a release and a dependency bump on the far side — on the one interface in
-this project that is *certain* to move, because writing the second implementation
-behind it is the whole of 0.4. That cost lands squarely on the milestone least
-able to absorb it.
+**Decision.** `notes-index` depends on `notes-model`, `notes-markdown` and
+bundled `rusqlite`, never `notes-fs`. Core walks the confined filesystem and
+supplies metadata/text. Index persistence owns FTS5 and derived parser facts;
+registry persistence owns a separate operational DB. The initial registry
+schema stores the existing serialized identity snapshot to preserve its full
+shape during migration. Immediate transactions merge deltas against a baseline
+and refuse conflicting changes; a stale snapshot cannot erase unrelated notes.
+Legacy JSON and a backup are retained. Persistence remains immediate, correcting
+the earlier unimplemented debounce described in architecture §4.1.
 
-The repository is also already shaped for the other answer, from before the
-question was asked. `apps/notes-app/src-tauri/Cargo.toml` declares
-`crate-type = ["staticlib", "cdylib", "rlib"]` — `staticlib` is what an iOS build
-links, `cdylib` what an Android build loads — and `main.rs` is a one-line shim
-over `notes_app_lib::run()`. That is the Tauri 2 mobile shape, already in place.
-`ARCHITECTURE.md` §1 carries `packages/ui/` with the note *"may stay empty until
-0.4 needs it"*.
+Recent history and reviewed rewrite originals are operational app-data files,
+not derived index tables. Link/image destinations are parsed by the existing
+Markdown authority and rewritten only at exact source spans after review.
+Concurrency checks and original-byte journals make partial application
+recoverable; no claim of a filesystem transaction is made. Notes not examined
+are disclosed; an unavailable index offers an explicit move without rewriting.
 
-**Decision.** iOS and Android are **targets of the existing `notes-app` crate**,
-in this repository and this Cargo workspace. `tauri ios init` and
-`tauri android init` generate `src-tauri/gen/apple` and `src-tauri/gen/android`,
-and both are committed: they hold signing configuration, manifest and
-entitlement edits that are source, not build output.
-
-The mobile interface is a **layout inside `apps/notes-app/src/`**, not a second
-React application. §14 asks for a different arrangement of the same screen —
-full-screen editor, a drawer for tree and search, a Markdown bar above the
-keyboard — and that is a layout, not an application boundary: the stores, the
-`ipc/` layer, the editor and the i18n catalogues are the same objects either way.
-
-**`packages/ui/` is not created.** It exists in §1 as the place for components
-shared between two `apps/`, and after this decision there is still one. A
-directory whose only justification is a second application that was just declined
-is scaffolding for a plan nobody holds.
-
-**Consequences.** One `version.md`, one `CHANGELOG.md`, one ADR log, one CI
-matrix. A mobile regression caused by a core change is caught in the commit that
-causes it, rather than in a downstream repository's next dependency bump — which
-is the same argument ADR-003 makes for keeping the Rust logic out of the Tauri
-shell, applied one level up.
-
-The cost, stated honestly: this tree grows a generated Xcode project and a Gradle
-project. Both are large, both are noisy in a diff, and neither is reviewable the
-way the rest of this repository is — they are committed because they must be, not
-because anybody will read them. CI grows two builds. And `apps/notes-app/src/app/`
-begins serving two layouts, which is exactly the pressure that would one day
-justify `packages/ui/`; this ADR does not forbid that directory, it declines to
-build it before anything needs it.
-
-**Alternative if you disagree.** A `notes-mobile` repository consuming
-`notes-core` as a git dependency pinned to a tag. It buys a smaller desktop
-repository and a mobile tree moving on its own cadence, and it costs the thing
-ADR-008 spent three milestones paying for: the ability to change the `FileSystem`
-trait and both implementations behind it in one commit, with one CI run telling
-you whether you were right.
+**Alternatives.** Giving the index direct filesystem access duplicates the root
+boundary. A third registry crate adds no useful isolation between the two DB
+lifecycles. Normalized registry rows can replace the snapshot in a later backed-up
+migration if measurements justify it; the current per-note merge semantics must
+survive that change. Tags, graph and wiki-link semantics remain 0.3.
 
 ---
 
-## ADR-040 — Milestone 0.4 is pulled ahead of 0.3, and starts on iOS
+## ADR-040 — Mobile starts with the iOS container
 
-**Status:** `ACCEPTED` · 09/09/2026 · owner's decision, recorded here · amends
-[roadmap.md](roadmap.md) and `.continue/SCOPE_final.md` §17
+**Status:** `ACCEPTED` · Original decision 09/09/2026; integration reviewed 10/09/2026
 
-**Context.** The published sequence was `0.2 index → 0.3 Markdown depth → 0.4
-mobile`, and the owner has ordered mobile next. **0.2 is not displaced**: it is
-being built as this is written and lands at `0.14.0`, bringing `notes-index`,
-FTS5 and the reference workflow. What moves is 0.3, which now follows mobile
-instead of preceding it.
+**Context.** The owner started mobile independently while desktop milestones
+0.2 and 0.3 were being delivered. The original PR proposed completing mobile
+before 0.3; 0.3 has since shipped, so that sequencing statement is historical.
+The owner now requests this foundation be merged and work continue on 0.5.
 
-The reordering is coherent rather than merely permitted, and the reason is a
-dependency fact: **0.4's acceptance depends on 0.1.** Select a workspace,
-navigate, open, edit, create, search, autosave — every one of those exists today,
-and search answered with no index at all before 0.2 arrived, because it is a scan
-the core owns
-([ADR-031](#adr-031--global-search-is-a-scan-the-core-owns-polled-like-reconciliation)).
-0.3 makes an existing screen richer; it is not a precondition for that screen
-existing on a phone.
+**Decision.** Start mobile validation with iOS and the application's own
+container, where LocalFs applies. External folders require security-scoped
+bookmarks on iOS and SAF on Android in a later slice. Toolchain availability
+motivated iOS first at the time; it is not a permanent claim about a machine's
+installed SDKs. Distribution credentials and physical-device acceptance remain
+separate from compilation for the simulator.
 
-A second reason is about timing rather than dependency. 0.1d shipped at `0.13.0`
-and the shell — rail, sidebar, tabs, note header, status bar — is the newest code
-in the repository. A second layout is cheapest written against a shell somebody
-still remembers writing, and dearest against one that has sat for two milestones.
+**Consequences.** This foundation gates the unsupported trash dependency and
+reports permanent deletion on mobile. It does not supply the Tauri mobile
+entry point, generated projects, layouts, external-folder adapters or device
+proof. Those remain in the mobile queue.
 
-**Decision.** The order becomes `0.1 → 0.2 → 0.4 → 0.3 → 0.5 …`, and 0.4 starts
-on **iOS**.
+---
 
-**iOS first reverses what the scope assumed, and it does so on evidence.**
-`.continue/SCOPE_final.md` observes that an iOS build needs macOS and Xcode while
-an Android build runs on Linux, and lists Apple Developer and Google Play
-accounts among 0.4's prerequisites — which together make Android look like the
-unblocked side. On the machine this is being built on, it is the exact opposite:
-Xcode 26.6 and the three iOS Rust targets are installed, and there is no Android
-SDK, no NDK and no Java runtime at all. And the Apple Developer account gates
-**distribution** — TestFlight, the App Store — not the compiler and not the
-Simulator. The first mobile build costs nothing and can happen today; the first
-Android build costs an SDK install before it can begin.
+## ADR-041 — Local knowledge and agents share the parser and guarded core
 
-**The first slice writes no adapter.** §14 gives "Create Workspace" the app's own
-container, and an iOS container is an ordinary POSIX directory — `LocalFs` serves
-it as it stands. "Open Folder", which is security-scoped bookmarks on iOS and SAF
-on Android, is the second slice, and it is the one that finally tests whether
-ADR-008 cut the seam in the right place. Sequencing them apart means the
-interface work and the adapter work can fail separately, and a failure in either
-is then diagnosable.
+**Status:** `ACCEPTED` · 10/09/2026
 
-**Consequences.** Mobile stops waiting two further milestones, and the risk
-ADR-008 named — a seam cut in the wrong place, discovered late — is discovered as
-early as it now can be.
+**Number reservation at publication.** ADR-040 was reserved by mobile PR #2.
+Its integration in 0.17.0 filled that reservation and assigned ADR-042 to its
+other decision, preserving the already published ADR-039.
 
-Landing after 0.2 rather than before it changes what 0.4 inherits, and the change
-cuts both ways. A phone gets FTS5 instead of a scan over a workspace it is the
-least able of the three platforms to afford scanning, which is plainly the better
-product. It also means **`notes-index` has to build for iOS**, and that is not
-free: it depends on `rusqlite` with `bundled`, which compiles SQLite from C
-source and pulls the `cc` crate and an iOS C toolchain into the mobile build.
-Nothing here predicts that fails — it records that it is the next thing to
-verify, and that it was not on the list an hour ago.
+**Context.** The owner requested all of milestone 0.3 while another agent
+implements mobile in PR #2. Knowledge relationships need one semantic source;
+MCP must run without the app and must not silently overwrite app buffers.
 
-The first evidence arrived before this ADR was finished, and is why the risk is
-named plainly rather than hedged: `notes-fs` did not compile for
-`aarch64-apple-ios-sim` at all, because `trash` has no mobile backend. The
-capability model already held a field for it and the fix was one `cfg`. `notify`,
-`fd-lock`, `dirs` and `blake3` then compiled for the simulator unchanged — so the
-count is one blocker across four crates, found in the first five minutes, with
-the Tauri shell and `notes-index` still unexamined.
+**Decision.** The Rust Markdown crate uses pulldown-cmark's wiki syntax and
+`serde_yaml_ng` 0.10 for bounded, read-only YAML interpretation. It never
+serializes metadata into notes. Core resolves wiki homonyms explicitly and
+derives backlinks/graph from index schema 2. Frontend shows the same facts,
+with bounded graph rendering and partial-state labels. The `image` crate
+with PNG/JPEG decoders validates clipboard bytes under allocation/dimension
+limits; original bytes are exclusively created in root attachments.
 
-**Alternative if you disagree.** Build 0.3 first and keep mobile last, as
-published. That is the better answer if the priority is that mobile arrives once,
-complete, with front matter, tags, links and backlinks already in it — and it
-costs the thing this decision buys: the seam stays untested for another milestone,
-having already been carried untested for three, and the 0.1d shell goes cold
-before anyone writes a second layout against it.
+`notes-mcp` is a stdio executable over core, without a listener or application
+dependency. Configuration explicitly scopes paths and independent permissions;
+review writes stay in proposals. Note contents never grant authority. Global
+enrollment locking gives simultaneous processes the same workspace ID, while
+the existing workspace lock serializes identity assignment and mutations.
+Disk hashes are always compared even when metadata matches: a two-process
+test demonstrated that matching size/mtime could otherwise destroy a newer
+write before the registry reported its conflict. Append receipts persist in
+operational app data to make retries across process restarts idempotent. Agent
+reads do not alter GUI visit history. Configuration and operational limits
+are [documented separately](KNOWLEDGE-0.3.md).
+
+**Consequences.** Disposable schema 1 indexes rebuild; operational schema stays
+unchanged. Saving reads the current bytes even on a metadata match. Coordination
+requires a shared app-data directory and cannot exclude unrelated editors from
+the filesystem. Linux releases publish a standalone MCP archive; unsigned
+macOS/Windows publication remains disabled under ADR-024. Version 0.16.0 avoids
+the mobile PR's reserved 0.15.0; merging the PR must choose a newer version.
+Owner acceptance remains the installed-release walk and following-release
+repeat; automated process/UI tests do not tick those boxes.
+
+---
+
+## ADR-042 — Mobile remains in the same repository and application
+
+**Status:** `ACCEPTED` · Original decision 09/09/2026; numbering reconciled 10/09/2026
+
+**Context.** The mobile PR used ADR-039 before the index decision occupied that
+number on master. Its architectural choice remains valid; its number changes
+here without renumbering an already published decision.
+
+**Decision.** iOS and Android are targets of notes-app and consume the same
+core. Mobile UI will be a layout in the existing React application. Generated
+Apple/Android projects will be committed when created, since their signing,
+entitlement and manifest edits are source. They do not exist in this PR.
+A separate repository or second React application is not introduced, and
+packages/ui is deferred until real sharing requires it.
+
+**Consequences.** Filesystem interfaces and their consumers evolve in one
+commit and one CI matrix. The current iOS CI check covers core dependencies,
+including bundled SQLite and clipboard image decoders; compiling the full
+Tauri shell, Android runtime integration and device flows remain future work.

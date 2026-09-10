@@ -16,6 +16,10 @@ pub trait Schemad: Serialize + DeserializeOwned {
     const CURRENT: u32;
     const NAME: &'static str;
     fn schema(&self) -> u32;
+    fn baseline(&self) -> Option<Vec<u8>> {
+        None
+    }
+    fn remember(&self, _bytes: &[u8]) {}
 }
 
 /// What happened on load, so the caller can tell "nothing there yet" from
@@ -32,7 +36,27 @@ pub enum Loaded<T> {
 }
 
 pub fn load<T: Schemad>(path: &Path) -> Result<Loaded<T>, CoreError> {
-    let bytes = match std::fs::read(path) {
+    let db_path = path.with_extension("db");
+    let registry = T::NAME == "registry.json";
+    if registry {
+        if let Ok(bytes) = std::fs::read(path) {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                if let Some(found) = v.get("schema").and_then(|v| v.as_u64()) {
+                    if found > u64::from(T::CURRENT) {
+                        return Ok(Loaded::TooNew {
+                            found: found as u32,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    let stored = if registry && db_path.exists() {
+        notes_index::RegistryStore::open(&db_path)?.read()?
+    } else {
+        None
+    };
+    let bytes = match stored.map(Ok).unwrap_or_else(|| std::fs::read(path)) {
         Ok(b) => b,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Loaded::Fresh),
         Err(e) => return Err(CoreError::io("read_state", path.display(), &e)),
@@ -42,6 +66,11 @@ pub fn load<T: Schemad>(path: &Path) -> Result<Loaded<T>, CoreError> {
     // even when its shape no longer deserialises into ours.
     let probe: serde_json::Value = match serde_json::from_slice(&bytes) {
         Ok(v) => v,
+        Err(e) if registry => {
+            return Err(CoreError::Internal {
+                message: format!("invalid identity registry: {e}"),
+            })
+        }
         Err(_) => return Ok(Loaded::Fresh), // corrupt: treated as absent, never as an error the user must clear
     };
     let found = probe.get("schema").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
@@ -55,7 +84,13 @@ pub fn load<T: Schemad>(path: &Path) -> Result<Loaded<T>, CoreError> {
     }
 
     match serde_json::from_slice::<T>(&bytes) {
-        Ok(v) => Ok(Loaded::Ok(v)),
+        Ok(v) => {
+            v.remember(&bytes);
+            Ok(Loaded::Ok(v))
+        }
+        Err(e) if registry => Err(CoreError::Internal {
+            message: format!("invalid identity registry: {e}"),
+        }),
         Err(_) => Ok(Loaded::Fresh),
     }
 }
@@ -89,7 +124,21 @@ pub fn store<T: Schemad>(path: &Path, value: &T) -> Result<(), CoreError> {
     let bytes = serde_json::to_vec_pretty(value).map_err(|e| CoreError::Internal {
         message: format!("serialising {}: {e}", T::NAME),
     })?;
-    write_atomic(path, &bytes)
+    if T::NAME == "registry.json" {
+        if path.exists() {
+            let backup = path.with_extension("json.bak-1");
+            if !backup.exists() {
+                std::fs::copy(path, &backup)
+                    .map_err(|e| CoreError::io("backup_registry", backup.display(), &e))?;
+            }
+        }
+        notes_index::RegistryStore::open(&path.with_extension("db"))?
+            .write_merged(value.baseline().as_deref(), &bytes)?;
+        value.remember(&bytes);
+        Ok(())
+    } else {
+        write_atomic(path, &bytes)
+    }
 }
 
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CoreError> {

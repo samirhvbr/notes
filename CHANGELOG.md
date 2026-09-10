@@ -8,88 +8,87 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
-## 0.15.0 - the two ADRs that place milestone 0.4
+## 0.17.0 - prepare the filesystem core for mobile targets
 
-Mobile opened with a question that is not a matter of preference: a separate
-repository, or a module here.
+Merge the reviewed mobile foundation after the completed local knowledge work.
+Make the trash dependency and capability desktop-only while preserving the
+0.3 guarded-write changes. Reconcile the PR's obsolete version and ADR numbers,
+state that generated mobile projects and layouts are still pending, and add
+an iOS simulator core check to CI. This integrates the foundation of milestone
+0.4; it does not claim a usable mobile application or device acceptance.
 
-**ADR-039 — this repository, and the same application.** A second repository
-turns `FileSystem` into a published interface between two release trains, at the
-exact moment the second implementation behind it is being written.
-`versioning.md` already makes a change to that trait surface a **Y** bump; two
-repositories would add a tag, a release and a cross-repository dependency bump
-to every one of them — which is the cost [ADR-008](docs/decisions.md) spent three
-milestones avoiding. The tree was already shaped for the answer, from before the
-question was asked: `src-tauri` declares
-`crate-type = ["staticlib", "cdylib", "rlib"]` — `staticlib` for iOS, `cdylib`
-for Android — and `main.rs` is a one-line shim over `notes_app_lib::run()`, which
-is the Tauri 2 mobile shape. The mobile interface is therefore a layout inside
-`apps/notes-app/src/`, not a second React application, and `packages/ui/` is
-**not** created: `ARCHITECTURE.md` §1 has it as the home for components shared
-between two `apps/`, and after this decision there is still one.
+## 0.16.1 - preserve indented separators in YAML properties
 
-**ADR-040 — ahead of 0.3, starting on iOS.** 0.2 is not displaced; it lands at
-`0.14.0` with `notes-index` and FTS5. What moves is 0.3, because 0.4's acceptance
-depends on 0.1 and not on front matter or backlinks, and because a second layout
-is cheapest written while the 0.1d shell is still the newest code in the
-repository.
+Only an unindented Markdown metadata fence ends front matter. An indented
+`---` or `...` inside a YAML block scalar is content; trimming its indentation
+silently truncated properties and could hide tags after the scalar. Keep the
+original source unchanged and cover both separators and trailing tags in a
+regression test. Properties update immediately; upgrading from 0.16.0 requires
+Rebuild index for affected cached tags. Publish refreshed packages for this
+milestone correction.
 
-iOS first reverses what the scope assumed, and it does so on evidence.
-`SCOPE_final.md` observes that an iOS build needs macOS and Xcode while an
-Android build runs on Linux, and lists both developer accounts among 0.4's
-prerequisites — which together make Android look like the unblocked side. On the
-machine this is being built on it is the exact opposite: Xcode 26.6 and the three
-iOS Rust targets are installed, and there is no Android SDK, no NDK and no Java
-runtime at all. The Apple Developer account gates **distribution** — TestFlight,
-the App Store — not the compiler and not the Simulator.
+## 0.16.0 - expose knowledge navigation and package local MCP
 
-`roadmap.md` is restated in the same pass, because both ADRs make it stale. The
-sequence block is now in build order, 0.4 before 0.3, with the reason it is not
-renumbered: the numbers are milestone identities, and renumbering would break
-every `[0.4]` marker already sitting in the architecture and in the code.
+Add Properties, Tags and Backlinks panels, wiki destination selection, an
+accessible graph with usable node targets, and safe asynchronous clipboard
+image insertion. Publish the standalone Linux MCP archive alongside app
+packages. The complete local gate, six real MCP process tests and 72 frontend
+tests pass; native debug interaction verified metadata, ambiguity, graph
+navigation and backlinks. Installed Linux owner acceptance and its repeat
+remain explicitly pending. Keep the independently developed mobile PR intact.
 
-One consequence is recorded now rather than discovered later. Landing after 0.2
-cuts both ways for mobile: a phone gets FTS5 instead of a scan over the workspace
-it is least able to afford scanning, which is plainly the better product — and
-`notes-index` acquires an obligation to build for iOS, since it depends on
-`rusqlite` with `bundled`, which compiles SQLite from C source and pulls the `cc`
-crate and an iOS C toolchain into the mobile build. That is the next thing to
-verify, and it was not on the list an hour ago.
+## 0.16.0 - build local knowledge and scoped agent operations
 
-## 0.15.0 - notes-fs builds for iOS: the trash is a desktop capability
+Implement the milestone 0.3 core: read-only YAML and tags, wiki resolution,
+backlinks/graph data, reviewed wiki renames, validated clipboard imports and
+standalone scoped stdio MCP. Rebuild derived schema 1 documents for the new
+parser while retaining operational identity. Cross-process tests found and
+now prevent overwrites hidden by equal size/mtime; shared enrollment and
+identity locking plus durable append receipts cover concurrent starts and
+retries. Version 0.15.0 remains reserved by the independent mobile PR; its merge
+must reconcile version and ADR numbering. Owner acceptance remains pending.
 
-The first thing milestone 0.4 touched was a compiler error. `notes-fs` did not
-build for `aarch64-apple-ios-sim` at all: the `trash` crate implements the
-Freedesktop bin, the Windows Recycle Bin and the Finder trash, and has no iOS or
-Android backend — on those targets it fails to *compile* rather than failing at
-runtime. That is the better of the two failures and still a wall.
+## 0.14.1 - isolate empty-file content correlation from inode reuse
 
-There was nothing to design, because `ARCHITECTURE.md` §11 had already designed
-for it. `Caps` carries a `trash` field, `LocalFs::delete` already branches on it,
-and `DeleteOutcome` already distinguishes `Trashed` from `Permanent` — because
-§7.7 forbids a silent fallback to a permanent delete, and a removable exFAT stick
-and a network share have no bin either. A phone was simply the first backend
-where the *crate* had to be absent and not merely the capability.
+Arch CI exposed a fixture that deleted the original empty file before creating
+its replacement. A reused inode legitimately entered the native-identity rule,
+so the test did not isolate the content-correlation behavior named in its title.
+Create both files before removing the original, and additionally assert that
+opening the replacement gives it a distinct NoteId. Product behavior is unchanged.
+The complete local gate is rerun; installed packages remain the 0.14.0 delivery.
 
-So: `Caps::LOCAL.trash` is now
-`cfg!(not(any(target_os = "ios", target_os = "android")))`, the dependency moved
-under a matching `[target.'cfg(...)'.dependencies]` table, and `delete` carries
-the same `cfg` around the call site. The `cfg` is not a duplicate of the
-`caps.trash` test it wraps: the runtime test could never have saved the build,
-because the crate has to be gone before the compiler reaches it. The two say the
-same thing at the two different moments it has to be said.
+## 0.14.0 - complete the desktop navigation workflow
 
-A delete on a phone is therefore `DeleteOutcome::Permanent`, and it says so.
-§7.7 is satisfied by honesty rather than by a bin that does not exist.
+Expose Files/Recent/Outline, named Words/Literal/Regex modes, index progress,
+cancellation/rebuild, and reference review before rename/move. The review lets
+users select affected files and cancel without writes; an unavailable index
+requires an explicit choice to move without updating links.
 
-Measured after the change: `notes-model`, `notes-fs`, `notes-markdown` and
-`notes-core` all check clean for `aarch64-apple-ios-sim`, and the host build is
-unchanged. `notify`, `fd-lock`, `dirs` and `blake3` needed nothing at all — one
-blocker across four crates, found in the first five minutes of the milestone.
-The Tauri shell and `notes-index` are still unexamined.
+Finish the 0.1d implementation pass: mount the Welcome creation dialog, trap
+and restore Settings/palette focus, refresh Quick Open while its cache builds,
+clean up a divider unmounted mid-drag, cancel late search-start responses, and
+prevent reloads from replacing newer typing. English/Portuguese catalogues and
+IPC types match. All 69 frontend tests and the full local gate pass. A debug
+macOS UI smoke test exercised Outline, Recent and a Words hit at the correct
+line. The installed-release owner checks remain unticked in both acceptance
+documents; 0.3 is still proposed.
 
-**Y**, not Z: `Caps::LOCAL` is part of the `FileSystem` surface, and its value
-now depends on the target it was compiled for.
+## 0.14.0 - implement the milestone 0.2 core
+
+Add separate operational registry.db and derived index.db, legacy identity
+migration with a retained backup, incremental/cancellable FTS5 indexing, recent
+history, and guarded incoming/outgoing Markdown reference rewrites. Rewrites
+keep original bytes, disclose skipped candidates and report per-file failure.
+Registry transactions merge unrelated stale snapshots and refuse conflicts;
+newer database schemas are never downgraded. Literal and Regex keep their
+existing semantics. Image destinations enter the shared document IR; the golden
+fixture changes only metadata, not rendered HTML.
+
+The full local gate passes, including native/Windows clippy, workspace tests,
+byte preservation and generated contracts; ENOSPC is Linux-only. The read-only
+~/x debug benchmark scanned 6,707 notes: 78.6 seconds initially and 3.7 seconds
+with zero unchanged files reprocessed on the second pass. Owner acceptance on
+installed Linux packages and the following release remains pending.
 
 ## 0.13.5 - preserve focus across menu actions
 

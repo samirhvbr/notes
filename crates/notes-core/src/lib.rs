@@ -5,14 +5,20 @@
 //! closed, and what lets every rule below be tested with `cargo test` and no
 //! Tauri (`ARCHITECTURE.md` §14).
 
+pub mod agent;
+pub mod attachments;
 pub mod conflicts;
+pub mod content_index;
 pub mod drafts;
 pub mod ignore;
 pub mod index;
+pub mod knowledge;
 mod lock;
 pub mod paths;
 pub mod preview;
+pub mod recent;
 pub mod reconcile;
+pub mod references;
 pub mod registry;
 pub mod search;
 pub mod settings;
@@ -173,6 +179,8 @@ struct PathState {
 }
 
 struct Open {
+    content_index: Option<content_index::Job>,
+    content_dirty: std::sync::atomic::AtomicBool,
     id: WorkspaceId,
     fs: LocalFs,
     dir: PathBuf,
@@ -194,6 +202,8 @@ struct Open {
 }
 
 pub struct WorkspaceService {
+    record_visits: bool,
+    reference_plan: Option<references::Pending>,
     data_dir: PathBuf,
     open: Option<Open>,
     settings: Settings,
@@ -219,6 +229,8 @@ impl WorkspaceService {
             Loaded::Fresh | Loaded::TooNew { .. } => Settings::default(),
         };
         Ok(Self {
+            record_visits: true,
+            reference_plan: None,
             data_dir,
             open: None,
             settings,
@@ -308,12 +320,19 @@ impl WorkspaceService {
             });
         }
         if let Some(open) = self.open.take() {
-            state::store(&paths::registry_file(&open.dir), &open.registry)?;
+            if !open.read_only {
+                state::store(&paths::registry_file(&open.dir), &open.registry)?;
+            }
         }
         Ok(())
     }
 
     fn adopt(&mut self, root: &Path, restored: bool) -> Result<WorkspaceInfo> {
+        let mut enrollment = lock::acquire(&self.data_dir.join("workspaces.lock"))?;
+        enrollment.with(|| self.adopt_locked(root, restored))?
+    }
+
+    fn adopt_locked(&mut self, root: &Path, restored: bool) -> Result<WorkspaceInfo> {
         let fs = LocalFs::open(root)?;
         let canonical = fs.root().display().to_string();
         let display_name = fs
@@ -358,7 +377,11 @@ impl WorkspaceService {
         };
         let read_only = ahead.is_some();
 
+        let previous = index.last_workspace;
         index.touch(id, &canonical, &display_name);
+        if !self.record_visits {
+            index.last_workspace = previous;
+        }
         state::store(&paths::workspaces_index(&self.data_dir), &index)?;
         if !read_only {
             state::store(&paths::registry_file(&dir), &registry)?;
@@ -374,6 +397,8 @@ impl WorkspaceService {
         let extra_ignore = read_portable_ignore(fs.root());
         let caps = fs.caps();
         self.open = Some(Open {
+            content_index: None,
+            content_dirty: std::sync::atomic::AtomicBool::new(true),
             id,
             fs,
             dir,
@@ -436,6 +461,17 @@ impl WorkspaceService {
     // ---- notes ----------------------------------------------------------
 
     pub fn open_note(&mut self, path: &RelPath) -> Result<OpenedNote> {
+        let mut guard = lock::acquire(&paths::lock_file(&self.open()?.dir))?;
+        guard.with(|| self.open_note_locked(path))?
+    }
+
+    fn open_note_locked(&mut self, path: &RelPath) -> Result<OpenedNote> {
+        // Identity assignment must see notes opened by another process.
+        if let Loaded::Ok(registry) =
+            state::load::<Registry>(&paths::registry_file(&self.open()?.dir))?
+        {
+            self.open_mut()?.registry = registry;
+        }
         let (stat, bytes) = {
             let open = self.open()?;
             (open.fs.stat(path)?, open.fs.read(path)?)
@@ -452,6 +488,9 @@ impl WorkspaceService {
             state::store(&paths::registry_file(&dir), &open.registry)?;
         }
 
+        if persist && self.record_visits {
+            self.touch_recent(note_id, path)?;
+        }
         let draft = drafts::read(&paths::drafts_dir(&dir), note_id)?.map(|d| d.info);
         Ok(OpenedNote {
             note_id,
@@ -504,107 +543,98 @@ impl WorkspaceService {
         };
 
         let mut guard = lock::acquire(&paths::lock_file(&dir))?;
-        let outcome = guard.with(|| -> Result<SaveResult> {
-            let new_hash = notes_fs::hash(&profile_bytes);
-            let open = self.open.as_ref().expect("checked above");
-
-            // Step 4: nothing to do. No write, no mtime bump, no `git status`.
-            if let Some(rec) = open.registry.record(note_id) {
-                if rec.hash == new_hash {
-                    if let Ok(disk) = open.fs.stat(&path) {
-                        if rec.base_rev().cheap_match(&disk) {
-                            return Ok(SaveResult::Saved {
-                                base_rev: rec.base_rev(),
-                                buffer_version,
-                                unchanged: true,
-                            });
-                        }
-                    }
-                }
+        guard.with(|| -> Result<SaveResult> {
+            if let Loaded::Ok(registry) = state::load::<Registry>(&paths::registry_file(&dir))? {
+                self.open_mut()?.registry = registry;
             }
+            if self
+                .open()?
+                .registry
+                .record(note_id)
+                .is_none_or(|record| record.path != path)
+            {
+                return Err(CoreError::NotFound {
+                    path: path.to_string(),
+                });
+            }
+            let outcome = (|| -> Result<SaveResult> {
+                let new_hash = notes_fs::hash(&profile_bytes);
+                let open = self.open.as_ref().expect("checked above");
 
-            // Step 5: compare against what the caller read.
-            let disk = open.fs.stat(&path)?;
-            if !base_rev.cheap_match(&disk) {
+                // Metadata is a cache hint, never permission to overwrite. Two
+                // processes (or a coarse filesystem clock) can share size/mtime.
+                let disk = open.fs.stat(&path)?;
                 let current = open.fs.read(&path)?;
                 let disk_hash = notes_fs::hash(&current);
+                let disk_rev = BaseRev {
+                    size: disk.size,
+                    mtime_ns: disk.mtime_ns,
+                    hash: disk_hash.clone(),
+                };
                 if disk_hash == new_hash {
-                    // Convergence: the disk already holds exactly this buffer.
-                    let rev = BaseRev {
-                        size: disk.size,
-                        mtime_ns: disk.mtime_ns,
-                        hash: disk_hash,
-                    };
                     return Ok(SaveResult::Saved {
-                        base_rev: rev,
+                        base_rev: disk_rev,
                         buffer_version,
                         unchanged: true,
                     });
                 }
                 if disk_hash != base_rev.hash {
-                    let disk_rev = BaseRev {
-                        size: disk.size,
-                        mtime_ns: disk.mtime_ns,
-                        hash: disk_hash,
-                    };
                     return Ok(SaveResult::Conflict {
                         disk_rev,
                         buffer_version,
                     });
                 }
-                // Touch-only change: mtime moved, content did not.
-            }
 
-            // A failed write is a *result*, not an error: the acceptance
-            // criterion is "disco cheio / permissão negada → erro visível,
-            // buffer recuperável ao reabrir", and propagating `Err` here would
-            // skip the draft that makes the buffer recoverable.
-            // Armed before the write: the watcher event this causes must not
-            // come back as news (`ARCHITECTURE.md` §8).
-            open.arm(&path, new_hash.clone());
-            let written = match open.fs.write_atomic(&path, &profile_bytes, Some(base_rev)) {
-                Ok(w) => w,
-                Err(CoreError::Io { kind, .. }) => {
-                    return Ok(SaveResult::WriteFailed {
-                        kind,
-                        buffer_version,
-                    })
-                }
-                Err(e) => return Err(e),
-            };
-            match written {
-                WriteOutcome::Written(stat) => Ok(SaveResult::Saved {
-                    base_rev: BaseRev {
-                        size: stat.size,
-                        mtime_ns: stat.mtime_ns,
-                        hash: new_hash,
-                    },
-                    buffer_version,
-                    unchanged: false,
-                }),
-                WriteOutcome::Diverged(stat) => {
-                    let current = open.fs.read(&path).unwrap_or_default();
-                    Ok(SaveResult::Conflict {
-                        disk_rev: BaseRev {
+                // A failed write is a *result*, not an error: the acceptance
+                // criterion is "disco cheio / permissão negada → erro visível,
+                // buffer recuperável ao reabrir", and propagating `Err` here would
+                // skip the draft that makes the buffer recoverable.
+                // Armed before the write: the watcher event this causes must not
+                // come back as news (`ARCHITECTURE.md` §8).
+                open.arm(&path, new_hash.clone());
+                let written = match open.fs.write_atomic(&path, &profile_bytes, Some(base_rev)) {
+                    Ok(w) => w,
+                    Err(CoreError::Io { kind, .. }) => {
+                        return Ok(SaveResult::WriteFailed {
+                            kind,
+                            buffer_version,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                };
+                match written {
+                    WriteOutcome::Written(stat) => Ok(SaveResult::Saved {
+                        base_rev: BaseRev {
                             size: stat.size,
                             mtime_ns: stat.mtime_ns,
-                            hash: notes_fs::hash(&current),
+                            hash: new_hash,
                         },
                         buffer_version,
-                    })
+                        unchanged: false,
+                    }),
+                    WriteOutcome::Diverged(stat) => {
+                        let current = open.fs.read(&path).unwrap_or_default();
+                        Ok(SaveResult::Conflict {
+                            disk_rev: BaseRev {
+                                size: stat.size,
+                                mtime_ns: stat.mtime_ns,
+                                hash: notes_fs::hash(&current),
+                            },
+                            buffer_version,
+                        })
+                    }
                 }
-            }
-        })??;
-
-        self.settle(
-            note_id,
-            &path,
-            text,
-            buffer_version,
-            base_rev,
-            outcome,
-            &dir,
-        )
+            })()?;
+            self.settle(
+                note_id,
+                &path,
+                text,
+                buffer_version,
+                base_rev,
+                outcome,
+                &dir,
+            )
+        })?
     }
 
     /// Apply the consequences of a save: registry, draft, suspension.
@@ -627,6 +657,8 @@ impl WorkspaceService {
             } => {
                 let open = self.open_mut()?;
                 open.suspended.remove(&note_id);
+                open.content_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 if let Some(rec) = open.registry.notes.get_mut(&note_id) {
                     if !*unchanged {
                         rec.rev += 1;
@@ -774,6 +806,11 @@ impl WorkspaceService {
     /// never enters identity correlation. Renaming a folder carries every note
     /// beneath it, for the same reason.
     pub fn rename_entry(&mut self, path: &RelPath, new_name: &str) -> Result<Entry> {
+        let mut guard = lock::acquire(&self.open()?.dir.join("write.lock"))?;
+        guard.with(|| self.rename_entry_locked(path, new_name))?
+    }
+
+    fn rename_entry_locked(&mut self, path: &RelPath, new_name: &str) -> Result<Entry> {
         // The tree is about to change shape; quick open must not offer a
         // path that is no longer there.
         self.invalidate_paths();
@@ -791,6 +828,11 @@ impl WorkspaceService {
     /// `ARCHITECTURE.md` §7.1 cannot arise here; it is left in the contract for
     /// the mobile adapters of 0.4, where it can.
     pub fn move_entry(&mut self, path: &RelPath, to_dir: &RelPath) -> Result<Entry> {
+        let mut guard = lock::acquire(&self.open()?.dir.join("write.lock"))?;
+        guard.with(|| self.move_entry_locked(path, to_dir))?
+    }
+
+    fn move_entry_locked(&mut self, path: &RelPath, to_dir: &RelPath) -> Result<Entry> {
         // The tree is about to change shape; quick open must not offer a
         // path that is no longer there.
         self.invalidate_paths();
@@ -960,6 +1002,11 @@ impl WorkspaceService {
     /// with it leave the registry — their identity has nothing left to name —
     /// and the ids come back so open tabs can be closed.
     pub fn delete_entry(&mut self, path: &RelPath) -> Result<Deleted> {
+        let mut guard = lock::acquire(&self.open()?.dir.join("write.lock"))?;
+        guard.with(|| self.delete_entry_locked(path))?
+    }
+
+    fn delete_entry_locked(&mut self, path: &RelPath) -> Result<Deleted> {
         // The tree is about to change shape; quick open must not offer a
         // path that is no longer there.
         self.invalidate_paths();
@@ -1385,6 +1432,8 @@ impl WorkspaceService {
     fn invalidate_paths(&self) {
         if let Some(open) = self.open.as_ref() {
             open.paths.lock().unwrap().stale = true;
+            open.content_dirty
+                .store(true, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -1447,7 +1496,12 @@ impl WorkspaceService {
         let root = self.open()?.fs.root().to_path_buf();
         // Dropping the old `Search` cancels its walk.
         self.search = None;
-        let s = search::Search::start(&root, query, opts)?;
+        let s = if opts.mode == search::SearchMode::Words {
+            let (hits, partial) = self.word_hits(query)?;
+            search::Search::ready(hits, partial)
+        } else {
+            search::Search::start(&root, query, opts)?
+        };
         let id = s.id();
         self.search = Some(s);
         Ok(id)
@@ -1469,6 +1523,7 @@ impl WorkspaceService {
                 done: true,
                 cancelled: true,
                 truncated: false,
+                partial: false,
             }),
         }
     }
