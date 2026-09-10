@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 10/09/2026, repository at 0.20.5
+> **Status:** `ACTIVE` · Last reviewed 10/09/2026, repository at 0.20.6
 
 Work in progress: drafts, plans under discussion, notes on things still being
 built, briefings for picking the work back up later.
@@ -46,7 +46,7 @@ here would be a second source of truth.
 | **Milestone 0.3 — knowledge and local agents** | Implemented in `0.16.0`; owner installed-release walk and following-release repeat remain in [ACCEPTANCE-0.3.md](../docs/ACCEPTANCE-0.3.md) | Samir |
 | **Milestone 0.4 — mobile** | Foundation from [PR #2](https://github.com/samirhvbr/notes/pull/2) integrated in `0.17.0`; mobile entry points, generated projects, UI, folder adapters and device acceptance remain in [ACCEPTANCE-0.4.md](../docs/ACCEPTANCE-0.4.md) | Mobile agent / Samir |
 | **Milestone 0.5 — self-hosting** | Implemented in `0.18.0`; installed-release owner walk and following-release repeat remain in [ACCEPTANCE-0.5.md](../docs/ACCEPTANCE-0.5.md). Sync and remote MCP remain milestones 0.6/0.7 | Samir |
-| [Milestone 0.6 — sync](0.6-sync.md) | Domain, server inbox, device transfer and guarded closed-workspace creations/updates plus explicit device acknowledgments implemented through `0.20.3`; exclusive open-session core foundation in `0.20.5`. Frontend application, conflicts, broader pairing, attachments, scheduling and UI remain open | Implementation / Samir |
+| [Milestone 0.6 — sync](0.6-sync.md) | Domain, server inbox, device transfer and guarded closed-workspace creations/updates plus explicit device acknowledgments implemented through `0.20.3`; editor application of prepared receive queues in `0.20.6`. Divergence, conflicts, broader pairing, attachments, scheduling and UI remain open | Implementation / Samir |
 | **Milestone 0.7 — remote MCP** | Next after sync: existing MCP tools over server authentication and scopes | Implementation |
 | **Milestone 0.0 — the spike** | **Open.** The application builds, is tested and lints clean; what it establishes and what it does not is [`../docs/SPIKE-0.0.md`](../docs/SPIKE-0.0.md). It stays here until the §2 checklist is marked on Arch/Wayland/NVIDIA, an iPhone and an Android device — none of which exist on the machine that wrote it | Samir |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) — my §20 proposal | **Superseded** by [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), Samir's v2.0-aligned document. Kept, not deleted: it is where the questions were asked. Three of its §5 questions are answered there; the bundle identifier is answered only for the spike | — |
@@ -54,8 +54,7 @@ here would be a second source of truth.
 
 ## Current implementation order
 
-1. Finish sync 0.6: active-editor application,
-   divergence handling, broader pairing, deletions, attachments, scheduling,
+1. Finish sync 0.6: divergence handling, broader pairing, deletions, attachments, scheduling,
    app controls and retention/recovery. The detailed ordered queue is in
    [0.6-sync.md](0.6-sync.md).
 2. Remote MCP 0.7: expose the existing tools through server authentication and

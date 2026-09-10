@@ -1,3 +1,4 @@
+import { isSyncLocked } from "../ipc/barrier";
 import { create } from "zustand";
 import * as ipc from "../ipc";
 import { useEditor } from "./editor";
@@ -62,11 +63,11 @@ function dirty(): ipc.NoteId[] {
 }
 
 async function run(all: boolean) {
-  if (running) return;
+  if (running || isSyncLocked()) return;
   running = true;
   try {
     const r = all ? await ipc.reconcileAll(dirty()) : await ipc.reconcileTick(dirty());
-    for (const e of r.events) apply(e);
+    if (!isSyncLocked()) for (const e of r.events) apply(e);
   } catch {
     // A workspace being closed mid-tick is the common case here, and it is not
     // something to show anybody.

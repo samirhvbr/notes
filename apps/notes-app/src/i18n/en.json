@@ -204,5 +204,18 @@
   "knowledge.unresolved": "{count} unresolved or ambiguous wiki links",
   "knowledge.choose": "Choose the linked note",
   "knowledge.missing": "No matching note.",
-  "attachment.created": "Image saved at {path}; insert its link in the intended note."
+  "attachment.created": "Image saved at {path}; insert its link in the intended note.",
+  "received.title": "Received revisions",
+  "received.pick": "Choose the receive queue created by notes-sync-client",
+  "received.open": "Open received workspace",
+  "received.closeFirst": "Close the current workspace first",
+  "received.ready": "Receive queue connected. Transfer with the CLI, then apply here.",
+  "received.apply": "Apply received revisions",
+  "received.applying": "Applying received revisions…",
+  "received.busy": "Another operation is finishing. Try again in a moment.",
+  "received.dirty": "Save your edits and resolve drafts or conflicts before applying.",
+  "received.recovery": "Editing is paused until the document can be reloaded safely.",
+  "received.retryReload": "Retry safe reload",
+  "received.applied": "Applied {count} revisions.",
+  "received.reloaded": "Document reloaded. Apply again to resume any pending revisions."
 }

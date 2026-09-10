@@ -2479,6 +2479,7 @@ dependencies = [
  "notes-core",
  "notes-markdown",
  "notes-model",
+ "notes-sync-client",
  "serde",
  "serde_json",
  "tauri",

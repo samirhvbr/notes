@@ -1,3 +1,4 @@
+import { isSyncLocked } from "./ipc/barrier";
 import {Graph,WikiDialog} from "./app/Knowledge";
 import { ReferenceReview } from "./app/ReferenceReview";
 import { WorkspaceBrowser } from "./explorer/WorkspaceBrowser";
@@ -101,6 +102,7 @@ export default function App() {
   // Ctrl/Cmd+E cycles Source → Preview → Split (scope §9).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (isSyncLocked()) return;
       if (!(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
       if (key === "s") {

@@ -1080,3 +1080,11 @@ accepts observed buffer snapshots for guarded application without closing that
 session (ADR-049). This is not wired to Tauri/React or the received-queue client.
 The host must freeze editing and reload clean buffers; shared sessions cannot
 apply or upgrade in place. See the host contract in [SYNC-0.6.md](SYNC-0.6.md).
+
+
+In 0.20.6 the Tauri shell delegates received queue/session operations to
+`notes-sync-client`. It shares the core service mutex with ordinary commands;
+there is no second workspace service for app application. React's synchronous
+input/IPC barrier spans snapshot, bounded application and verified reload, with
+a persistent recovery control after unknown outcomes (ADR-050). The current
+single-buffer editor supplies its complete inventory; Split is a preview.

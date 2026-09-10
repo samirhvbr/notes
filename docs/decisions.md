@@ -1563,7 +1563,7 @@ ADR-047's existing closed-workspace guard.
 
 ## ADR-049 — Admit exclusive sync hosts before opening buffers
 
-**Status:** ACTIVE · Core foundation implemented in 0.20.5; frontend integration remains queued.
+**Status:** ACTIVE · Core foundation in 0.20.5; frontend integration follows in ADR-050.
 
 **Context.** Applying with an editor open needs a coherent snapshot of buffers
 that live outside core. Upgrading an existing shared OS lock risks a gap in
@@ -1588,3 +1588,38 @@ recovery/reload and UI remain queued. Omitted frontend buffers cannot be detecte
 by core. No automatic flush, draft deletion, lease upgrade, network listener or
 server acknowledgment is added. Other cooperating processes using the same app
 data are excluded for the entire exclusive session, not just its writes.
+
+
+## ADR-050 — The editor owns an input barrier around received application
+
+**Status:** ACTIVE · Implemented in 0.20.6.
+
+**Context.** Exclusive core ownership does not freeze the frontend's document.
+A batch may apply some revisions before a later failure, and a missing response
+does not prove no source write occurred.
+
+**Decision.** Add explicit app controls for an already initialized receive queue.
+The Tauri shell delegates queue/session admission and application to
+`notes-sync-client`, which reuses its durable intent/receipt protocol and calls
+core without closing the exclusively owned workspace. HTTP stays in the client
+crate, but these app commands make no transport calls or open listening ports.
+
+The frontend snapshots its one live buffer (inactive tabs have no buffers and
+Split is a preview). Dirty/draft/conflict/writing state refuses application.
+Admission requires no pending IPC response continuations, no active composition,
+and no outstanding modal. A synchronous barrier gates ordinary IPC, user input,
+CodeMirror edits, autosave and reconciliation. The barrier owner alone invokes
+application/recovery commands. Input resumes only after verified clean reloads
+are installed into the exact frozen document. A missing response or failed
+reload retains the barrier with an explicit recovery control.
+
+The client advances buffer BaseRev snapshots between revisions and reloads after
+partial failures. Successful earlier receipts stay durable. The shell owns the
+selected Store for the session; source binding is checked by the client/core.
+A normal app restart does not silently opt into exclusive mode.
+
+**Consequences.** Received creations/updates can be applied with the app open.
+Transport, acknowledgment, pairing initialization and credentials remain CLI
+operations. Multi-buffer editing must extend the inventory before enabling this
+workflow. No automatic flush, draft deletion, overwrite-on-conflict, network
+listener, or server acknowledgment follows from the UI action.

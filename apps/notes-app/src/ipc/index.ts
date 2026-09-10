@@ -4,7 +4,18 @@
 // `./generated`; nothing here is hand-written, and a CI job fails when the
 // committed files differ from a fresh generation. The frontend has no
 // filesystem capability — every read and write below is a command.
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as rawInvoke } from "@tauri-apps/api/core";
+import { tracked } from "./barrier";
+function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
+  return tracked(() => rawInvoke<T>(command, args));
+}
+import type { BufferSnapshot } from "./generated/BufferSnapshot";
+import type { SyncApplyResult } from "./generated/SyncApplyResult";
+export type { BufferSnapshot, SyncApplyResult };
+// Only the barrier owner may use these entry points while ordinary IPC is gated.
+export const syncOpen = (stateDir: string) => rawInvoke<WorkspaceInfo>("sync_open", { stateDir });
+export const syncApply = (buffers: BufferSnapshot[]) => rawInvoke<SyncApplyResult>("sync_apply", { buffers });
+export const syncReload = (buffers: BufferSnapshot[]) => rawInvoke<SyncApplyResult>("sync_reload", { buffers });
 
 import type { BaseRev } from "./generated/BaseRev";
 import type { CoreError } from "./generated/CoreError";

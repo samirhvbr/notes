@@ -396,10 +396,10 @@ scope, revocation, backup/restore and the real CLI over the TCP/HTTPS smoke path
 
 ## Exclusive open-session core foundation (0.20.5)
 
-This is a Rust host API, **not an app command or a change to the CLI**. The
-ordinary app still opens shared sessions, and the CLI still requires the
-workspace closed. The editor input barrier, complete pane snapshot collection,
-received-queue adapter and UI controls remain unimplemented.
+This section records the 0.20.5 Rust host API; the 0.20.6 app integration is below.
+The CLI continues to require a closed workspace. Ordinary app sessions remain
+shared; opening a prepared receive queue now explicitly selects the exclusive
+session described below. Version 0.20.5 supplied only the core host API.
 
 A host can call `WorkspaceService::open_sync_workspace` before opening any
 buffers. This acquires the same exclusive activity lease used by offline apply
@@ -431,3 +431,53 @@ buffers, unchanged source on failed intent, draft preservation, refusal of share
 sessions and competing owners, and lease release at close. The existing
 cross-process and offline recovery tests run against the shared implementation.
 No frontend interaction or installed-app acceptance is claimed by these tests.
+
+
+## Apply a received queue in the app (0.20.6)
+
+Use the existing CLI to initialize a **receive** queue and transfer revisions.
+Close the current workspace in the app, choose **Open received workspace**, and
+select that queue's state directory (the folder containing `client.json`). The
+app opens the queue's bound source using its actual app data directory and an
+exclusive core session. A queue already pinned to another app data directory is
+refused. No token or server URL is entered into the app by this workflow.
+
+Choose **Apply received revisions** to apply at most 20 creations/same-path
+updates. Transfer and `acknowledge` remain explicit CLI operations; transfer can
+populate the cache while the workspace stays open, and a busy client lock causes
+application to refuse rather than overlap. Restarting the app restores a normal
+shared workspace; close it and reopen the receive queue to resume this mode.
+
+The current editor holds one live buffer (ADR-030). Inactive tabs hold positions,
+and Split shows that buffer beside its preview. The app snapshots that complete
+buffer inventory and refuses dirty, writing, draft or conflict state. Pending
+IPC and active IME composition prevent admission. Once admitted, ordinary IPC,
+input, CodeMirror document changes, autosave and reconciliation are gated until
+reload is verified. Existing dialogs must be closed before applying.
+
+The client reuses durable per-revision intent and receipts. It advances the
+observed buffer BaseRev between revisions of the same note within a batch.
+After success **or partial failure**, it reloads clean documents through core and
+returns their content/profile/revision together with the outcome. The frontend
+installs the reload only into the exact frozen clean buffer, then refreshes the
+tree and resumes reconciliation. Earlier receipts survive a later refusal.
+
+An IPC failure has an unknown outcome. Editing stays paused and **Retry safe
+reload** reads through the same service mutex before input is released. Failed
+or missing reloads keep the barrier in place; the UI never treats a missing
+response as proof that nothing was written. After recovery, apply again to
+resume the durable checkpoint. No draft is saved/discarded merely to enable sync.
+
+Renames, tombstones, divergent branches, broader pairing, credentials/UI transfer,
+scheduling and automatic acknowledgments remain queued. This delivery adds app
+controls for prepared receive queues, not a complete sync settings interface.
+
+Validation for 0.20.6: the full local `tools/check.sh` gate passed on macOS with
+`RUST_TEST_THREADS=1`, including native/Windows clippy, workspace tests, TCP
+smoke, byte preservation, generated types and frontend tests/build. ENOSPC is a
+Linux-only check. Client regressions cover multiple updates to one open note,
+partial receipts and dirty refusal; frontend regressions cover blocked input,
+uncertain responses, failed/missing recovery reloads, pending IPC and composition.
+The isolated Tauri development process launched, but the native automation
+surface did not expose its unbundled window. This is not installed GUI or owner
+acceptance; those checks remain open.

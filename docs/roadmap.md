@@ -156,8 +156,8 @@ The 0.19.1 sync block adds a scoped server revision inbox with atomic content,
 idempotent publication and incremental metadata pages. The 0.20.0 device client adds durable queues and resumable transfer. The 0.20.1 block applies creations and same-path updates through core while the
 workspace is closed and draft-free. The 0.20.3 block explicitly acknowledges
 durable application receipts to the server. The 0.20.5 core API supports
-exclusive open sessions with observed buffer checks. Frontend application,
-conflicts and UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
+exclusive open sessions with observed buffer checks. In 0.20.6 the app applies prepared receive queues behind an editing barrier.
+Conflicts, broader pairing and transport UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 ## 0.7 — AI
 

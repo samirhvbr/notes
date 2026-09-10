@@ -204,5 +204,18 @@
   "knowledge.unresolved": "{count} wiki links ausentes ou ambíguos",
   "knowledge.choose": "Escolha a nota vinculada",
   "knowledge.missing": "Nenhuma nota correspondente.",
-  "attachment.created": "Imagem salva em {path}; insira o link na nota desejada."
+  "attachment.created": "Imagem salva em {path}; insira o link na nota desejada.",
+  "received.title": "Revisões recebidas",
+  "received.pick": "Escolha a fila recebida criada pelo notes-sync-client",
+  "received.open": "Abrir workspace recebido",
+  "received.closeFirst": "Feche o workspace atual primeiro",
+  "received.ready": "Fila conectada. Transfira pelo CLI e aplique aqui.",
+  "received.apply": "Aplicar revisões recebidas",
+  "received.applying": "Aplicando revisões recebidas…",
+  "received.busy": "Outra operação está terminando. Tente novamente em instantes.",
+  "received.dirty": "Salve as edições e resolva drafts ou conflitos antes de aplicar.",
+  "received.recovery": "A edição está pausada até o documento ser recarregado com segurança.",
+  "received.retryReload": "Tentar recarga segura",
+  "received.applied": "{count} revisões aplicadas.",
+  "received.reloaded": "Documento recarregado. Aplique novamente para retomar revisões pendentes."
 }

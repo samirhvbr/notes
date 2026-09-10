@@ -47,6 +47,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .manage(App {
             svc: Mutex::new(service),
+            received: Mutex::new(None),
             dmabuf: DmabufReport {
                 applied: decision.applied,
                 explanation: decision.explanation,
@@ -59,6 +60,9 @@ pub fn run() {
         .register_uri_scheme_protocol("notes-asset", asset::serve)
         .invoke_handler(tauri::generate_handler![
             commands::env_report,
+            commands::sync_open,
+            commands::sync_apply,
+            commands::sync_reload,
             commands::knowledge_get,
             commands::wiki_candidates,
             commands::metadata_get,

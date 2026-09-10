@@ -149,5 +149,10 @@ draft-free, with local revision checks and crash recovery. Usage and limits are 
 the current remaining work is in [the queue](.continue/README.md#current-implementation-order).
 
 Version 0.20.5 adds the Rust core foundation for an exclusively owned open sync
-session, with buffer snapshot checks. It is not wired to the editor yet; the CLI
-still applies only with the workspace closed. See [the host contract](docs/SYNC-0.6.md#exclusive-open-session-core-foundation-0205).
+session, with buffer snapshot checks. The CLI applies only with the workspace
+closed; app integration is available from 0.20.6. See [the host contract](docs/SYNC-0.6.md#exclusive-open-session-core-foundation-0205).
+
+Version 0.20.6 connects prepared receive queues to the app. Close the current
+workspace, choose **Open received workspace**, select the CLI state directory,
+and use **Apply received revisions**. Dirty buffers/drafts are refused and input
+stays paused until a safe reload after uncertain outcomes. See [the app workflow](docs/SYNC-0.6.md#apply-a-received-queue-in-the-app-0206).

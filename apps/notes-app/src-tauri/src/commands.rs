@@ -20,6 +20,7 @@ use tauri::State;
 
 pub struct App {
     pub svc: Mutex<WorkspaceService>,
+    pub received: Mutex<Option<notes_sync_client::state::Store>>,
     pub dmabuf: DmabufReport,
 }
 
@@ -455,4 +456,46 @@ pub fn attachment_import(
     bytes: Vec<u8>,
 ) -> Result<notes_core::attachments::Attachment, CoreError> {
     svc(&app)?.import_attachment(&note, &bytes)
+}
+
+#[tauri::command]
+pub async fn sync_open(app: State<'_, App>, state_dir: String) -> R<WorkspaceInfo> {
+    let store =
+        notes_sync_client::state::Store::open(&PathBuf::from(state_dir)).map_err(sync_error)?;
+    let mut service = svc(&app)?;
+    let info = store.open_for_editor(&mut service).map_err(sync_error)?;
+    *app.received
+        .lock()
+        .map_err(|_| sync_error("sync state lock failed"))? = Some(store);
+    Ok(info)
+}
+fn sync_error(error: impl std::fmt::Display) -> CoreError {
+    CoreError::Unsupported {
+        cap: error.to_string(),
+    }
+}
+#[tauri::command]
+pub async fn sync_apply(
+    app: State<'_, App>,
+    buffers: Vec<notes_core::sync::BufferSnapshot>,
+) -> R<notes_core::sync::SyncApplyResult> {
+    let mut service = svc(&app)?;
+    let received = app
+        .received
+        .lock()
+        .map_err(|_| sync_error("sync state lock failed"))?;
+    Ok(received
+        .as_ref()
+        .ok_or_else(|| sync_error("no received workspace open"))?
+        .apply_for_editor(&mut service, buffers))
+}
+#[tauri::command]
+pub async fn sync_reload(
+    app: State<'_, App>,
+    buffers: Vec<notes_core::sync::BufferSnapshot>,
+) -> R<notes_core::sync::SyncApplyResult> {
+    Ok(notes_sync_client::state::Store::reload_for_editor(
+        &mut *svc(&app)?,
+        &buffers,
+    ))
 }

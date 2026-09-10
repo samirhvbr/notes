@@ -875,3 +875,11 @@ code { font-family: var(--font-mono); }
 .knowledge-panel label { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 
 .knowledge-graph .node-hit { fill: transparent; pointer-events: all; }
+
+/* Received sync owns an input barrier outside the ordinary app surfaces. */
+.sync-shell { height: 100vh; display: flex; flex-direction: column; }
+.sync-content { flex: 1; min-height: 0; }
+.sync-content > .app { height: 100%; }
+.received-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--bg-raised); font-size: 12px; }
+.received-controls button { font: inherit; }
+.received-controls button:disabled { opacity: .55; }

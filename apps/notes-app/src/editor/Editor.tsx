@@ -1,3 +1,4 @@
+import { isSyncLocked } from "../ipc/barrier";
 import * as ipc from "../ipc";
 import {useWorkspace} from "../stores/workspace";
 import { useEffect, useRef } from "react";
@@ -58,6 +59,7 @@ export function Editor() {
     const state = EditorState.create({
       doc: initial.current,
       extensions: [
+        EditorState.transactionFilter.of(tr => isSyncLocked() && tr.docChanged && !tr.annotation(External) ? [] : tr),
         ...(lineNumbersOn ? [lineNumbers()] : []),
         highlightActiveLine(),
         EditorState.tabSize.of(tabSize),
@@ -76,6 +78,7 @@ export function Editor() {
         ...(wrapOn ? [EditorView.lineWrapping] : []),
         EditorView.domEventHandlers({paste(event,editor){
           const file=Array.from(event.clipboardData?.files??[]).find(f=>f.type.startsWith("image/"));
+          if(isSyncLocked())return true;
           if(!file || readOnly)return false;
           event.preventDefault();
           const current=useEditor.getState().doc;

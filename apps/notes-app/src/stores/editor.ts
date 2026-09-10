@@ -1,3 +1,4 @@
+import { isSyncLocked } from "../ipc/barrier";
 import { create } from "zustand";
 import * as ipc from "../ipc";
 import type {
@@ -102,7 +103,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   edit(text) {
     const doc = get().doc;
-    if (!doc || doc.readOnly) return;
+    if (isSyncLocked() || !doc || doc.readOnly) return;
     const next: OpenDoc = {
       ...doc,
       text,
@@ -121,7 +122,7 @@ export const useEditor = create<EditorState>((set, get) => ({
 
   async save(flush = false) {
     const doc = get().doc;
-    if (!doc || doc.readOnly || doc.conflict || inFlight) return;
+    if (isSyncLocked() || !doc || doc.readOnly || doc.conflict || inFlight) return;
     if (doc.bufferVersion === doc.savedVersion && !flush) return;
 
     const sending = doc.bufferVersion;
@@ -255,3 +256,14 @@ export const useEditor = create<EditorState>((set, get) => ({
     set({ doc: null });
   },
 }));
+
+
+/** Install a verified reload only into the exact frozen clean buffer. */
+export function acceptSyncReload(before: OpenDoc | null, fresh: OpenedNote[]): boolean {
+  if (useEditor.getState().doc !== before) return false;
+  if (!before) return true;
+  const note = fresh.find(n => n.note_id === before.noteId);
+  if (!note || before.bufferVersion !== before.savedVersion) return false;
+  useEditor.setState({ doc: { ...fromOpened(note), externalRev: before.externalRev + 1 } });
+  return true;
+}

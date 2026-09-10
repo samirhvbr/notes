@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.6 - connect received queues to exclusive editor sessions
+
+Add app controls to open a prepared receive queue and apply bounded batches.
+Freeze editing and reject concurrent IPC until verified clean reloads are
+installed; retain the barrier after uncertain outcomes or incomplete recovery.
+Dirty buffers, drafts and active composition refuse admission. Update the sync
+contract and queue to put divergence handling next. The full local gate passed,
+including Windows cross-target clippy, client recovery and frontend barrier
+regressions. The development app launched, but native UI automation could not
+access its unbundled window; installed-release owner acceptance remains open.
+
 ## 0.20.6 - adapt received queues to open sync sessions
 
 Reuse the receive queue's durable intent and receipts through an exclusively
