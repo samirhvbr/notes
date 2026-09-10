@@ -197,6 +197,13 @@ jobs:
           cd dist-release
           sha256sum notes-server-*.tar.gz > "notes-server-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz.sha256"
 
+      - name: build the standalone pairing preview
+        run: |
+          cargo build --release -p notes-core --bin notes-sync-plan --locked
+          tar -czf "dist-release/notes-sync-plan-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz" -C target/release notes-sync-plan
+          cd dist-release
+          sha256sum notes-sync-plan-*.tar.gz > "notes-sync-plan-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz.sha256"
+
       - name: the tarball the AUR package consumes
         run: packaging/linux/tarball.sh "${{ needs.what.outputs.version }}"
 

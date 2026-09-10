@@ -129,3 +129,11 @@ authenticated REST API, conditional writes and offline backup/restore. See the
 [server guide](docs/SERVER-0.5.md) for local use and Docker with HTTPS, and the
 [OpenAPI contract](server/notes-server/openapi.json) for integration. Desktop
 sync and remote MCP are later milestones; this does not enable a desktop port.
+
+## Synchronization preview
+
+Milestone 0.6 is in progress. `notes-sync-plan` previews upload, download or
+reconciliation between two mounted folders without changing their notes.
+Build it with `cargo build -p notes-core --bin notes-sync-plan`, or use the
+standalone Linux release archive. See [SYNC-0.6.md](docs/SYNC-0.6.md) for its
+causal model and the remaining work before remote synchronization is available.

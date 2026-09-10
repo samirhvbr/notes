@@ -1059,3 +1059,11 @@ conditional mutations, identity and offline enrollment rebinding; the server
 owns HTTP/authentication, request limits, audit and backup transport. Deployment
 and the versioned API are in [SERVER-0.5.md](SERVER-0.5.md); ADR-043 records the
 security boundary. No desktop listener or synchronization engine is added.
+
+## Milestone 0.6 — causal domain boundary
+
+The first 0.6 block adds `notes-sync` as a dependency of core, beside `notes-fs`.
+It supplies revision/ancestry planning and locked operational metadata storage;
+core supplies source inventories. `notes-sync-plan` is a core-owned CLI for
+explicit pairing previews. No sync network transport or source application is
+present yet. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.

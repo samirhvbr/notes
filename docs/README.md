@@ -72,3 +72,7 @@ and the fleet adopted it the same day.
 
 - [SERVER-0.5.md](SERVER-0.5.md) — operator CLI, REST, HTTPS and backup/restore.
 - [ACCEPTANCE-0.5.md](ACCEPTANCE-0.5.md) — automated coverage and pending owner walk.
+
+## Synchronization in progress
+
+- [SYNC-0.6.md](SYNC-0.6.md) — implemented causal model and pairing preview; remaining sync work stays queued.

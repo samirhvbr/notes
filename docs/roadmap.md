@@ -137,6 +137,10 @@ service we operate.
 
 ## 0.6 — Sync
 
+In progress. Version **0.19.0** introduces the [causal domain and mounted-folder
+pairing preview](SYNC-0.6.md). It does not transfer remote content; the
+[remaining implementation](../.continue/0.6-sync.md) stays in the queue.
+
 - devices;
 - revisions, content hashes;
 - tombstones for deletions;

@@ -36,7 +36,7 @@ windows_target_ready() {
 
 if why=$(windows_target_ready); then
   step "clippy (windows)"   cargo clippy --target x86_64-pc-windows-gnu \
-                              -p notes-model -p notes-fs -p notes-core -p notes-markdown -p notes-index -p notes-mcp -p notes-server \
+                              -p notes-model -p notes-fs -p notes-core -p notes-markdown -p notes-index -p notes-mcp -p notes-server -p notes-sync \
                               --all-targets -- -D warnings
 else
   printf '\n== clippy (windows)\n   WARNING, not run — %s\n' "${why:-unknown}"

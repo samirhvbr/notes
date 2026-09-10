@@ -23,6 +23,7 @@ pub mod registry;
 pub mod search;
 pub mod settings;
 mod state;
+pub mod sync;
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};

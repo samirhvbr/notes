@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.19.0 - preview pairing through core inventories
+
+Expose a standalone notes-sync-plan command over bounded core inventories of
+two mounted folders. Distinguish upload, download and reconciliation; preserve
+raw bytes, existing identities and note visits while reporting links, unique
+notes and conflicts. Reject state directories inside source folders before
+creating anything. Package the preview separately and keep the unfinished
+transport, outbox, content application and UI explicitly in the sync queue.
+
 ## 0.19.0 - model causal revisions for synchronization
 
 Start milestone 0.6 with a separate notes-sync domain crate. Track immutable

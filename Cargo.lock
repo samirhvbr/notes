@@ -2440,6 +2440,7 @@ dependencies = [
  "notes-index",
  "notes-markdown",
  "notes-model",
+ "notes-sync",
  "regex",
  "serde",
  "serde_json",
