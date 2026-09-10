@@ -8,6 +8,24 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.3 - preserve keyboard intent inside modal dialogs
+
+Pressing Enter on Cancel confirmed a destructive request because the modal's
+parent intercepted Enter before the button could activate. Confirmation now
+uses each button's native keyboard behavior. Tab and Shift+Tab wrap inside the
+modal, and separate input and button refs prevent the confirmation button from
+receiving an unsupported `select()` call when it opens. Modal keystrokes no
+longer reach background application shortcuts.
+
+Six DOM regression tests cover cancellation, confirmation, focus containment,
+text selection, Escape with focus restoration, text submission, and shortcut
+isolation. Before the
+fix, three failed and confirmation dialogs raised three uncaught exceptions.
+A sixth test also reproduced shortcut propagation before its fix. The manual
+installed-build acceptance remains pending. `tools/check.sh` passed; its ENOSPC
+check skipped because this machine is macOS. The final frontend suite passed
+all 55 tests and the production build passed.
+
 ## 0.13.2 - disambiguate the dialog component on case-insensitive filesystems
 
 A fresh macOS clone passed all 49 frontend tests but failed the production

@@ -15,6 +15,7 @@ export function Dialog() {
   const current = useDialog((s) => s.current);
   const settle = useDialog((s) => s.settle);
   const input = useRef<HTMLInputElement | null>(null);
+  const confirm = useRef<HTMLButtonElement | null>(null);
   const restoreTo = useRef<HTMLElement | null>(null);
   const [value, setValue] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,8 +26,12 @@ export function Dialog() {
     setValue(current.kind === "text" ? current.initial : "");
     setError(null);
     const id = requestAnimationFrame(() => {
-      input.current?.focus();
-      input.current?.select();
+      if (current.kind === "text") {
+        input.current?.focus();
+        input.current?.select();
+      } else {
+        confirm.current?.focus();
+      }
     });
     return () => {
       cancelAnimationFrame(id);
@@ -58,13 +63,25 @@ export function Dialog() {
         aria-modal="true"
         aria-label={current.title}
         onKeyDown={(e) => {
+          // Background shortcuts must not open another surface over the modal.
+          e.stopPropagation();
           if (e.key === "Escape") {
             e.preventDefault();
             cancel();
           }
-          if (e.key === "Enter" && current.kind === "confirm") {
-            e.preventDefault();
-            accept();
+          if (e.key === "Tab") {
+            const controls = e.currentTarget.querySelectorAll<HTMLElement>(
+              "input:not(:disabled), button:not(:disabled)",
+            );
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (e.shiftKey && document.activeElement === first) {
+              e.preventDefault();
+              last?.focus();
+            } else if (!e.shiftKey && document.activeElement === last) {
+              e.preventDefault();
+              first?.focus();
+            }
           }
         }}
       >
@@ -114,7 +131,7 @@ export function Dialog() {
               </button>
               <button
                 type="button"
-                ref={input as unknown as React.RefObject<HTMLButtonElement>}
+                ref={confirm}
                 className={current.danger ? "danger" : "primary"}
                 onClick={accept}
               >

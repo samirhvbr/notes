@@ -48,10 +48,11 @@ What a machine can hold, and it is less than a fifth of the above.
 | What | Where | Holds |
 |---|---|---|
 | Menu keyboard navigation, with focus tracked | `src/app/Menu.test.tsx`, 11 tests, in a DOM | Arrows wrap; a disabled item is never landed on; `Home`/`End`; `Enter` runs and closes; **`Escape` and `Tab` return focus to the trigger**; a click outside closes; the action runs *after* the menu is gone |
+| Modal keyboard behavior | `src/app/DialogHost.test.tsx`, 6 DOM tests | Enter activates the focused button, including Cancel; Tab wraps in both directions; text selection and submission; Escape restores focus; confirmation opens without an input-method exception; modal keystrokes do not invoke background shortcuts |
 | Contrast and the palette | `tools/contrast.sh`, in `check.sh` and CI | 42 pairs: AA for every text/surface pair, AA for the focus ring and for disabled controls, an 8/255 sRGB step between the three dark levels — **and a build failure if any colour is written outside `:root`** |
 | No blocking dialogs | `tools/no-blocking-dialogs.sh` | A browser script dialog anywhere in the frontend fails the build. Six flows of 0.1b were behind one |
 | Switching workspace | `notes-core`, `tests/switch.rs`, 6 tests | Identity survives a switch and a restart; a dirty close is refused **and names the notes**; a clean close leaves no workspace open; every workspace opened is offered again |
-| Everything the milestone inherits | `tools/check.sh` | Format, clippy on the native and the Windows target, the whole Rust suite, byte preservation, the full-disk suite, the generated TypeScript, the i18n catalogues, the frontend build and its 60 tests |
+| Everything the milestone inherits | `tools/check.sh` | Format, clippy on the native and the Windows target, the whole Rust suite, byte preservation, the full-disk suite, the generated TypeScript, the i18n catalogues, the frontend build and test suite |
 
 **Three things the automated half deliberately does not claim.** It does not
 know whether the interface *looks* right; it does not know whether the tab bar
