@@ -171,3 +171,15 @@ The modal component is `src/app/DialogHost.tsx`; its state module is
 On a case-insensitive filesystem, an extensionless `app/Dialog` import can
 resolve to `dialog.ts` and fail TypeScript with TS2305 and TS1149.
 Run `npm run build` from `apps/notes-app` to check frontend module resolution.
+
+## Development version
+
+`npm run tauri dev` reads the first version in the repository's `version.md`
+and supplies it through a CLI config override. The native About menu therefore
+identifies the running source version. Restart development after a version bump.
+The same override applies to `npm run tauri ios dev` and `android dev`.
+
+The launcher does not edit `tauri.conf.json` or stamp build commands: packaging
+still follows ADR-035 and `tools/stamp-version.sh`. A development version in
+About is not evidence of a signed or published package. Run the launcher tests
+with `node --test tools/tauri.test.mjs`; they also run in `tools/check.sh`.

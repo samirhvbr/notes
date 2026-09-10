@@ -188,6 +188,7 @@ jobs:
           cache: npm
           cache-dependency-path: apps/notes-app/package-lock.json
       - run: npm ci
+      - run: node --test ../../tools/tauri.test.mjs
       - run: npm run typecheck
       # `vitest` for the pieces of the frontend that are logic rather than
       # markup (docs/ARCHITECTURE.md §14). The conflict diff is the first:

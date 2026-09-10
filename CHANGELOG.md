@@ -8,6 +8,20 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.4 - show the repository version in development builds
+
+The macOS About window displayed 0.0.0 during interface acceptance because the
+development CLI read the committed packaging placeholder. The npm Tauri entry
+now supplies the first version from version.md through an in-memory CLI config
+override for desktop and mobile dev commands. Build commands retain ADR-035's
+explicit release stamping, and tauri.conf.json stays unchanged.
+
+Five launcher tests cover version extraction, mobile commands, application
+argument separation, build passthrough, and refusal of a missing version. They
+run in the local gate and frontend CI. The real CLI version/help commands and
+`tools/check.sh` passed; ENOSPC skipped on macOS. The existing native window
+was not restarted, so visual confirmation of About remains pending.
+
 ## 0.13.3 - preserve keyboard intent inside modal dialogs
 
 Pressing Enter on Cancel confirmed a destructive request because the modal's
