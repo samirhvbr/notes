@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useRef, useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Menu, type MenuRow } from "./Menu";
+import { Dialog } from "./DialogHost";
+import { askText, useDialog } from "./dialog";
 
 /**
  * `.continue/0.1d-interface.md` §7: *"Navegação por teclado dos menus … teste de
@@ -37,7 +39,10 @@ function Harness({ rows }: { rows: MenuRow[] }) {
 
 // `globals: false`, so testing-library's automatic cleanup never registers and
 // each render would otherwise pile onto the last one's document.
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  useDialog.getState().settle(null);
+});
 
 const chose: string[] = [];
 function rows(): MenuRow[] {
@@ -161,5 +166,44 @@ describe("Menu keyboard navigation", () => {
     );
     await user.click(screen.getByText("Go"));
     expect(order).toEqual(["closed", "ran"]);
+  });
+});
+
+
+describe("Menu action focus", () => {
+  it("returns focus after selecting an ordinary action", async () => {
+    const user = await openMenu();
+    await user.keyboard("{Enter}");
+    expect(screen.queryByRole("menu")).toBeNull();
+    expect(screen.getByText("open menu")).toHaveFocus();
+  });
+
+  it("gives a dialog a surviving return target when launched from a menu", async () => {
+    const user = userEvent.setup();
+    render(<>
+      <Harness rows={[{ id: "rename", label: "Rename", run: async () => {
+        await askText({ title: "Rename note", label: "Name", confirmLabel: "Save" });
+      } }]} />
+      <Dialog />
+    </>);
+    await user.click(screen.getByText("open menu"));
+    await user.keyboard("{Enter}");
+    await waitFor(() => expect(screen.getByRole("textbox")).toHaveFocus());
+    await user.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByText("open menu")).toHaveFocus();
+  });
+
+  it("does not steal focus from a destination chosen by the action", async () => {
+    const user = userEvent.setup();
+    render(<>
+      <Harness rows={[{ id: "go", label: "Go", run: () => {
+        screen.getByRole("textbox").focus();
+      } }]} />
+      <input aria-label="Destination" />
+    </>);
+    await user.click(screen.getByText("open menu"));
+    await user.keyboard("{Enter}");
+    expect(screen.getByRole("textbox")).toHaveFocus();
   });
 });

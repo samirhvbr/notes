@@ -47,7 +47,7 @@ What a machine can hold, and it is less than a fifth of the above.
 
 | What | Where | Holds |
 |---|---|---|
-| Menu keyboard navigation, with focus tracked | `src/app/Menu.test.tsx`, 11 tests, in a DOM | Arrows wrap; a disabled item is never landed on; `Home`/`End`; `Enter` runs and closes; **`Escape` and `Tab` return focus to the trigger**; a click outside closes; the action runs *after* the menu is gone |
+| Menu keyboard navigation, with focus tracked | `src/app/Menu.test.tsx`, 14 tests, in a DOM | Arrows wrap; a disabled item is never landed on; `Home`/`End`; `Enter` runs and closes; **`Escape` and `Tab` return focus to the trigger**; a click outside closes; closing is requested before the action; choosing restores the trigger before the action runs; a launched dialog returns focus there; an action can focus its own destination |
 | Modal keyboard behavior | `src/app/DialogHost.test.tsx`, 6 DOM tests | Enter activates the focused button, including Cancel; Tab wraps in both directions; text selection and submission; Escape restores focus; confirmation opens without an input-method exception; modal keystrokes do not invoke background shortcuts |
 | Contrast and the palette | `tools/contrast.sh`, in `check.sh` and CI | 42 pairs: AA for every text/surface pair, AA for the focus ring and for disabled controls, an 8/255 sRGB step between the three dark levels — **and a build failure if any colour is written outside `:root`** |
 | No blocking dialogs | `tools/no-blocking-dialogs.sh` | A browser script dialog anywhere in the frontend fails the build. Six flows of 0.1b were behind one |

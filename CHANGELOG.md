@@ -8,6 +8,21 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.5 - preserve focus across menu actions
+
+Choosing a menu item removed the focused button without restoring focus, so
+ordinary actions left the keyboard on the document body. Dialogs launched by a
+menu also captured a disappearing return target and lost focus on cancellation.
+The menu now restores its trigger synchronously before running the action.
+An action can then focus its own destination without a delayed restoration
+stealing focus back.
+
+Three DOM regression cases cover ordinary selection, launching and cancelling
+a dialog, and an action that focuses another control. The first two failed
+before the fix. All 14 menu tests and `tools/check.sh` passed, including the
+frontend suite and production build; ENOSPC skipped because this machine is
+macOS. Manual installed-build acceptance remains pending.
+
 ## 0.13.4 - show the repository version in development builds
 
 The macOS About window displayed 0.0.0 during interface acceptance because the

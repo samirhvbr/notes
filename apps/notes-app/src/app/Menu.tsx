@@ -101,9 +101,12 @@ export function Menu({
       // one that unmounts this tree would leave the focus restore chasing a
       // node that is gone.
       close(false);
+      // Establish a surviving return target before a dialog captures focus.
+      // Do not defer this: the action may intentionally focus another control.
+      trigger.current?.focus();
       await item.run?.();
     },
-    [close],
+    [close, trigger],
   );
 
   // A click anywhere else closes it — including on the trigger, which would
