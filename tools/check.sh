@@ -36,12 +36,13 @@ windows_target_ready() {
 
 if why=$(windows_target_ready); then
   step "clippy (windows)"   cargo clippy --target x86_64-pc-windows-gnu \
-                              -p notes-model -p notes-fs -p notes-core -p notes-markdown -p notes-index -p notes-mcp \
+                              -p notes-model -p notes-fs -p notes-core -p notes-markdown -p notes-index -p notes-mcp -p notes-server \
                               --all-targets -- -D warnings
 else
   printf '\n== clippy (windows)\n   WARNING, not run — %s\n' "${why:-unknown}"
 fi
 step "cargo test"           cargo test --workspace
+step "server TCP smoke"    python3 server/tests/smoke.py
 step "byte preservation"    tools/byte-preservation.sh
 step "full disk (ENOSPC)"   tools/enospc.sh
 step "generated types"      bash -c '

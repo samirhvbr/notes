@@ -1,0 +1,50 @@
+name: notes
+services:
+  notes-server:
+    image: notes-server:local
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      NOTES_SERVER_DATA: /data
+      NOTES_SERVER_BIND: 172.30.90.3:8787
+      NOTES_SERVER_TRUSTED_PROXY: 172.30.90.2
+    volumes:
+      - notes-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks:
+      backend:
+        ipv4_address: 172.30.90.3
+  caddy:
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    restart: unless-stopped
+    environment:
+      NOTES_DOMAIN: ${NOTES_DOMAIN:?Set NOTES_DOMAIN to the public DNS hostname}
+    ports:
+      - "${NOTES_HTTP_PORT:-80}:80"
+      - "${NOTES_HTTPS_PORT:-443}:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      backend:
+        ipv4_address: 172.30.90.2
+      edge: {}
+    depends_on: [notes-server]
+networks:
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.30.90.0/28
+  edge: {}
+volumes:
+  notes-data: {}
+  caddy-data: {}
+  caddy-config: {}

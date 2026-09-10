@@ -1050,3 +1050,12 @@ schema 2 invalidates old derived parser documents; registry schema stays 1.
 `notes-mcp` depends on core and has no Tauri or frontend dependency. Both
 processes use the same app-data directory, enrollment lock, identity lock and
 guarded save protocol. ADR-041 records these choices and their limits.
+
+## Milestone 0.5 — optional process boundary
+
+`server/notes-server` is the independent REST/CLI executable introduced in
+0.18.0. It depends on notes-core, not Tauri. Core owns filesystem paths, scopes,
+conditional mutations, identity and offline enrollment rebinding; the server
+owns HTTP/authentication, request limits, audit and backup transport. Deployment
+and the versioned API are in [SERVER-0.5.md](SERVER-0.5.md); ADR-043 records the
+security boundary. No desktop listener or synchronization engine is added.

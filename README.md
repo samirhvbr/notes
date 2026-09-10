@@ -121,3 +121,11 @@ repository content.
 and the commit shape both. Check before opening a pull request or an issue
 there; when you cannot tell, English (US). See
 [conventions.md §8](https://github.com/samirhvbr/repodocs/blob/master/docs/conventions.md#8-language).
+
+## Optional self-hosted server
+
+Milestone 0.5 adds a separate `notes-server` executable with a scoped,
+authenticated REST API, conditional writes and offline backup/restore. See the
+[server guide](docs/SERVER-0.5.md) for local use and Docker with HTTPS, and the
+[OpenAPI contract](server/notes-server/openapi.json) for integration. Desktop
+sync and remote MCP are later milestones; this does not enable a desktop port.

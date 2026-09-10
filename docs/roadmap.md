@@ -114,10 +114,15 @@ not a rewrite.
 
 ## 0.5 — Self-hosting
 
+Implemented in **0.18.0** as the independent `notes-server` process. The
+[operator guide and REST contract](SERVER-0.5.md) cover credentials, HTTPS,
+conditional writes, limits and offline backup/restore. Automated acceptance
+and the pending owner walk are in [ACCEPTANCE-0.5.md](ACCEPTANCE-0.5.md).
+
 **Notes Server**, run by the user:
 
 ```bash
-docker compose up -d
+docker compose -f server/compose.yml up -d --build
 ```
 
 - authentication;

@@ -67,3 +67,8 @@ and the fleet adopted it the same day.
 - [Acceptance — milestone 0.3](ACCEPTANCE-0.3.md): automated evidence and pending installed-release owner flows.
 
 - [Mobile acceptance](ACCEPTANCE-0.4.md): merged compilation foundation and remaining usable-mobile scope.
+
+## Self-hosted server
+
+- [SERVER-0.5.md](SERVER-0.5.md) — operator CLI, REST, HTTPS and backup/restore.
+- [ACCEPTANCE-0.5.md](ACCEPTANCE-0.5.md) — automated coverage and pending owner walk.

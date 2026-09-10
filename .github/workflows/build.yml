@@ -190,6 +190,13 @@ jobs:
           cd dist-release
           sha256sum notes-mcp-*.tar.gz > "notes-mcp-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz.sha256"
 
+      - name: build the standalone REST server
+        run: |
+          cargo build --release -p notes-server --locked
+          tar -czf "dist-release/notes-server-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz" -C target/release notes-server
+          cd dist-release
+          sha256sum notes-server-*.tar.gz > "notes-server-${{ needs.what.outputs.version }}-x86_64-linux.tar.gz.sha256"
+
       - name: the tarball the AUR package consumes
         run: packaging/linux/tarball.sh "${{ needs.what.outputs.version }}"
 

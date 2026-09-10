@@ -1,0 +1,3 @@
+{$NOTES_DOMAIN} {
+    reverse_proxy notes-server:8787
+}

@@ -98,6 +98,38 @@ jobs:
           sys.exit(1 if missing_pt or missing_en else 0)
           PY
 
+  server-container:
+    name: server HTTPS container
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: validate the versioned API contract
+        run: |
+          pip install openapi-spec-validator==0.7.2
+          openapi-spec-validator server/notes-server/openapi.json
+      - name: build and start the private backend with a TLS proxy
+        env:
+          NOTES_DOMAIN: localhost
+          NOTES_HTTP_PORT: '8080'
+          NOTES_HTTPS_PORT: '8443'
+        run: |
+          docker compose -f server/compose.yml -f server/tests/compose.yml config --quiet
+          docker compose -f server/compose.yml -f server/tests/compose.yml up -d --build
+          for attempt in $(seq 1 60); do
+            docker compose -f server/compose.yml exec -T caddy test -f /data/caddy/pki/authorities/local/root.crt && break
+            sleep 1
+          done
+      - name: authenticated CRUD over verified HTTPS
+        run: python3 server/tests/smoke.py --compose
+      - name: stop disposable services
+        if: always()
+        env:
+          NOTES_DOMAIN: localhost
+        run: docker compose -f server/compose.yml -f server/tests/compose.yml down --volumes
+
   rust:
     name: rust (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
