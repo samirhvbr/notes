@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.0 - refresh the remaining milestone queue
+
+Record the shipped domain, server inbox and device transfer client separately
+from guarded source application, conflict handling, broader pairing, deletions,
+attachments, scheduling, UI and retention. Keep mobile implementation and owner
+installed-release acceptance visible, with remote MCP following sync. Correct
+the scope index to reflect partial implementation without removing open work.
+
 ## 0.20.0 - ship the verified device transfer client
 
 Package the standalone client and exercise two real processes through the native
