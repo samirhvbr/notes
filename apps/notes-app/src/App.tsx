@@ -3,7 +3,7 @@ import { Editor } from "./editor/Editor";
 import { Tree } from "./explorer/Tree";
 import { StatusBar, errorText } from "./app/StatusBar";
 import { Welcome } from "./app/Welcome";
-import { Dialog } from "./app/Dialog";
+import { Dialog } from "./app/DialogHost";
 import { Tabs } from "./app/Tabs";
 import { Rail } from "./app/Rail";
 import { NoteHeader } from "./app/NoteHeader";

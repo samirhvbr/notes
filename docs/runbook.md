@@ -163,3 +163,11 @@ python3 -m json.tool .claude/settings.json > /dev/null && echo ok
 
 If the `diff` on the twins reports anything other than the mirroring comment,
 an edit was applied to one file and not the other.
+
+## macOS module resolution
+
+The modal component is `src/app/DialogHost.tsx`; its state module is
+`src/app/dialog.ts`. Keep their stems distinct, including when case is ignored.
+On a case-insensitive filesystem, an extensionless `app/Dialog` import can
+resolve to `dialog.ts` and fail TypeScript with TS2305 and TS1149.
+Run `npm run build` from `apps/notes-app` to check frontend module resolution.

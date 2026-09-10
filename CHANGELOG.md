@@ -8,6 +8,21 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.13.2 - disambiguate the dialog component on case-insensitive filesystems
+
+A fresh macOS clone passed all 49 frontend tests but failed the production
+build: TypeScript resolved the extensionless `app/Dialog` import against
+`app/dialog.ts`, then reported TS2305 and TS1149. The modal component now lives
+in `DialogHost.tsx`, separate from the dialog state module even when filename
+case is ignored. Its exported component and behavior are unchanged.
+
+The existing TypeScript build is the regression check on macOS; a new unit
+test would not exercise filesystem module resolution. `tools/check.sh` passed,
+including native and Windows clippy, the Rust suite, byte preservation, and
+frontend tests and build. The ENOSPC script skipped on macOS because it needs
+Linux. The development app started; interface acceptance remains pending and
+this fix does not begin milestone 0.2.
+
 ## 0.13.1 - the queue says where 0.1d and 0.2 stand
 
 Two rows in `.continue/README.md`, which is the folder's index and had neither.
