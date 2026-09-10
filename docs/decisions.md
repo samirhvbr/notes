@@ -1559,3 +1559,32 @@ or new credential authority follows from it. Credential rebinding and stale
 backup reconciliation remain explicit future work; retries never reset identity
 or roll server progress back. Active-editor application remains queued under
 ADR-047's existing closed-workspace guard.
+
+
+## ADR-049 — Admit exclusive sync hosts before opening buffers
+
+**Status:** ACTIVE · Core foundation implemented in 0.20.5; frontend integration remains queued.
+
+**Context.** Applying with an editor open needs a coherent snapshot of buffers
+that live outside core. Upgrading an existing shared OS lock risks a gap in
+ownership, and the CLI cannot discover the app's unpersisted edits.
+
+**Decision.** Add opt-in exclusive workspace admission before a host opens any
+buffers. Reuse the existing activity lease for the session lifetime. Refuse
+admission when that service already has a workspace; do not release an existing
+shared lease to try an upgrade. Ordinary app/MCP sessions stay shared and the
+CLI's closed-workspace requirement from ADR-047 stays in force.
+
+Expose single-revision application on an exclusively owned service. The host
+must freeze editing and supply every buffer's identity, BaseRev and saved/current
+versions. Core rejects dirty, stale, duplicated or suspended buffer state and
+pending drafts before durable intent. Reuse the existing guarded source write;
+return the local receipt and allow clean reload through the existing note API.
+Invalidate the path index after successful application.
+
+**Consequences.** This implements the core seam, not an editor sync feature.
+The frontend barrier, inactive-pane accounting, durable client adapter, error
+recovery/reload and UI remain queued. Omitted frontend buffers cannot be detected
+by core. No automatic flush, draft deletion, lease upgrade, network listener or
+server acknowledgment is added. Other cooperating processes using the same app
+data are excluded for the entire exclusive session, not just its writes.

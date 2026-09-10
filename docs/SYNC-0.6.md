@@ -392,3 +392,42 @@ lost. Keep the updated binaries and both state directories during recovery.
 ADR-048 records the boundary. Tests cover lost responses, restart, batch bounds,
 legacy checkpoints, unapplied/local-conflicting content, ownership, monotonicity,
 scope, revocation, backup/restore and the real CLI over the TCP/HTTPS smoke path.
+
+
+## Exclusive open-session core foundation (0.20.5)
+
+This is a Rust host API, **not an app command or a change to the CLI**. The
+ordinary app still opens shared sessions, and the CLI still requires the
+workspace closed. The editor input barrier, complete pane snapshot collection,
+received-queue adapter and UI controls remain unimplemented.
+
+A host can call `WorkspaceService::open_sync_workspace` before opening any
+buffers. This acquires the same exclusive activity lease used by offline apply
+and holds it until closing the workspace. A second cooperating process cannot
+open that root using the same app data. An already-open session cannot upgrade:
+it must first be closed through the normal draft-preserving workflow. Failed
+exclusive admission leaves no open workspace and does not change later shared
+admission. Existing ordinary app/MCP behavior stays shared.
+
+`sync::apply_in_workspace` accepts the existing service, the received path and
+bytes, the previous local receipt, retry intent, and a snapshot of **every live
+buffer**, including inactive panes. Each snapshot contains note identity,
+observed BaseRev, buffer version and saved version. The host must stop editing,
+settlement, navigation and workspace switching for the complete operation and
+reload. Core cannot discover omitted frontend buffers.
+
+Before calling the durable-intent callback, core rejects changed buffers,
+suspended notes, duplicate snapshots, stale disk revisions and any draft entry.
+It then uses the same collision, byte-preservation, atomic-write and registry
+protocol as offline apply. Dirty buffers are never flushed or discarded to make
+sync proceed. Successful application invalidates the quick-open path index;
+`reload_note` gives the host the clean document, current revision and encoding
+profile without closing its workspace. Refresh affected clean buffers before
+resuming editing, including recovery after an uncertain source write. Persist
+the returned receipt separately; a successful source write is not a server ack.
+
+The new tests cover clean application/reload, dirty inactive and stale clean
+buffers, unchanged source on failed intent, draft preservation, refusal of shared
+sessions and competing owners, and lease release at close. The existing
+cross-process and offline recovery tests run against the shared implementation.
+No frontend interaction or installed-app acceptance is claimed by these tests.

@@ -1073,3 +1073,10 @@ workspace activity leases protect open cooperating processes (ADR-047).
 In 0.20.3, a separate client command sends durable application receipts through
 the authenticated server inbox, with credential-bound devices and a resumable
 local acknowledgment cursor (ADR-048). Active-editor application and app integration remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+
+
+The 0.20.5 core seam admits an exclusive workspace before buffers are opened and
+accepts observed buffer snapshots for guarded application without closing that
+session (ADR-049). This is not wired to Tauri/React or the received-queue client.
+The host must freeze editing and reload clean buffers; shared sessions cannot
+apply or upgrade in place. See the host contract in [SYNC-0.6.md](SYNC-0.6.md).

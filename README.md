@@ -147,3 +147,7 @@ to/from private revision inboxes. Version 0.20.1 adds explicit application of
 received creations and same-path updates while the workspace is closed and
 draft-free, with local revision checks and crash recovery. Usage and limits are in [SYNC-0.6.md](docs/SYNC-0.6.md#device-transfer-client-0200);
 the current remaining work is in [the queue](.continue/README.md#current-implementation-order).
+
+Version 0.20.5 adds the Rust core foundation for an exclusively owned open sync
+session, with buffer snapshot checks. It is not wired to the editor yet; the CLI
+still applies only with the workspace closed. See [the host contract](docs/SYNC-0.6.md#exclusive-open-session-core-foundation-0205).

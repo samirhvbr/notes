@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.5 - document exclusive sync host responsibilities
+
+Document exclusive admission before buffers open, complete buffer snapshots,
+input freezing, clean reload and separate durable receipt persistence. Record
+ADR-049 and keep the frontend barrier, queue adapter and app controls in the
+implementation queue. The full local gate passed with Rust tests serialized;
+focused application tests and native/Windows clippy passed after the final
+state-location guard. No installed-app interaction is claimed.
+
 ## 0.20.5 - guard received writes in an exclusively owned open workspace
 
 Add opt-in exclusive core sessions for a future editor sync host. Reuse the
