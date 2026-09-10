@@ -1213,3 +1213,36 @@ it is a key like every other.
 interface, and add it whenever it arrives. That avoids a disabled control
 carrying a promise, at the cost of an icon rail that has to be relaid out later
 and a user who cannot see the shape of what is coming.
+
+
+## ADR-039 — SQLite stores facts; the core owns workspace I/O
+
+**Status:** Accepted, implemented in 0.14.0 (milestone 0.2).
+
+**Context.** ADR-003 deferred the index boundary until real code needed it;
+ADR-015 requires operational identity to move to a separate SQLite database.
+The user requested all of 0.1d and 0.2 together; owner acceptance still follows
+the installed-release and following-release rule.
+
+**Decision.** `notes-index` depends on `notes-model`, `notes-markdown` and
+bundled `rusqlite`, never `notes-fs`. Core walks the confined filesystem and
+supplies metadata/text. Index persistence owns FTS5 and derived parser facts;
+registry persistence owns a separate operational DB. The initial registry
+schema stores the existing serialized identity snapshot to preserve its full
+shape during migration. Immediate transactions merge deltas against a baseline
+and refuse conflicting changes; a stale snapshot cannot erase unrelated notes.
+Legacy JSON and a backup are retained. Persistence remains immediate, correcting
+the earlier unimplemented debounce described in architecture §4.1.
+
+Recent history and reviewed rewrite originals are operational app-data files,
+not derived index tables. Link/image destinations are parsed by the existing
+Markdown authority and rewritten only at exact source spans after review.
+Concurrency checks and original-byte journals make partial application
+recoverable; no claim of a filesystem transaction is made. Notes not examined
+are disclosed; an unavailable index offers an explicit move without rewriting.
+
+**Alternatives.** Giving the index direct filesystem access duplicates the root
+boundary. A third registry crate adds no useful isolation between the two DB
+lifecycles. Normalized registry rows can replace the snapshot in a later backed-up
+migration if measurements justify it; the current per-note merge semantics must
+survive that change. Tags, graph and wiki-link semantics remain 0.3.

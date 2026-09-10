@@ -20,6 +20,7 @@
 //! Either one alone would be enough on a good day. Together, a mistake in the
 //! rewrite pass has to coincide with a hole in the allowlist to reach a user.
 
+pub mod rewrite;
 mod slug;
 pub mod url;
 
@@ -243,6 +244,11 @@ fn analyse(src: &str) -> (Document, Vec<Spanned<'_>>) {
                 }
             }
             Event::Start(Tag::Link {
+                dest_url,
+                link_type,
+                ..
+            })
+            | Event::Start(Tag::Image {
                 dest_url,
                 link_type,
                 ..

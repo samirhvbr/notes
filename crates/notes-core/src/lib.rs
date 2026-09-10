@@ -6,13 +6,16 @@
 //! Tauri (`ARCHITECTURE.md` §14).
 
 pub mod conflicts;
+pub mod content_index;
 pub mod drafts;
 pub mod ignore;
 pub mod index;
 mod lock;
 pub mod paths;
 pub mod preview;
+pub mod recent;
 pub mod reconcile;
+pub mod references;
 pub mod registry;
 pub mod search;
 pub mod settings;
@@ -173,6 +176,8 @@ struct PathState {
 }
 
 struct Open {
+    content_index: Option<content_index::Job>,
+    content_dirty: std::sync::atomic::AtomicBool,
     id: WorkspaceId,
     fs: LocalFs,
     dir: PathBuf,
@@ -194,6 +199,7 @@ struct Open {
 }
 
 pub struct WorkspaceService {
+    reference_plan: Option<references::Pending>,
     data_dir: PathBuf,
     open: Option<Open>,
     settings: Settings,
@@ -219,6 +225,7 @@ impl WorkspaceService {
             Loaded::Fresh | Loaded::TooNew { .. } => Settings::default(),
         };
         Ok(Self {
+            reference_plan: None,
             data_dir,
             open: None,
             settings,
@@ -308,7 +315,9 @@ impl WorkspaceService {
             });
         }
         if let Some(open) = self.open.take() {
-            state::store(&paths::registry_file(&open.dir), &open.registry)?;
+            if !open.read_only {
+                state::store(&paths::registry_file(&open.dir), &open.registry)?;
+            }
         }
         Ok(())
     }
@@ -374,6 +383,8 @@ impl WorkspaceService {
         let extra_ignore = read_portable_ignore(fs.root());
         let caps = fs.caps();
         self.open = Some(Open {
+            content_index: None,
+            content_dirty: std::sync::atomic::AtomicBool::new(true),
             id,
             fs,
             dir,
@@ -452,6 +463,9 @@ impl WorkspaceService {
             state::store(&paths::registry_file(&dir), &open.registry)?;
         }
 
+        if persist {
+            self.touch_recent(note_id, path)?;
+        }
         let draft = drafts::read(&paths::drafts_dir(&dir), note_id)?.map(|d| d.info);
         Ok(OpenedNote {
             note_id,
@@ -627,6 +641,8 @@ impl WorkspaceService {
             } => {
                 let open = self.open_mut()?;
                 open.suspended.remove(&note_id);
+                open.content_dirty
+                    .store(true, std::sync::atomic::Ordering::Relaxed);
                 if let Some(rec) = open.registry.notes.get_mut(&note_id) {
                     if !*unchanged {
                         rec.rev += 1;
@@ -1385,6 +1401,8 @@ impl WorkspaceService {
     fn invalidate_paths(&self) {
         if let Some(open) = self.open.as_ref() {
             open.paths.lock().unwrap().stale = true;
+            open.content_dirty
+                .store(true, std::sync::atomic::Ordering::Relaxed);
         }
     }
 
@@ -1447,7 +1465,12 @@ impl WorkspaceService {
         let root = self.open()?.fs.root().to_path_buf();
         // Dropping the old `Search` cancels its walk.
         self.search = None;
-        let s = search::Search::start(&root, query, opts)?;
+        let s = if opts.mode == search::SearchMode::Words {
+            let (hits, partial) = self.word_hits(query)?;
+            search::Search::ready(hits, partial)
+        } else {
+            search::Search::start(&root, query, opts)?
+        };
         let id = s.id();
         self.search = Some(s);
         Ok(id)
@@ -1469,6 +1492,7 @@ impl WorkspaceService {
                 done: true,
                 cancelled: true,
                 truncated: false,
+                partial: false,
             }),
         }
     }

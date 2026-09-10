@@ -8,6 +8,23 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.14.0 - implement the milestone 0.2 core
+
+Add separate operational registry.db and derived index.db, legacy identity
+migration with a retained backup, incremental/cancellable FTS5 indexing, recent
+history, and guarded incoming/outgoing Markdown reference rewrites. Rewrites
+keep original bytes, disclose skipped candidates and report per-file failure.
+Registry transactions merge unrelated stale snapshots and refuse conflicts;
+newer database schemas are never downgraded. Literal and Regex keep their
+existing semantics. Image destinations enter the shared document IR; the golden
+fixture changes only metadata, not rendered HTML.
+
+The full local gate passes, including native/Windows clippy, workspace tests,
+byte preservation and generated contracts; ENOSPC is Linux-only. The read-only
+~/x debug benchmark scanned 6,707 notes: 78.6 seconds initially and 3.7 seconds
+with zero unchanged files reprocessed on the second pass. Owner acceptance on
+installed Linux packages and the following release remains pending.
+
 ## 0.13.5 - preserve focus across menu actions
 
 Choosing a menu item removed the focused button without restoring focus, so

@@ -49,6 +49,8 @@ pub struct WorkspaceSettings {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Registry {
+    #[serde(skip)]
+    baseline: std::sync::Arc<std::sync::Mutex<Option<Vec<u8>>>>,
     pub schema: u32,
     pub workspace_id: WorkspaceId,
     pub root: String,
@@ -68,6 +70,12 @@ pub struct Registry {
 impl Schemad for Registry {
     const CURRENT: u32 = 1;
     const NAME: &'static str = "registry.json";
+    fn baseline(&self) -> Option<Vec<u8>> {
+        self.baseline.lock().unwrap().clone()
+    }
+    fn remember(&self, bytes: &[u8]) {
+        *self.baseline.lock().unwrap() = Some(bytes.to_vec());
+    }
     fn schema(&self) -> u32 {
         self.schema
     }
@@ -81,6 +89,7 @@ impl Registry {
         root_native_id: Option<NativeId>,
     ) -> Self {
         Self {
+            baseline: Default::default(),
             schema: Self::CURRENT,
             workspace_id,
             root: root.to_string(),

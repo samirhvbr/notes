@@ -8,6 +8,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+notes-index.workspace = true
 notes-model = { workspace = true }
 notes-fs = { workspace = true }
 notes-markdown = { workspace = true }

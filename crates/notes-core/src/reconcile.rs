@@ -309,6 +309,11 @@ impl super::WorkspaceService {
         if !events.is_empty() {
             self.invalidate_paths();
         }
+        if !events.is_empty() {
+            self.open()?
+                .content_dirty
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+        }
         Ok(Reconciled { events, queued })
     }
 

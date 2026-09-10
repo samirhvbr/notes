@@ -390,3 +390,44 @@ pub fn settings_get(app: State<'_, App>) -> R<Settings> {
 pub fn settings_set(app: State<'_, App>, settings: Settings) -> R<()> {
     svc(&app)?.set_settings(settings)
 }
+
+#[tauri::command]
+pub fn index_start(
+    app: tauri::State<'_, App>,
+    force: bool,
+) -> Result<notes_core::content_index::IndexStatus, notes_model::CoreError> {
+    svc(&app)?.index_start(force)
+}
+#[tauri::command]
+pub fn index_status(
+    app: tauri::State<'_, App>,
+) -> Result<notes_core::content_index::IndexStatus, notes_model::CoreError> {
+    svc(&app)?.index_status()
+}
+#[tauri::command]
+pub fn index_cancel(app: tauri::State<'_, App>) -> Result<(), notes_model::CoreError> {
+    svc(&app)?.index_cancel()
+}
+#[tauri::command]
+pub fn recent_notes(
+    app: tauri::State<'_, App>,
+) -> Result<Vec<notes_core::recent::RecentNote>, notes_model::CoreError> {
+    svc(&app)?.recent_notes()
+}
+
+#[tauri::command]
+pub fn reference_preview(
+    app: tauri::State<'_, App>,
+    from: notes_model::RelPath,
+    to: notes_model::RelPath,
+) -> Result<notes_core::references::ReferencePlan, notes_model::CoreError> {
+    svc(&app)?.reference_preview(&from, &to)
+}
+#[tauri::command]
+pub fn reference_apply(
+    app: tauri::State<'_, App>,
+    token: String,
+    selected: Vec<usize>,
+) -> Result<notes_core::references::ReferenceResult, notes_model::CoreError> {
+    svc(&app)?.reference_apply(&token, &selected)
+}
