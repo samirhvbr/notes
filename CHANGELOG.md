@@ -8,6 +8,24 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.4 - declare the CSS side-effect import for TypeScript 7
+
+`typescript` 5.9 to 7.0. The native compiler found exactly one thing in this
+codebase, and it was right: `import "./styles.css"` in `main.tsx` is a
+side-effect import of a module with no declaration anywhere, which 5.x accepted
+silently and 7 reports as TS2882.
+
+The fix is the file this project never had. Vite ships the declarations for the
+assets it resolves, and `src/vite-env.d.ts` is the reference to them — the same
+shape as the existing `src/vitest-dom.d.ts`, which points at the DOM matchers
+for the same reason. It is a gap being closed rather than a workaround: the
+import was always untyped, and only the compiler changed its mind about saying
+so.
+
+`tsc --noEmit`, 72 frontend tests and the production build all pass, and with
+this the whole of `tools/check.sh` is green across all thirteen dependency
+updates of 0.20.4.
+
 ## 0.20.4 - move the frontend to React 19 and Vite 8
 
 `react` and `react-dom` 18 to 19 with their `@types`, `@vitejs/plugin-react` 4
