@@ -29,12 +29,20 @@ milestone is reached when everything under it works. Do not read `0.3` here as
      0.1c  navigation      tabs, quick open, global search, palette, settings
      0.1d  interface       the shell: rail, sidebar, tabs, note header, status bar
 0.2  index                 SQLite, global search, external-change detection
-0.3  Markdown depth        front matter, tags, links, backlinks, attachments
 0.4  mobile                iOS and Android against the same core
+0.3  Markdown depth        front matter, tags, links, backlinks, attachments
 0.5  self-hosting          Notes Server, REST API, tokens, Docker
 0.6  sync                  revisions, hashes, tombstones, conflicts, offline
 0.7  AI                    MCP server over the same API and the same scopes
 ```
+
+**0.4 and 0.3 are out of numeric order on purpose, and the list is in build
+order** ([ADR-040](decisions.md#adr-040--milestone-04-is-pulled-ahead-of-03-and-starts-on-ios)).
+Mobile moved ahead of Markdown depth because 0.4's acceptance depends on 0.1 and
+not on 0.3, and because a second layout is cheapest written while the 0.1d shell
+is still the newest code in the repository. The numbers are milestone identities
+and do not get renumbered when the order changes — renumbering would break every
+`[0.4]` marker already sitting in the architecture and the code.
 
 Each stage is useful on its own. That is the constraint that sets the order: a
 user who stops receiving updates after 0.1 still has a working Markdown editor,
@@ -100,6 +108,14 @@ with nothing but a folder. No index, no server, no account.
 
 ## 0.4 — Mobile
 
+> **Next, after 0.2, and started.** Moved ahead of 0.3 by
+> [ADR-040](decisions.md#adr-040--milestone-04-is-pulled-ahead-of-03-and-starts-on-ios);
+> built in this repository and in the same application, not a second one, by
+> [ADR-039](decisions.md#adr-039--mobile-is-built-in-this-repository-and-in-the-same-application).
+> **iOS first** — the Apple Developer account gates distribution, not the
+> compiler and not the Simulator, and the Android SDK is the toolchain that is
+> not installed. The core compiles for `aarch64-apple-ios-sim` as of `0.15.0`.
+
 iOS and Android, against the same core.
 
 - select a workspace;
@@ -115,6 +131,14 @@ it is here rather than at 0.1 is
 user chose" is a desktop concept, and iOS in particular has no equivalent — the
 adapter is what absorbs that, and it exists from 0.1 precisely so this stage is
 not a rewrite.
+
+**It arrives in two slices, and they fail separately.** The first is the app's
+own container — §14's "Create Workspace" — which on iOS is an ordinary POSIX
+directory that `LocalFs` already serves, so it tests the interface and nothing
+else. The second is "Open Folder": security-scoped bookmarks on iOS, SAF on
+Android, a `ScopedFileSystem` with no `watch` and a budgeted poll. That second
+slice is the one that finally answers whether ADR-008 cut the seam in the right
+place.
 
 ## 0.5 — Self-hosting
 
