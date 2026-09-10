@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.6 - adapt received queues to open sync sessions
+
+Reuse the receive queue's durable intent and receipts through an exclusively
+owned open core session. Advance clean buffer revisions within a batch and
+return verified reloads after success or partial failure, preserving earlier
+receipts when a later revision refuses application. Regression tests cover
+multiple updates to one open note and dirty-buffer refusal.
+
 ## 0.20.5 - document exclusive sync host responsibilities
 
 Document exclusive admission before buffers open, complete buffer snapshots,

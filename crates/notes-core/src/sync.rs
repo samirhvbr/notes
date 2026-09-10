@@ -171,11 +171,14 @@ pub fn apply_received(
 /// The host must freeze editing and provide every live buffer, including
 /// inactive panes, for the duration of this call and the subsequent reload.
 /// Core does not own frontend buffers and cannot infer omitted buffer state.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
 pub struct BufferSnapshot {
     pub note_id: notes_model::NoteId,
     pub base_rev: notes_model::BaseRev,
+    #[ts(type = "number")]
     pub buffer_version: u64,
+    #[ts(type = "number")]
     pub saved_version: u64,
 }
 
@@ -386,4 +389,13 @@ pub fn apply_in_workspace(
             },
         })
     })?
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export)]
+pub struct SyncApplyResult {
+    pub applied: Option<u32>,
+    pub error: Option<CoreError>,
+    pub refreshed: Vec<crate::OpenedNote>,
+    pub reload_failed: bool,
 }

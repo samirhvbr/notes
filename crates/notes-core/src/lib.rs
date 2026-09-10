@@ -248,6 +248,10 @@ impl WorkspaceService {
         &self.data_dir
     }
 
+    pub fn workspace_root(&self) -> Result<&Path> {
+        Ok(self.open()?.fs.root())
+    }
+
     /// The open workspace's id, for callers that need to address its app-data
     /// directory — `notes-mcp` from 0.3, and the tests today.
     pub fn workspace_id(&self) -> Option<WorkspaceId> {

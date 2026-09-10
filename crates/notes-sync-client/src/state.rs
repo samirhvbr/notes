@@ -460,6 +460,25 @@ impl Store {
     /// Apply received creations/updates to the bound folder, with the workspace
     /// closed in every cooperating client using this same application data path.
     pub fn apply(&self, core_data: &Path) -> Result<usize> {
+        self.apply_using(core_data, |root, path, bytes, expected, retry, prepare| {
+            notes_core::sync::apply_received(root, core_data, path, bytes, expected, retry, prepare)
+        })
+    }
+    fn apply_using(
+        &self,
+        core_data: &Path,
+        mut execute: impl FnMut(
+            &Path,
+            &notes_model::RelPath,
+            &[u8],
+            Option<&notes_core::sync::Applied>,
+            bool,
+            &mut dyn FnMut() -> std::result::Result<(), notes_model::CoreError>,
+        ) -> std::result::Result<
+            notes_core::sync::Applied,
+            notes_model::CoreError,
+        >,
+    ) -> Result<usize> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let state = self.load()?;
@@ -495,14 +514,13 @@ impl Store {
             }
             let bytes = content(p).map_err(|_| Error::Invalid)?;
             let retry = app.intent == Some(p.revision.id);
-            let applied = notes_core::sync::apply_received(
+            let applied = execute(
                 &state.source,
-                &core_data,
                 &p.revision.path,
                 &bytes,
                 previous.as_ref().map(|n| &n.local),
                 retry,
-                || {
+                &mut || {
                     app.intent = Some(p.revision.id);
                     self.save_application(&app)
                         .map_err(|_| notes_model::CoreError::Internal {
@@ -556,5 +574,106 @@ impl Store {
             count += 1;
         }
         Ok(count)
+    }
+}
+
+impl Store {
+    pub fn open_for_editor(
+        &self,
+        service: &mut notes_core::WorkspaceService,
+    ) -> Result<notes_core::WorkspaceInfo> {
+        let lock = self.lock()?;
+        let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Err(Error::Invalid);
+        }
+        let data = fs::canonicalize(service.data_dir()).map_err(|_| Error::Storage)?;
+        if self
+            .application(&state)?
+            .is_some_and(|a| a.core_data != data)
+        {
+            return Err(Error::Invalid);
+        }
+        service
+            .open_sync_workspace(&state.source)
+            .map_err(|_| Error::ApplicationBlocked)
+    }
+
+    /// The host owns its input barrier until these refreshed buffers are installed.
+    pub fn apply_for_editor(
+        &self,
+        service: &mut notes_core::WorkspaceService,
+        mut buffers: Vec<notes_core::sync::BufferSnapshot>,
+    ) -> notes_core::sync::SyncApplyResult {
+        use notes_core::sync::{apply_in_workspace, SyncApplyResult};
+        if buffers.iter().any(|b| b.buffer_version != b.saved_version) {
+            return SyncApplyResult {
+                applied: None,
+                error: Some(notes_model::CoreError::DirtyBuffers {
+                    note_ids: buffers.iter().map(|b| b.note_id).collect(),
+                    count: buffers.len(),
+                }),
+                refreshed: vec![],
+                reload_failed: false,
+            };
+        }
+        let data = service.data_dir().to_path_buf();
+        let outcome = self.apply_using(&data, |root, path, bytes, expected, retry, prepare| {
+            if service.workspace_root()? != root {
+                return Err(notes_model::CoreError::Unsupported {
+                    cap: "receive queue belongs to another workspace".into(),
+                });
+            }
+            let applied =
+                apply_in_workspace(service, path, bytes, expected, retry, &buffers, prepare)?;
+            for buffer in &mut buffers {
+                if buffer.note_id == applied.note_id {
+                    buffer.base_rev = applied.base_rev.clone();
+                }
+            }
+            Ok(applied)
+        });
+        let mut report = Self::reload_for_editor(service, &buffers);
+        report.applied = outcome.as_ref().ok().map(|n| *n as u32);
+        if let Err(error) = outcome {
+            report.error = Some(notes_model::CoreError::Unsupported {
+                cap: error.to_string(),
+            });
+        }
+        report
+    }
+
+    pub fn reload_for_editor(
+        service: &mut notes_core::WorkspaceService,
+        buffers: &[notes_core::sync::BufferSnapshot],
+    ) -> notes_core::sync::SyncApplyResult {
+        if buffers.iter().any(|b| b.buffer_version != b.saved_version) {
+            return notes_core::sync::SyncApplyResult {
+                applied: None,
+                error: Some(notes_model::CoreError::DirtyBuffers {
+                    note_ids: buffers.iter().map(|b| b.note_id).collect(),
+                    count: buffers.len(),
+                }),
+                refreshed: vec![],
+                reload_failed: true,
+            };
+        }
+        let mut report = notes_core::sync::SyncApplyResult {
+            applied: None,
+            error: None,
+            refreshed: vec![],
+            reload_failed: false,
+        };
+        for buffer in buffers {
+            match service.reload_note(buffer.note_id) {
+                Ok(note) => report.refreshed.push(note),
+                Err(error) => {
+                    report.reload_failed = true;
+                    report.error = Some(error);
+                }
+            }
+        }
+        report
     }
 }

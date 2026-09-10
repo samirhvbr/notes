@@ -431,3 +431,86 @@ fn acknowledgment_batches_are_bounded_and_old_checkpoints_default_to_pending() {
     fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
     assert!(receiver.acknowledge(&mut peer).is_err());
 }
+
+#[test]
+fn editor_batch_advances_buffer_bases_and_keeps_partial_receipts() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"first").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    let mut service = notes_core::WorkspaceService::with_data_dir(&data).unwrap();
+    receiver.open_for_editor(&mut service).unwrap();
+    let note = service
+        .open_note(&notes_model::RelPath::parse("test.md").unwrap())
+        .unwrap();
+    let buffer = notes_core::sync::BufferSnapshot {
+        note_id: note.note_id,
+        base_rev: note.base_rev,
+        buffer_version: 0,
+        saved_version: 0,
+    };
+    for bytes in [b"second".as_slice(), b"third".as_slice()] {
+        fs::write(root.join("test.md"), bytes).unwrap();
+        sender.stage().unwrap();
+    }
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    let report = receiver.apply_for_editor(&mut service, vec![buffer]);
+    assert_eq!(report.applied, Some(2));
+    assert!(report.error.is_none());
+    assert!(!report.reload_failed);
+    assert_eq!(report.refreshed[0].text, "third");
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"third");
+    let buffer = notes_core::sync::BufferSnapshot {
+        note_id: note.note_id,
+        base_rev: report.refreshed[0].base_rev.clone(),
+        buffer_version: 0,
+        saved_version: 0,
+    };
+    fs::write(root.join("test.md"), b"fourth").unwrap();
+    sender.stage().unwrap();
+    fs::rename(root.join("test.md"), root.join("renamed.md")).unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    let report = receiver.apply_for_editor(&mut service, vec![buffer]);
+    assert!(report.error.is_some());
+    assert!(!report.reload_failed);
+    assert_eq!(report.refreshed[0].text, "fourth");
+    assert_eq!(receiver.status().unwrap().applied_revisions, 4);
+    assert!(!target.join("renamed.md").exists());
+}
+
+#[test]
+fn editor_refuses_dirty_buffers_without_reloading_or_advancing() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"first").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    let mut service = notes_core::WorkspaceService::with_data_dir(&data).unwrap();
+    receiver.open_for_editor(&mut service).unwrap();
+    let note = service
+        .open_note(&notes_model::RelPath::parse("test.md").unwrap())
+        .unwrap();
+    fs::write(root.join("test.md"), b"remote").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    let dirty = notes_core::sync::BufferSnapshot {
+        note_id: note.note_id,
+        base_rev: note.base_rev,
+        buffer_version: 1,
+        saved_version: 0,
+    };
+    let report = receiver.apply_for_editor(&mut service, vec![dirty]);
+    assert!(report.error.is_some());
+    assert!(report.refreshed.is_empty());
+    assert_eq!(receiver.status().unwrap().applied_revisions, 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"first");
+}
