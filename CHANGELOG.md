@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.19.0 - model causal revisions for synchronization
+
+Start milestone 0.6 with a separate notes-sync domain crate. Track immutable
+revisions, parentage, renames, tombstones and device acknowledgments without
+using modification time to elect a winner. Produce deterministic incremental
+plans that preserve conflicting edits and refuse path collisions, stale
+resolutions and unrelated histories. Persist schema-versioned metadata through
+locked, atomic compare-and-set transactions that preserve invalid/future state.
+
 ## 0.18.1 - exclude process locks from portable server backups
 
 Windows enforces locked byte ranges even when the lock file contains no data,

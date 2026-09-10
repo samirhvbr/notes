@@ -1381,3 +1381,35 @@ step. Server state is readable by its operator: no E2EE, teams, hosted service,
 desktop sync or remote MCP is introduced. Dependencies and container digests
 are tracked by Dependabot and Cargo.lock. The owner acceptance walk and its
 following-release repeat remain open in ACCEPTANCE-0.5.md.
+
+## ADR-044 — Synchronization starts with causal plans and explicit pairing
+
+**Status:** ACTIVE · Implemented domain boundary in 0.19.0; milestone 0.6 open.
+
+**Context.** The owner requested the next queued items after the 0.5 server.
+ADR-005 already requires identity, revisions, tombstones and no clock-based
+winner. Applying remote writes without a causal model would turn synchronization
+into overwrite-by-arrival and bypass the local save protocol.
+
+**Decision.** Create `notes-sync` beside the filesystem adapter. Its first block
+contains immutable revision DAGs, compare-and-set heads, monotonic device
+receipts, explicit two-parent resolution and deterministic pairing/incremental
+plans. It depends on the domain model, never on Tauri or an HTTP implementation.
+Core supplies explicit inventories with original byte hashes and its existing
+identity/reconciliation rules. A separate `notes-sync-plan` executable exposes
+those inventories as a read-only preview for two mounted folders.
+
+Schema-1 sync metadata is private operational data and uses locked, atomic,
+digest-conditional replacement. Future/corrupt state is refused unchanged.
+Limits stop growth explicitly; acknowledgments do not authorize pruning.
+Missing inventory is never a deletion, and a tombstone retains ancestry.
+Upload/download require an empty destination inventory; reconciling two
+populated folders produces explicit links and conflicts before any application.
+Filesystem-specific name checks remain mandatory at the eventual apply step.
+
+**Consequences.** Planning creates no source files and changes no note bytes;
+explicit inventory may establish identities in operational state. The desktop
+continues to open no listener. No remote wire format, background transfer,
+content retention or UI completion is claimed by this first block. Those
+remaining items stay in `.continue/0.6-sync.md`; MCP remote is still 0.7.
+See SYNC-0.6.md for the implemented contract and limits.
