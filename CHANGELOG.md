@@ -8,6 +8,41 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.15.0 - notes-fs builds for iOS: the trash is a desktop capability
+
+The first thing milestone 0.4 touched was a compiler error. `notes-fs` did not
+build for `aarch64-apple-ios-sim` at all: the `trash` crate implements the
+Freedesktop bin, the Windows Recycle Bin and the Finder trash, and has no iOS or
+Android backend — on those targets it fails to *compile* rather than failing at
+runtime. That is the better of the two failures and still a wall.
+
+There was nothing to design, because `ARCHITECTURE.md` §11 had already designed
+for it. `Caps` carries a `trash` field, `LocalFs::delete` already branches on it,
+and `DeleteOutcome` already distinguishes `Trashed` from `Permanent` — because
+§7.7 forbids a silent fallback to a permanent delete, and a removable exFAT stick
+and a network share have no bin either. A phone was simply the first backend
+where the *crate* had to be absent and not merely the capability.
+
+So: `Caps::LOCAL.trash` is now
+`cfg!(not(any(target_os = "ios", target_os = "android")))`, the dependency moved
+under a matching `[target.'cfg(...)'.dependencies]` table, and `delete` carries
+the same `cfg` around the call site. The `cfg` is not a duplicate of the
+`caps.trash` test it wraps: the runtime test could never have saved the build,
+because the crate has to be gone before the compiler reaches it. The two say the
+same thing at the two different moments it has to be said.
+
+A delete on a phone is therefore `DeleteOutcome::Permanent`, and it says so.
+§7.7 is satisfied by honesty rather than by a bin that does not exist.
+
+Measured after the change: `notes-model`, `notes-fs`, `notes-markdown` and
+`notes-core` all check clean for `aarch64-apple-ios-sim`, and the host build is
+unchanged. `notify`, `fd-lock`, `dirs` and `blake3` needed nothing at all — one
+blocker across four crates, found in the first five minutes of the milestone.
+The Tauri shell and `notes-index` are still unexamined.
+
+**Y**, not Z: `Caps::LOCAL` is part of the `FileSystem` surface, and its value
+now depends on the target it was compiled for.
+
 ## 0.13.5 - preserve focus across menu actions
 
 Choosing a menu item removed the focused button without restoring focus, so

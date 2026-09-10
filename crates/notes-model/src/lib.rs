@@ -150,10 +150,20 @@ impl Caps {
     /// (`DECISIONS-0.1a.md` D-24, closed at 0.11.1). `preserve_mode` stays
     /// Unix-only — NTFS ACLs are not a mode, and `ARCHITECTURE.md` §11 does not
     /// promise them.
+    ///
+    /// `trash` is **desktop-only, and that is a platform fact rather than a
+    /// choice** \[0.4\]: iOS and Android have no user-visible bin for an app's
+    /// own container, so there is nothing for `trash::delete` to move a file
+    /// into and the crate does not build for either target. A local filesystem
+    /// on a phone is still a local filesystem in every other respect — atomic
+    /// replace, rename and `create_new` all hold — which is why this is one
+    /// field and not a second constant. `DeleteOutcome::Permanent` is then the
+    /// only answer mobile can give, and §7.7 is satisfied by saying so rather
+    /// than by pretending otherwise.
     pub const LOCAL: Caps = Caps {
         atomic_replace: true,
         rename: true,
-        trash: true,
+        trash: cfg!(not(any(target_os = "ios", target_os = "android"))),
         watch: true,
         native_id: cfg!(any(unix, windows)),
         preserve_mode: cfg!(unix),
