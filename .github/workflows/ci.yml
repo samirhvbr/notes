@@ -122,6 +122,10 @@ jobs:
             docker compose -f server/compose.yml exec -T caddy test -f /data/caddy/pki/authorities/local/root.crt && break
             sleep 1
           done
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: build the device sync client
+        run: cargo build -p notes-sync-client --locked
       - name: authenticated CRUD over verified HTTPS
         run: python3 server/tests/smoke.py --compose
       - name: stop disposable services

@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.0 - ship the verified device transfer client
+
+Package the standalone client and exercise two real processes through the native
+server and the CI HTTPS proxy. Verify offline restart, untrusted certificate
+refusal, explicit test-CA trust and exact received-byte export while preserving
+source folders. Include the client in cross-target checks and build transport
+binaries explicitly before smoke tests.
+
 ## 0.20.0 - resume device revision transfers from durable queues
 
 Add an explicit sync client that captures saved source bytes through core,

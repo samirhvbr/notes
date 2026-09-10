@@ -21,6 +21,7 @@ compose = sys.argv[1:] == ["--compose"]
 root = pathlib.Path(__file__).resolve().parents[2]
 cmd = ["docker", "compose", "-f", "server/compose.yml", "-f", "server/tests/compose.yml"]
 env = os.environ.copy()
+env.pop("NOTES_SYNC_CA_FILE", None)
 env.update(NOTES_DOMAIN="localhost", NOTES_HTTP_PORT="8080", NOTES_HTTPS_PORT="8443")
 
 
@@ -128,6 +129,56 @@ with tempfile.TemporaryDirectory() as temp:
         status, _, page = request("GET", sync)
         assert status == 200 and len(page["revisions"]) == 1 and page["next_cursor"] == 1
         assert request("GET", collection + "/empty.md")[0] == 404
+        # Two real client processes transfer byte-identical content through the
+        # same authenticated transport. Neither process applies workspace writes.
+        client = str(root / "target/debug/notes-sync-client")
+        cli("workspace", "create", "client")
+        remote_token_path = "/tmp/client.secret" if compose else str(temp / "client.secret")
+        cli("token", "create", "client", "client", ".", "read,create,update,move,delete", remote_token_path)
+        client_token = run(cmd + ["exec", "-T", "notes-server", "cat", remote_token_path]) if compose else pathlib.Path(remote_token_path).read_text()
+        client_secret = temp / "client-transport.secret"
+        client_secret.write_text(client_token)
+        client_secret.chmod(0o600)
+        source = temp / "client-source"
+        source.mkdir()
+        original = b"\xef\xbb\xbfsource\r\n\xff"
+        (source / "original.md").write_bytes(original)
+        target = temp / "client-target"
+        target.mkdir()
+        sender, receiver = temp / "sender-state", temp / "receiver-state"
+        if compose:
+            # A test CA is explicitly trusted; TLS verification stays enabled.
+            untrusted = subprocess.run([client, "init-upload", str(sender), str(source), base, "client", str(client_secret), "--allow-private"], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert untrusted.returncode != 0 and not sender.exists()
+            env["NOTES_SYNC_CA_FILE"] = str(temp / "ca.crt")
+        run([client, "init-upload", str(sender), str(source), base, "client", str(client_secret), "--allow-private"])
+        run([client, "stage", str(sender)])
+        if not compose:
+            proc.terminate()
+            proc.wait(timeout=15)
+            offline = subprocess.run([client, "transfer", str(sender), str(client_secret)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert offline.returncode != 0
+            assert json.loads(run([client, "status", str(sender)]))["pending"] == 1
+            proc = subprocess.Popen([binary, "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(100):
+                try:
+                    if request("GET", "/healthz", auth=False)[0] == 200:
+                        break
+                except (urllib.error.URLError, ConnectionError):
+                    pass
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("server did not restart")
+        run([client, "transfer", str(sender), str(client_secret)])
+        run([client, "init-receive", str(receiver), str(target), base, "client", str(client_secret), "--allow-private"])
+        run([client, "transfer", str(receiver), str(client_secret)])
+        received = json.loads(run([client, "received", str(receiver)]))
+        assert len(received) == 1
+        run([client, "export", str(receiver), received[0]["id"]])
+        assert (receiver / ("received-" + received[0]["id"] + ".md")).read_bytes() == original
+        assert list(target.iterdir()) == []
+        assert (source / "original.md").read_bytes() == original
+        assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])
         assert request("GET", note)[0] == 401

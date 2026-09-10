@@ -141,3 +141,8 @@ causal model and the remaining work before remote synchronization is available.
 The 0.19.1 server also exposes a scoped immutable revision inbox. It transfers
 original bytes and acknowledges storage, without applying changes to workspace
 files. See [the sync contract](docs/SYNC-0.6.md#server-revision-inbox-0191).
+
+Version 0.20.0 adds `notes-sync-client` for offline staging and resumable transfer
+to/from private revision inboxes. It preserves source files and does not apply
+remote changes yet. Usage and limits are in [SYNC-0.6.md](docs/SYNC-0.6.md#device-transfer-client-0200);
+the current remaining work is in [the queue](.continue/README.md#current-implementation-order).
