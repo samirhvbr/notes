@@ -1193,6 +1193,68 @@
           }
         }
       }
+    },
+    "/v1/workspaces/{workspace}/sync/acknowledgments": {
+      "post": {
+        "operationId": "acknowledgeSyncApplication",
+        "description": "Report one durable historical device application receipt. Requires Read and visibility of the entire note history. Workspace UUID must match; device UUID must be non-nil and is bound to the first authenticated credential that acknowledges it. A different credential cannot reuse that device. Exact retries are idempotent; backward acknowledgments are refused. At most 1024 devices. No source writes, retention or pruning is authorized. Response echoes the validated request only after atomic persistence.",
+        "parameters": [
+          {
+            "name": "workspace",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicationAcknowledgment"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Historical device receipt persisted; echoed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicationAcknowledgment"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "507": {
+            "description": "Sync capacity reached"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1603,6 +1665,29 @@
           },
           "has_more": {
             "type": "boolean"
+          }
+        }
+      },
+      "ApplicationAcknowledgment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workspace",
+          "device",
+          "revision"
+        ],
+        "properties": {
+          "workspace": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "device": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "revision": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       }

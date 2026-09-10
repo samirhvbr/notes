@@ -335,7 +335,10 @@ fn dispatch(
     if route.0 != credential.workspace {
         return Err(err(StatusCode::FORBIDDEN, "forbidden"));
     }
-    if route.1 == "sync/revisions" || route.1.starts_with("sync/revisions/") {
+    if route.1 == "sync/acknowledgments"
+        || route.1 == "sync/revisions"
+        || route.1.starts_with("sync/revisions/")
+    {
         return sync_dispatch(server, credential, parts, bytes, route.1, offset, limit);
     }
     let config = AgentConfig {
@@ -435,6 +438,12 @@ fn sync_dispatch(
         sync::Error::Storage => internal(),
     };
     match (parts.method.as_str(), route) {
+        ("POST", "sync/acknowledgments") => {
+            let input: notes_sync::transfer::ApplicationAcknowledgment =
+                body(bytes, &parts.headers)?;
+            sync::acknowledge(&server.data, credential, &input).map_err(map)?;
+            Ok(Json(input).into_response())
+        }
         ("GET", "sync/revisions") => Ok(Json(
             sync::page(&server.data, credential, cursor, limit).map_err(map)?,
         )

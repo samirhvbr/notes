@@ -889,3 +889,112 @@ async fn sync_review_and_distinct_mutation_permissions_are_preserved() {
         StatusCode::UNAUTHORIZED
     );
 }
+
+#[tokio::test]
+async fn sync_application_acknowledgments_are_owned_monotonic_and_durable() {
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let first = publication(workspace, None, "allowed/test.md", Some(b"one"));
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let second = publication(workspace, Some(&first), "allowed/test.md", Some(b"two"));
+    assert_eq!(post_revision(&f, &second).await, StatusCode::OK);
+    let route = "/v1/workspaces/home/sync/acknowledgments";
+    let device = uuid::Uuid::new_v4();
+    let mut receipt = json!({"workspace":workspace,"device":device,"revision":first.revision.id});
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::OK
+    );
+    let path = f.data.join("sync/home/vault.json");
+    let before = fs::read(&path).unwrap();
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.2,
+        receipt
+    );
+    assert_eq!(fs::read(&path).unwrap(), before);
+    receipt["revision"] = json!(second.revision.id);
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::OK
+    );
+    f.app = api::router(api::Server::new(f.data.clone(), None));
+    assert_eq!(sync_workspace(&f).await, workspace);
+    let accepted = fs::read(&path).unwrap();
+    receipt["revision"] = json!(first.revision.id);
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::CONFLICT
+    );
+    receipt["revision"] = json!(uuid::Uuid::new_v4());
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::NOT_FOUND
+    );
+    receipt["revision"] = json!(second.revision.id);
+    receipt["workspace"] = json!(uuid::Uuid::new_v4());
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::CONFLICT
+    );
+    receipt["workspace"] = json!(workspace);
+    let other = f._dir.path().join("other.secret");
+    admin::create_token(
+        &f.data,
+        "other".into(),
+        "home".into(),
+        RelPath::root(),
+        [Permission::Read].into(),
+        false,
+        &other,
+    )
+    .unwrap();
+    f.token = fs::read_to_string(other).unwrap();
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(fs::read(&path).unwrap(), accepted);
+    // A new device can report application with Read alone; this writes no note.
+    receipt["device"] = json!(uuid::Uuid::new_v4());
+    assert_eq!(
+        f.request("POST", route, Some(receipt), &[]).await.0,
+        StatusCode::OK
+    );
+    let backup_path = f._dir.path().join("receipt-backup.tar");
+    backup::backup(&f.data, &backup_path).unwrap();
+    let restored = f._dir.path().join("restored-receipts");
+    backup::restore(&backup_path, &restored).unwrap();
+    assert_eq!(
+        fs::read(restored.join("sync/home/vault.json")).unwrap(),
+        fs::read(&path).unwrap()
+    );
+    let c = admin::authenticate(&admin::load(&restored).unwrap(), f.token.trim()).unwrap();
+    notes_server::sync::page(&restored, &c, 0, 20).unwrap();
+    assert!(fs::read_dir(f.data.join("workspaces/home/allowed"))
+        .unwrap()
+        .next()
+        .is_none());
+}
+
+#[tokio::test]
+async fn sync_acknowledgments_refuse_invisible_history_and_revoked_credentials() {
+    let f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let credential = admin::authenticate(&admin::load(&f.data).unwrap(), f.token.trim()).unwrap();
+    let mut broad = credential.clone();
+    broad.scope = RelPath::root();
+    let p = publication(workspace, None, "secret.md", Some(b"private"));
+    notes_server::sync::publish(&f.data, &broad, p.clone()).unwrap();
+    let receipt =
+        json!({"workspace":workspace,"device":uuid::Uuid::new_v4(),"revision":p.revision.id});
+    let route = "/v1/workspaces/home/sync/acknowledgments";
+    assert_eq!(
+        f.request("POST", route, Some(receipt.clone()), &[]).await.0,
+        StatusCode::NOT_FOUND
+    );
+    admin::revoke(&f.data, f.id).unwrap();
+    assert_eq!(
+        f.request("POST", route, Some(receipt), &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}

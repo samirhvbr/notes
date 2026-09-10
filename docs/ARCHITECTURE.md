@@ -1070,4 +1070,6 @@ authentication, without applying them to source files. The 0.20.0 `notes-sync-cl
 core capture and the shared publication contract (ADR-046). In 0.20.1, explicit
 application uses core guards and a separate durable client checkpoint; shared
 workspace activity leases protect open cooperating processes (ADR-047).
-Active-editor application and app integration remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+In 0.20.3, a separate client command sends durable application receipts through
+the authenticated server inbox, with credential-bound devices and a resumable
+local acknowledgment cursor (ADR-048). Active-editor application and app integration remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.

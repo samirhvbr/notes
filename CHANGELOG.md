@@ -8,6 +8,18 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.3 - acknowledge durable device application receipts
+
+Add explicit, resumable device acknowledgments derived only from durable local
+application receipts. The server binds each device to its first credential,
+checks historical scope and causal progress, and persists receipts separately
+from storage acceptance. Lost responses can be retried without writing source
+notes or claiming that cached content was applied. Active-editor integration
+remains queued. Regression tests exercise lost responses, restart, bounded
+batches, legacy checkpoints, unapplied content, credential ownership, causal
+progress, scope, revocation and backup/restore; the real TCP smoke exercises
+the new CLI command.
+
 ## 0.20.2 - preserve disk-full classification through contextual IO errors
 
 Classify StorageFull and QuotaExceeded even when a library adds path context

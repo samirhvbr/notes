@@ -1530,3 +1530,32 @@ conflict resolution, active buffers, server acknowledgments and mobile lifecycle
 remain separate work. Owner installed-release acceptance is not inferred from
 CLI tests. Server backup skips activity lock files; device backups must retain application
 checkpoints.
+
+## ADR-048 — Application acknowledgments report durable device receipts
+
+**Status:** ACTIVE · Implemented in 0.20.3; milestone 0.6 remains open.
+
+**Context.** Storage acceptance and a successful local application are different
+facts. The server needs explicit device progress without inferring it from
+received bytes or requiring connectivity during filesystem writes.
+
+**Decision.** A separate receive-client `acknowledge` command sends one immutable
+workspace/device/revision assertion per durable application receipt, up to 20
+per invocation. It advances an additive default-zero cursor only after validating
+the server's exact echo. Lost responses retry the same receipt. Application
+intents and cached content never authorize sending. HTTP stays outside core.
+
+The server requires Read and entire-history scope visibility and binds each
+device to its first acknowledging credential ID. Same-revision retries are
+idempotent; ancestors of an acknowledged revision are refused. Atomic vault
+persistence retains acknowledgments and credential ownership alongside history,
+under existing request and storage limits. Existing vaults have no owners;
+existing client checkpoints have zero acknowledged receipts. Older binaries
+refuse the additive fields, preventing silent loss on downgrade.
+
+**Consequences.** A receipt is a historical assertion from an authenticated
+client, not independent proof of current disk bytes. No pruning, source mutation
+or new credential authority follows from it. Credential rebinding and stale
+backup reconciliation remain explicit future work; retries never reset identity
+or roll server progress back. Active-editor application remains queued under
+ADR-047's existing closed-workspace guard.
