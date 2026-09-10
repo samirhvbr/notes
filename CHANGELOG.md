@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.14.1 - isolate empty-file content correlation from inode reuse
+
+Arch CI exposed a fixture that deleted the original empty file before creating
+its replacement. A reused inode legitimately entered the native-identity rule,
+so the test did not isolate the content-correlation behavior named in its title.
+Create both files before removing the original, and additionally assert that
+opening the replacement gives it a distinct NoteId. Product behavior is unchanged.
+The complete local gate is rerun; installed packages remain the 0.14.0 delivery.
+
 ## 0.14.0 - complete the desktop navigation workflow
 
 Expose Files/Recent/Outline, named Words/Literal/Regex modes, index progress,
