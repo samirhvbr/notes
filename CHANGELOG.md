@@ -8,6 +8,16 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.5 - guard received writes in an exclusively owned open workspace
+
+Add opt-in exclusive core sessions for a future editor sync host. Reuse the
+existing guarded application path without closing the workspace, and require
+observed buffer snapshots before writing: changed buffers, stale clean buffers,
+suspended notes and drafts are refused before durable intent. Keep the ordinary
+shared-session CLI boundary intact. Refresh clean note reads and invalidate the
+path index after application; app controls and the frontend editing barrier
+remain queued.
+
 ## 0.20.4 - declare the CSS side-effect import for TypeScript 7
 
 `typescript` 5.9 to 7.0. The native compiler found exactly one thing in this

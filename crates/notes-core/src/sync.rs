@@ -161,6 +161,38 @@ pub fn apply_received(
     retry: bool,
     prepare: impl FnOnce() -> Result<()>,
 ) -> Result<Applied> {
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_sync_workspace(root)?;
+    apply_in_workspace(&mut service, path, bytes, expected, retry, &[], prepare)
+}
+
+/// The host must freeze editing and provide every live buffer, including
+/// inactive panes, for the duration of this call and the subsequent reload.
+/// Core does not own frontend buffers and cannot infer omitted buffer state.
+#[derive(Debug, Clone)]
+pub struct BufferSnapshot {
+    pub note_id: notes_model::NoteId,
+    pub base_rev: notes_model::BaseRev,
+    pub buffer_version: u64,
+    pub saved_version: u64,
+}
+
+/// Apply one received revision in an opt-in exclusive session. Dirty or stale
+/// buffers are refused, never flushed or discarded. After success the host must
+/// reload affected clean buffers before unfreezing editing. The returned receipt
+/// still needs durable client persistence; retry follows the original intent.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_in_workspace(
+    service: &mut WorkspaceService,
+    path: &RelPath,
+    bytes: &[u8],
+    expected: Option<&Applied>,
+    retry: bool,
+    buffers: &[BufferSnapshot],
+    prepare: impl FnOnce() -> Result<()>,
+) -> Result<Applied> {
     use notes_model::{BaseRev, IoKind};
     if !path.is_note()
         || bytes.len() > 8 * 1024 * 1024
@@ -176,20 +208,45 @@ pub fn apply_received(
             reason: e.to_string(),
         })?;
     }
-    validate_state_location(&[root], data)?;
-    let mut service = WorkspaceService::with_data_dir(data)?;
-    service.exclusive_workspace = true;
-    service.record_visits = false;
-    service.open_workspace(root)?;
     let open = service.open()?;
-    if open.read_only || !open.fs.caps().atomic_replace {
+    if !open.sync_exclusive || open.read_only || !open.fs.caps().atomic_replace {
         return Err(CoreError::Unsupported {
             cap: "workspace cannot apply atomic sync writes".into(),
+        });
+    }
+    if !open.suspended.is_empty() || buffers.iter().any(|b| b.buffer_version != b.saved_version) {
+        return Err(CoreError::Unsupported {
+            cap: "sync application has dirty or suspended buffers".into(),
         });
     }
     let dir = open.dir.clone();
     let mut guard = crate::lock::acquire(&crate::paths::lock_file(&dir))?;
     guard.with(|| {
+        let mut seen = std::collections::BTreeSet::new();
+        for buffer in buffers {
+            if !seen.insert(buffer.note_id) {
+                return Err(CoreError::Unsupported {
+                    cap: "duplicate sync buffer snapshot".into(),
+                });
+            }
+            let open = service.open()?;
+            let record =
+                open.registry
+                    .record(buffer.note_id)
+                    .ok_or_else(|| CoreError::NotFound {
+                        path: buffer.note_id.to_string(),
+                    })?;
+            let stat = open.fs.stat(&record.path)?;
+            if stat.size > 8 * 1024 * 1024
+                || stat.size != buffer.base_rev.size
+                || stat.mtime_ns != buffer.base_rev.mtime_ns
+                || notes_fs::hash(&open.fs.read(&record.path)?) != buffer.base_rev.hash
+            {
+                return Err(CoreError::Unsupported {
+                    cap: "sync application has a stale buffer".into(),
+                });
+            }
+        }
         let drafts = crate::paths::drafts_dir(&dir);
         match std::fs::read_dir(&drafts) {
             Ok(mut entries) => {
@@ -319,6 +376,7 @@ pub fn apply_received(
             &crate::paths::registry_file(&dir),
             &service.open()?.registry,
         )?;
+        service.invalidate_paths();
         Ok(Applied {
             note_id: id,
             base_rev: BaseRev {

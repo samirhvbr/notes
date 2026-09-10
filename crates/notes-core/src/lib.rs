@@ -201,6 +201,7 @@ struct Open {
     /// rebuild happens on the next `quick_open` rather than immediately, so a
     /// reconciliation tick cannot put the walk on a treadmill.
     paths: std::sync::Mutex<PathState>,
+    sync_exclusive: bool,
     _activity: std::fs::File,
 }
 
@@ -258,6 +259,22 @@ impl WorkspaceService {
     /// Adopt a folder. **Creates nothing inside it** (scope §2.3).
     pub fn open_workspace(&mut self, root: &Path) -> Result<WorkspaceInfo> {
         self.adopt(root, false)
+    }
+
+    /// Opt into sole process ownership before opening any editor buffers.
+    /// Refuses an already open workspace instead of dropping its activity lease.
+    /// Other cooperating app/MCP/CLI processes cannot open it until it closes.
+    pub fn open_sync_workspace(&mut self, root: &Path) -> Result<WorkspaceInfo> {
+        if self.open.is_some() {
+            return Err(CoreError::Unsupported {
+                cap: "close the current workspace before opting into sync ownership".into(),
+            });
+        }
+        sync::validate_state_location(&[root], &self.data_dir)?;
+        self.exclusive_workspace = true;
+        let result = self.adopt(root, false);
+        self.exclusive_workspace = false;
+        result
     }
 
     /// Create `parent/name` and adopt it. The only path on which this
@@ -468,6 +485,7 @@ impl WorkspaceService {
             recon: std::sync::Mutex::new(reconcile::Recon::default()),
             watch: None,
             paths: std::sync::Mutex::new(PathState::default()),
+            sync_exclusive: self.exclusive_workspace,
             _activity: activity,
         });
 
