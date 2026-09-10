@@ -28,7 +28,9 @@ fn process_lock(relative: &Path) -> bool {
     matches!(
         relative.to_str(),
         Some("server.lock" | "admin/lock" | "audit/lock")
-    ) || (relative.starts_with("sync") && relative.file_name().is_some_and(|n| n == "vault.lock"))
+    ) || (relative.starts_with(Path::new("state").join("active"))
+        && relative.extension().is_some_and(|e| e == "lock"))
+        || (relative.starts_with("sync") && relative.file_name().is_some_and(|n| n == "vault.lock"))
         || relative == Path::new("admin").join("lock")
         || relative == Path::new("audit").join("lock")
         || (relative.starts_with("state")

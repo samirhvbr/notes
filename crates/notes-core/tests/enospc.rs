@@ -86,6 +86,20 @@ fn a_full_disk_is_reported_and_leaves_the_buffer_recoverable() {
         "the note on disk must be byte-identical after a failed write"
     );
 
+    // New files must also remain absent on ENOSPC, rather than leave a
+    // truncated destination that a resumed sync could mistake for local work.
+    use notes_fs::FileSystem;
+    let filesystem = notes_fs::LocalFs::open(&root).unwrap();
+    let fresh = RelPath::parse("received.md").unwrap();
+    assert!(matches!(
+        filesystem.create_new(&fresh, typed.as_bytes()),
+        Err(notes_model::CoreError::Io {
+            kind: IoKind::DiskFull,
+            ..
+        })
+    ));
+    assert!(!root.join("received.md").exists());
+
     // …and the temporary file did not survive to litter the user's folder.
     let leftovers: Vec<_> = std::fs::read_dir(&root)
         .unwrap()

@@ -142,3 +142,190 @@ pub fn capture(root: &Path, data: &Path) -> Result<Vec<(File, Vec<u8>)>> {
     }
     Ok(result)
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Applied {
+    pub note_id: notes_model::NoteId,
+    pub base_rev: notes_model::BaseRev,
+}
+/// Offline application: all cooperating clients must share the app data path.
+/// `prepare` durably records intent after precondition checks, before any write.
+/// Retry is authorized only by that saved intent, never by matching bytes alone.
+pub fn apply_received(
+    root: &Path,
+    data: &Path,
+    path: &RelPath,
+    bytes: &[u8],
+    expected: Option<&Applied>,
+    retry: bool,
+    prepare: impl FnOnce() -> Result<()>,
+) -> Result<Applied> {
+    use notes_model::{BaseRev, IoKind};
+    if !path.is_note()
+        || bytes.len() > 8 * 1024 * 1024
+        || path.as_str().split('/').any(crate::ignore::is_hidden_name)
+    {
+        return Err(CoreError::Unsupported {
+            cap: "invalid sync application".into(),
+        });
+    }
+    for name in path.as_str().split('/') {
+        notes_model::portable_name(name).map_err(|e| CoreError::InvalidPath {
+            path: path.to_string(),
+            reason: e.to_string(),
+        })?;
+    }
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.exclusive_workspace = true;
+    service.record_visits = false;
+    service.open_workspace(root)?;
+    let open = service.open()?;
+    if open.read_only || !open.fs.caps().atomic_replace {
+        return Err(CoreError::Unsupported {
+            cap: "workspace cannot apply atomic sync writes".into(),
+        });
+    }
+    let dir = open.dir.clone();
+    let mut guard = crate::lock::acquire(&crate::paths::lock_file(&dir))?;
+    guard.with(|| {
+        let drafts = crate::paths::drafts_dir(&dir);
+        match std::fs::read_dir(&drafts) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    return Err(CoreError::Unsupported {
+                        cap: "workspace has pending drafts".into(),
+                    });
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(CoreError::io("sync_drafts", "state", &e)),
+        }
+        let current = match service.open()?.fs.stat(path) {
+            Ok(stat) => {
+                if stat.size > 8 * 1024 * 1024 {
+                    return Err(CoreError::Unsupported {
+                        cap: "sync target exceeds limit".into(),
+                    });
+                }
+                let raw = service.open()?.fs.read(path)?;
+                Some(BaseRev {
+                    size: stat.size,
+                    mtime_ns: stat.mtime_ns,
+                    hash: notes_fs::hash(&raw),
+                })
+            }
+            Err(CoreError::Io {
+                kind: IoKind::NotFound,
+                ..
+            })
+            | Err(CoreError::NotFound { .. }) => None,
+            Err(e) => return Err(e),
+        };
+        let hash = notes_fs::hash(bytes);
+        let already = retry && current.as_ref().is_some_and(|r| r.hash == hash);
+        if !already {
+            match (expected, &current) {
+                (None, None) => {
+                    let mut cursor = RelPath::root();
+                    for name in path.as_str().split('/') {
+                        let next = cursor.join(name)?;
+                        match service.open()?.fs.stat(&next) {
+                            Ok(stat) if stat.kind == EntryKind::Dir => {}
+                            Ok(_) => {
+                                return Err(CoreError::AlreadyExists {
+                                    path: next.to_string(),
+                                })
+                            }
+                            Err(CoreError::Io {
+                                kind: IoKind::NotFound,
+                                ..
+                            })
+                            | Err(CoreError::NotFound { .. }) => {
+                                service.check_name(name, &next)?;
+                                break;
+                            }
+                            Err(e) => return Err(e),
+                        }
+                        cursor = next;
+                    }
+                }
+                (Some(before), Some(now))
+                    if before.base_rev == *now
+                        && service
+                            .open()?
+                            .registry
+                            .record(before.note_id)
+                            .is_some_and(|r| r.path == *path) => {}
+                _ => {
+                    return Err(CoreError::Unsupported {
+                        cap: "sync target changed".into(),
+                    })
+                }
+            }
+        }
+        prepare()?;
+        if !already {
+            if let Some(before) = expected {
+                match service
+                    .open()?
+                    .fs
+                    .write_atomic(path, bytes, Some(&before.base_rev))?
+                {
+                    notes_fs::WriteOutcome::Written(_) => {}
+                    notes_fs::WriteOutcome::Diverged(_) => {
+                        return Err(CoreError::Unsupported {
+                            cap: "sync target changed during write".into(),
+                        })
+                    }
+                }
+            } else {
+                // Create parent folders through the same jail; no source note is
+                // overwritten even if a third-party editor wins the create race.
+                let mut parent = RelPath::root();
+                let names: Vec<_> = path.as_str().split('/').collect();
+                for name in &names[..names.len() - 1] {
+                    let next = parent.join(name)?;
+                    match service.open()?.fs.stat(&next) {
+                        Ok(_) => {}
+                        Err(CoreError::Io {
+                            kind: IoKind::NotFound,
+                            ..
+                        })
+                        | Err(CoreError::NotFound { .. }) => {
+                            service.check_name(name, &next)?;
+                            service.open()?.fs.create_dir(&next)?;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                    parent = next;
+                }
+                service.open()?.fs.create_new(path, bytes)?;
+            }
+        }
+        let stat = service.open()?.fs.stat(path)?;
+        let actual = service.open()?.fs.read(path)?;
+        if notes_fs::hash(&actual) != hash {
+            return Err(CoreError::Unsupported {
+                cap: "sync target changed after write".into(),
+            });
+        }
+        let id = service
+            .open_mut()?
+            .registry
+            .observe(path, &stat, hash.clone());
+        crate::state::store(
+            &crate::paths::registry_file(&dir),
+            &service.open()?.registry,
+        )?;
+        Ok(Applied {
+            note_id: id,
+            base_rev: BaseRev {
+                size: stat.size,
+                mtime_ns: stat.mtime_ns,
+                hash,
+            },
+        })
+    })?
+}

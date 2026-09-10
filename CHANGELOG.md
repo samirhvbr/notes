@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.1 - apply received content through guarded core writes
+
+Apply received creations and same-path updates only while the workspace is
+closed in cooperating core processes. Preserve drafts and reject stale local
+revisions, destination collisions and unsupported operations. Persist intent
+before source writes so interrupted application can resume without rewriting
+newer local content. Keep application receipts distinct from transfer receipts.
+
 ## 0.20.0 - refresh the remaining milestone queue
 
 Record the shipped domain, server inbox and device transfer client separately

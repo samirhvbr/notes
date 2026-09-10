@@ -260,19 +260,27 @@ impl FileSystem for LocalFs {
 
     fn create_new(&self, path: &RelPath, bytes: &[u8]) -> Result<Stat> {
         let abs = self.resolve(path)?;
-        let mut f = match fs::File::create_new(&abs) {
-            Ok(f) => f,
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
-                return Err(CoreError::AlreadyExists {
-                    path: path.to_string(),
-                })
-            }
-            Err(e) => return Err(CoreError::io("create_new", path, &e)),
-        };
-        f.write_all(bytes)
+        // Publish complete bytes without replacing a concurrently created note.
+        let mut temp = tempfile::Builder::new()
+            .prefix(".notes-create-")
+            .suffix(".tmp")
+            .tempfile_in(abs.parent().expect("jailed file has a parent"))
+            .map_err(|e| CoreError::io("create_temp", path, &e))?;
+        temp.write_all(bytes)
             .map_err(|e| CoreError::io("write", path, &e))?;
-        f.sync_all().map_err(|e| CoreError::io("fsync", path, &e))?;
-        drop(f);
+        temp.as_file()
+            .sync_all()
+            .map_err(|e| CoreError::io("fsync", path, &e))?;
+        let abs = self.resolve(path)?;
+        temp.persist_noclobber(&abs).map_err(|e| {
+            if e.error.kind() == std::io::ErrorKind::AlreadyExists {
+                CoreError::AlreadyExists {
+                    path: path.to_string(),
+                }
+            } else {
+                CoreError::io("create_new", path, &e.error)
+            }
+        })?;
         sync_dir(&abs);
         Self::stat_at(&abs)
     }

@@ -5,6 +5,7 @@
 //! closed, and what lets every rule below be tested with `cargo test` and no
 //! Tauri (`ARCHITECTURE.md` §14).
 
+mod activity;
 pub mod agent;
 pub mod attachments;
 pub mod conflicts;
@@ -200,9 +201,11 @@ struct Open {
     /// rebuild happens on the next `quick_open` rather than immediately, so a
     /// reconciliation tick cannot put the walk on a treadmill.
     paths: std::sync::Mutex<PathState>,
+    _activity: std::fs::File,
 }
 
 pub struct WorkspaceService {
+    exclusive_workspace: bool,
     record_visits: bool,
     reference_plan: Option<references::Pending>,
     data_dir: PathBuf,
@@ -230,6 +233,7 @@ impl WorkspaceService {
             Loaded::Fresh | Loaded::TooNew { .. } => Settings::default(),
         };
         Ok(Self {
+            exclusive_workspace: false,
             record_visits: true,
             reference_plan: None,
             data_dir,
@@ -384,6 +388,12 @@ impl WorkspaceService {
     fn adopt_locked(&mut self, root: &Path, restored: bool) -> Result<WorkspaceInfo> {
         let fs = LocalFs::open(root)?;
         let canonical = fs.root().display().to_string();
+        let activity_key = fs
+            .stat(&RelPath::root())?
+            .native_id
+            .map(|id| format!("native:{id:?}"))
+            .unwrap_or_else(|| format!("path:{canonical}"));
+        let activity = activity::acquire(&self.data_dir, &activity_key, self.exclusive_workspace)?;
         let display_name = fs
             .root()
             .file_name()
@@ -458,6 +468,7 @@ impl WorkspaceService {
             recon: std::sync::Mutex::new(reconcile::Recon::default()),
             watch: None,
             paths: std::sync::Mutex::new(PathState::default()),
+            _activity: activity,
         });
 
         Ok(WorkspaceInfo {
