@@ -90,6 +90,12 @@ process tests. See [the implemented contract](KNOWLEDGE-0.3.md) and
 
 ## 0.4 — Mobile
 
+**Foundation implemented in 0.17.0; the usable mobile app remains pending.**
+The reviewed PR makes trash desktop-only and adds an iOS simulator core check.
+ADRs 040/042 keep mobile in this application, starting with the iOS container.
+No generated mobile projects, layout or external-folder adapter exists yet.
+See [ACCEPTANCE-0.4.md](ACCEPTANCE-0.4.md) for the remaining scope.
+
 iOS and Android, against the same core.
 
 - select a workspace;

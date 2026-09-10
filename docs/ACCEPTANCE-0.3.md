@@ -6,9 +6,9 @@
 > local debug checks never tick the owner columns.
 
 The implemented contract and limits are in [KNOWLEDGE-0.3.md](KNOWLEDGE-0.3.md).
-The mobile work is independently tracked in [PR #2](https://github.com/samirhvbr/notes/pull/2).
-It reserves 0.15.0; merge must reconcile version ordering and its ADR numbers
-with the newer master. This delivery does not merge or modify that PR.
+The mobile foundation from [PR #2](https://github.com/samirhvbr/notes/pull/2)
+was reviewed and integrated in 0.17.0; full mobile acceptance remains in
+[ACCEPTANCE-0.4.md](ACCEPTANCE-0.4.md).
 
 ## Automated evidence
 

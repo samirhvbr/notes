@@ -10,8 +10,15 @@ repository.workspace = true
 [dependencies]
 notes-model = { workspace = true }
 blake3 = { workspace = true }
-trash = { workspace = true }
 notify = { workspace = true }
+
+# Desktop only, and not by preference \[0.4\]: `trash` implements the
+# Freedesktop bin, the Recycle Bin and the Finder trash, and has no iOS or
+# Android backend — on those targets it does not compile at all. `Caps::LOCAL`
+# reports `trash: false` there and `local.rs` carries the matching `cfg`, so a
+# mobile delete is `DeleteOutcome::Permanent` and says so.
+[target.'cfg(not(any(target_os = "ios", target_os = "android")))'.dependencies]
+trash = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true }

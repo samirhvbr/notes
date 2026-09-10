@@ -316,13 +316,22 @@ impl FileSystem for LocalFs {
         // follow a link, which matters more here than anywhere else.
         let meta = fs::symlink_metadata(&abs).map_err(|e| CoreError::io("stat", path, &e))?;
 
-        if self.caps.trash {
-            match trash::delete(&abs) {
-                Ok(()) => return Ok(DeleteOutcome::Trashed),
-                Err(e) => {
-                    // No bin on this backend, no session bus, a root-owned
-                    // container: all real, none of them a reason to refuse.
-                    eprintln!("[notes] trash unavailable for {path}: {e}");
+        // The `cfg` is not a duplicate of the `caps.trash` test inside it \[0.4\]:
+        // `Caps::LOCAL` already reports `trash: false` on iOS and Android, but
+        // the `trash` crate has no implementation for either target and fails to
+        // *compile* there, so the runtime test alone would never be reached to
+        // save us. The two say the same thing at the two different moments it
+        // has to be said.
+        #[cfg(not(any(target_os = "ios", target_os = "android")))]
+        {
+            if self.caps.trash {
+                match trash::delete(&abs) {
+                    Ok(()) => return Ok(DeleteOutcome::Trashed),
+                    Err(e) => {
+                        // No bin on this backend, no session bus, a root-owned
+                        // container: all real, none of them a reason to refuse.
+                        eprintln!("[notes] trash unavailable for {path}: {e}");
+                    }
                 }
             }
         }

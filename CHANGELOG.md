@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.17.0 - prepare the filesystem core for mobile targets
+
+Merge the reviewed mobile foundation after the completed local knowledge work.
+Make the trash dependency and capability desktop-only while preserving the
+0.3 guarded-write changes. Reconcile the PR's obsolete version and ADR numbers,
+state that generated mobile projects and layouts are still pending, and add
+an iOS simulator core check to CI. This integrates the foundation of milestone
+0.4; it does not claim a usable mobile application or device acceptance.
+
 ## 0.16.1 - preserve indented separators in YAML properties
 
 Only an unindented Markdown metadata fence ends front matter. An indented

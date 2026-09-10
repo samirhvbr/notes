@@ -65,3 +65,5 @@ and the fleet adopted it the same day.
 
 - [Local knowledge and agents](KNOWLEDGE-0.3.md): metadata, wiki resolution, graph, clipboard import and standalone MCP configuration/recovery.
 - [Acceptance — milestone 0.3](ACCEPTANCE-0.3.md): automated evidence and pending installed-release owner flows.
+
+- [Mobile acceptance](ACCEPTANCE-0.4.md): merged compilation foundation and remaining usable-mobile scope.

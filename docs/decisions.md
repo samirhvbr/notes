@@ -1249,13 +1249,36 @@ survive that change. Tags, graph and wiki-link semantics remain 0.3.
 
 ---
 
+## ADR-040 — Mobile starts with the iOS container
+
+**Status:** `ACCEPTED` · Original decision 09/09/2026; integration reviewed 10/09/2026
+
+**Context.** The owner started mobile independently while desktop milestones
+0.2 and 0.3 were being delivered. The original PR proposed completing mobile
+before 0.3; 0.3 has since shipped, so that sequencing statement is historical.
+The owner now requests this foundation be merged and work continue on 0.5.
+
+**Decision.** Start mobile validation with iOS and the application's own
+container, where LocalFs applies. External folders require security-scoped
+bookmarks on iOS and SAF on Android in a later slice. Toolchain availability
+motivated iOS first at the time; it is not a permanent claim about a machine's
+installed SDKs. Distribution credentials and physical-device acceptance remain
+separate from compilation for the simulator.
+
+**Consequences.** This foundation gates the unsupported trash dependency and
+reports permanent deletion on mobile. It does not supply the Tauri mobile
+entry point, generated projects, layouts, external-folder adapters or device
+proof. Those remain in the mobile queue.
+
+---
+
 ## ADR-041 — Local knowledge and agents share the parser and guarded core
 
 **Status:** `ACCEPTED` · 10/09/2026
 
-**Number reservation.** ADR-040 is reserved by the independently open mobile
-PR #2. That PR also collides with the already published ADR-039 and must
-reconcile its numbers at merge. No existing decision is renumbered here.
+**Number reservation at publication.** ADR-040 was reserved by mobile PR #2.
+Its integration in 0.17.0 filled that reservation and assigned ADR-042 to its
+other decision, preserving the already published ADR-039.
 
 **Context.** The owner requested all of milestone 0.3 while another agent
 implements mobile in PR #2. Knowledge relationships need one semantic source;
@@ -1289,3 +1312,25 @@ macOS/Windows publication remains disabled under ADR-024. Version 0.16.0 avoids
 the mobile PR's reserved 0.15.0; merging the PR must choose a newer version.
 Owner acceptance remains the installed-release walk and following-release
 repeat; automated process/UI tests do not tick those boxes.
+
+---
+
+## ADR-042 — Mobile remains in the same repository and application
+
+**Status:** `ACCEPTED` · Original decision 09/09/2026; numbering reconciled 10/09/2026
+
+**Context.** The mobile PR used ADR-039 before the index decision occupied that
+number on master. Its architectural choice remains valid; its number changes
+here without renumbering an already published decision.
+
+**Decision.** iOS and Android are targets of notes-app and consume the same
+core. Mobile UI will be a layout in the existing React application. Generated
+Apple/Android projects will be committed when created, since their signing,
+entitlement and manifest edits are source. They do not exist in this PR.
+A separate repository or second React application is not introduced, and
+packages/ui is deferred until real sharing requires it.
+
+**Consequences.** Filesystem interfaces and their consumers evolve in one
+commit and one CI matrix. The current iOS CI check covers core dependencies,
+including bundled SQLite and clipboard image decoders; compiling the full
+Tauri shell, Android runtime integration and device flows remain future work.
