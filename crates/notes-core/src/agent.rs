@@ -37,6 +37,8 @@ pub struct AgentArgs {
     pub base_rev: Option<BaseRev>,
     pub query: Option<String>,
     pub limit: Option<usize>,
+    /// Offset within the authorized, sorted result set.
+    pub offset: Option<usize>,
 }
 pub struct AgentService {
     service: WorkspaceService,
@@ -149,10 +151,14 @@ impl AgentService {
             return Err(denied());
         }
         let limit = args.limit.unwrap_or(100).clamp(1, 200);
+        let offset = args.offset.unwrap_or(0);
+        if offset > 1_000_000 {
+            return Err(invalid("offset exceeds limit"));
+        }
         if tool == "notes_list" {
             let paths = self.paths()?;
             return Ok(
-                json!({"paths":paths.iter().take(limit).collect::<Vec<_>>(),"truncated":paths.len()>limit}),
+                json!({"paths":paths.iter().skip(offset).take(limit).collect::<Vec<_>>(),"truncated":paths.len()>offset.saturating_add(limit)}),
             );
         }
         if tool == "notes_search" {
@@ -161,6 +167,7 @@ impl AgentService {
                 return Err(invalid("query must contain 1 to 4096 bytes"));
             }
             let mut hits = vec![];
+            let mut skipped = 0;
             let open = self.service.open()?;
             for path in self.paths()? {
                 if open.fs.stat(&path)?.size > 8 * 1024 * 1024 {
@@ -172,6 +179,10 @@ impl AgentService {
                 };
                 for (line, content) in text.lines().enumerate() {
                     if content.contains(&query) {
+                        if skipped < offset {
+                            skipped += 1;
+                            continue;
+                        }
                         hits.push(json!({"path":path,"line":line+1,"context":content.chars().take(240).collect::<String>()}));
                         if hits.len() > limit {
                             hits.truncate(limit);
@@ -252,7 +263,7 @@ impl AgentService {
                     return Ok(json!({"note_id":note.note_id,"base_rev":current,"replayed":true}));
                 }
             }
-            if current.hash != base.hash {
+            if current != base {
                 return Err(CoreError::Conflict {
                     note_id: note.note_id,
                     disk_rev: current,

@@ -327,10 +327,10 @@ impl FileSystem for LocalFs {
             if self.caps.trash {
                 match trash::delete(&abs) {
                     Ok(()) => return Ok(DeleteOutcome::Trashed),
-                    Err(e) => {
+                    Err(_) => {
                         // No bin on this backend, no session bus, a root-owned
                         // container: all real, none of them a reason to refuse.
-                        eprintln!("[notes] trash unavailable for {path}: {e}");
+                        eprintln!("[notes] trash unavailable; deletion reports its final outcome");
                     }
                 }
             }

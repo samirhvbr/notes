@@ -301,6 +301,54 @@ impl WorkspaceService {
         self.adopt(&root, true).map(Some)
     }
 
+    /// Rebind enrollment paths in an offline restored copy. This changes only
+    /// operational state, never note bytes or identities. The original index is
+    /// retained beside the new one before any replacement (server restore).
+    pub fn rebind_restored_workspaces(&mut self, from: &Path, to: &Path) -> Result<()> {
+        if self.open.is_some() || !from.is_absolute() || !to.is_absolute() {
+            return Err(CoreError::Unsupported {
+                cap: "restore requires a detached service and absolute roots".into(),
+            });
+        }
+        let mut lock = lock::acquire(&self.data_dir.join("workspaces.lock"))?;
+        lock.with(|| {
+            let path = paths::workspaces_index(&self.data_dir);
+            if !path.exists() {
+                return Ok(());
+            }
+            let raw = std::fs::read(&path)
+                .map_err(|e| CoreError::io("read_enrollment", "enrollment", &e))?;
+            serde_json::from_slice::<WorkspacesIndex>(&raw).map_err(|_| {
+                CoreError::Unsupported {
+                    cap: "invalid restored enrollment".into(),
+                }
+            })?;
+            let mut index = self.index()?;
+            for entry in &mut index.workspaces {
+                let relative = Path::new(&entry.root).strip_prefix(from).map_err(|_| {
+                    CoreError::Unsupported {
+                        cap: "restored workspace lies outside the backup root".into(),
+                    }
+                })?;
+                if relative
+                    .components()
+                    .any(|c| !matches!(c, std::path::Component::Normal(_)))
+                {
+                    return Err(CoreError::Unsupported {
+                        cap: "invalid restored enrollment".into(),
+                    });
+                }
+                entry.root = to.join(relative).to_string_lossy().into_owned();
+            }
+            let backup = path.with_extension("json.before-restore");
+            if !backup.exists() {
+                std::fs::copy(&path, &backup)
+                    .map_err(|e| CoreError::io("backup_enrollment", "enrollment", &e))?;
+            }
+            state::store(&path, &index)
+        })?
+    }
+
     pub fn recent_workspaces(&self) -> Result<Vec<WorkspaceEntry>> {
         let mut v = self.index()?.workspaces;
         v.sort_by(|a, b| b.last_opened.cmp(&a.last_opened));

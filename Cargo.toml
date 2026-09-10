@@ -6,7 +6,7 @@
 # notes-index at 0.2; notes-mcp at 0.3; server/ at 0.5.
 [workspace]
 resolver = "2"
-members = ["crates/*", "apps/notes-app/src-tauri"]
+members = ["crates/*", "apps/notes-app/src-tauri", "server/notes-server"]
 
 [workspace.package]
 edition = "2021"

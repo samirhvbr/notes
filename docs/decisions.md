@@ -1334,3 +1334,50 @@ packages/ui is deferred until real sharing requires it.
 commit and one CI matrix. The current iOS CI check covers core dependencies,
 including bundled SQLite and clipboard image decoders; compiling the full
 Tauri shell, Android runtime integration and device flows remain future work.
+
+## ADR-043 — A separate owner-operated REST server reuses core policy
+
+**Status:** ACTIVE · 10/09/2026 · Implemented in 0.18.0.
+
+**Context.** The owner requested milestone 0.5 after reviewing and merging the
+mobile foundation. Server access needs revocable, scoped credentials without
+turning the desktop app into a network service or inventing another note store.
+
+**Decision.** Add `server/notes-server` using Axum 0.8.9 and Tokio, with an
+operator CLI and a path-only `/v1` REST API documented in OpenAPI 3.1. Core owns
+scope checks, note IO, identity coordination, conditional writes, append
+receipts and saved-content search. Paged core results remain scope-filtered.
+Complete BaseRev comparison prevents consuming a stale conditional revision;
+a timestamp never chooses a sync winner. This is not the 0.6 sync protocol.
+
+There is one owner, with distinct random bearer credentials per integration.
+Only secret digests are persisted; comparison is constant-time. Operator CLI
+creation/revocation is outside HTTP. A shared administration lock surrounds
+request authorization and its core operation; revocation takes the exclusive
+lock. A separate lifetime lock excludes backup from a live server. State schema
+1 is explicit; unknown versions are refused. Offline restore stages the data,
+rejects traversal/links, rebinds restored enrollment through the core with a
+pre-restore copy, and publishes only a new directory. Notes stay byte-identical.
+
+The process defaults to loopback. Remote use requires the fixed private
+backend/known HTTPS proxy topology documented in SERVER-0.5.md. Compose exposes
+only Caddy; the backend rejects an untrusted actual peer or a missing HTTPS
+forwarded-protocol header. Eight-operation concurrency and fixed identity/peer
+rate windows bound requests. Request bodies, result pages and audit retention
+are bounded. Audit records authorship and an opaque route reference, never
+credentials, note text, queries or full note IDs/paths. Filesystem trash failure
+logging is generic so a server fallback cannot disclose a note path.
+
+**Explicit CSRF amendment to security.md §4.3.** These machine endpoints use
+non-cookie bearer authorization instead of a session CSRF token or per-request
+signature. No cookies authenticate, no CORS is enabled, and every Origin-bearing
+request is denied. This deliberate exemption applies only to the documented
+`/v1` API; it grants no exemption to a future browser/session interface.
+
+**Consequences.** The desktop still opens no listener. Linux releases include a
+separate server archive; CI builds the non-root container and verifies actual
+TLS using a test CA. The public certificate setup remains an owner deployment
+step. Server state is readable by its operator: no E2EE, teams, hosted service,
+desktop sync or remote MCP is introduced. Dependencies and container digests
+are tracked by Dependabot and Cargo.lock. The owner acceptance walk and its
+following-release repeat remain open in ACCEPTANCE-0.5.md.

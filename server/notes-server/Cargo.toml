@@ -1,0 +1,28 @@
+[package]
+name = "notes-server"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+notes-core.workspace = true
+notes-model.workspace = true
+notes-fs.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+blake3.workspace = true
+fd-lock.workspace = true
+tempfile.workspace = true
+axum = "=0.8.9"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
+base64 = "0.22"
+subtle = "2.6"
+percent-encoding = "2"
+serde_urlencoded = "0.7"
+
+tar = "0.4"
+flate2 = "1"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

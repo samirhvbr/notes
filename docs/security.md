@@ -43,9 +43,10 @@ not a second source.
 Every decision about architecture, code or a library passes through the security
 filter first.
 
-**What this repository owns.** _Fill this in: the assets that are actually
-here, the boundaries data crosses, and what would hurt if it leaked. A threat
-model written for someone else's project protects someone else's project._
+**What this repository owns.** User Markdown bytes, local identity/draft state,
+and optional server credential/audit state. Webview IPC and authenticated HTTP
+are distinct boundaries. Source loss, out-of-scope reads, stale overwrites and
+credential disclosure are the concrete failures the core and transports prevent.
 
 ## 2. Threat model
 
@@ -60,7 +61,10 @@ model written for someone else's project protects someone else's project._
 | Documents read by an agent | Prompt injection through text the agent treats as instruction | §4.9 |
 | Published history | Force-push or hard reset destroys the audit trail | `git push --force`, `-f`, `reset --hard`, `clean -fd` are denied |
 | The repository's own visibility | A private repo made public with content that assumed privacy | The pre-flight checklist in [runbook.md](runbook.md) |
-| _this project's data_ | _to be filled in_ | _to be filled in_ |
+| Markdown and drafts | Destructive overwrite or out-of-root access | Core revision checks, atomic writes, relative-path jail, no symlink traversal |
+| Server credentials and notes | Remote scope escalation or accidental public backend | Per-integration digests, revocation locks, core scopes, private backend and trusted HTTPS proxy (ADR-043) |
+| Operational state and backups | Lost identities or incompatible schema replacement | Offline full-data backup, staged restore, enrollment rebinding and future-schema refusal |
+| Server audit | Content/token disclosure or unbounded retention | Redacted structured events and five bounded segments |
 
 ## 3. General rules (mandatory)
 
@@ -103,6 +107,10 @@ why raw output is necessary.
 Every state-changing request carries a CSRF token. An endpoint exempted from
 CSRF (a webhook, a machine-to-machine callback) authenticates by signature
 instead, and the exemption is listed with its compensating control.
+
+ADR-043 explicitly exempts only the machine `/v1` REST API: non-cookie bearer
+authorization, denied Origin headers and no CORS replace a session CSRF token
+or per-request signature. A future browser/session UI needs its own CSRF control.
 
 ### 4.4 SSRF
 A URL that comes from a user is not fetched directly. Resolve it, reject private

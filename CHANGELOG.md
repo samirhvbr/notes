@@ -8,6 +8,24 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.18.0 - package the self-hosted server with HTTPS operations
+
+Provide a non-root container, a Compose deployment behind Caddy HTTPS, a
+versioned OpenAPI contract and operator backup/restore instructions. Add real
+TCP and container TLS acceptance alongside the existing workspace gate. The
+server remains opt-in; desktop sync and remote MCP remain later milestones.
+
+## 0.18.0 - serve scoped notes through a conditional REST API
+
+Add the independent notes-server executable for one owner and per-integration
+credentials. Reuse core permissions, root confinement, identity locks and
+durable append receipts for path-addressed CRUD and search. Enforce bounded
+bodies, pagination, request rates and concurrency; preserve source formatting
+and reject stale complete revisions. Persist revocable credential digests and
+bounded authorship events without tokens, note paths or content. Offline
+backups include source bytes and operational state, refuse a live server and
+restore only into a new directory. Future state schemas are refused unchanged.
+
 ## 0.17.0 - prepare the filesystem core for mobile targets
 
 Merge the reviewed mobile foundation after the completed local knowledge work.
