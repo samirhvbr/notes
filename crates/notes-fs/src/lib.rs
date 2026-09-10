@@ -53,7 +53,7 @@ pub trait FileSystem: Send + Sync {
 
     /// Write via a temporary file and a rename (`ARCHITECTURE.md` §5.2).
     ///
-    /// When `expect` is `Some`, the file is re-`stat`ed immediately before the
+    /// When `expect` is `Some`, the file is re-read and hashed immediately before the
     /// rename and a mismatch returns [`WriteOutcome::Diverged`] with nothing
     /// written — the narrow window between the core's own check and this one.
     fn write_atomic(

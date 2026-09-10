@@ -20,6 +20,7 @@
 //! Either one alone would be enough on a good day. Together, a mistake in the
 //! rewrite pass has to coincide with a hole in the allowlist to reach a user.
 
+pub mod knowledge;
 pub mod rewrite;
 mod slug;
 pub mod url;
@@ -92,17 +93,13 @@ pub struct Task {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Document {
-    /// The byte span of the YAML front matter, delimiters included, when the
-    /// note opens with one. **The bytes are not parsed here and never
-    /// rewritten** — front matter survives because nothing touches the buffer
-    /// (`ARCHITECTURE.md` §5.1), not because this crate preserves it. Reading
-    /// it is the 0.3 index's job.
+    /// Original YAML span, delimiters included. Interpretation is read-only;
+    /// no parser or metadata operation serializes it back into the note.
     pub front_matter: Option<Span>,
     pub headings: Vec<Heading>,
     pub links: Vec<Link>,
     pub tasks: Vec<Task>,
-    /// `#tag` and YAML tags, from 0.3. Always empty today, and named now so
-    /// that arriving there is not a wire change.
+    /// Normalized inline and YAML tags, excluding code and destinations.
     pub tags: Vec<String>,
 }
 
@@ -155,7 +152,8 @@ fn options(src: &str) -> Options {
     let base = Options::ENABLE_TABLES
         | Options::ENABLE_STRIKETHROUGH
         | Options::ENABLE_TASKLISTS
-        | Options::ENABLE_FOOTNOTES;
+        | Options::ENABLE_FOOTNOTES
+        | Options::ENABLE_WIKILINKS;
 
     // **The metadata extension is enabled only when the note actually opens
     // with `---`.** `pulldown-cmark` will otherwise treat *any* `---`-fenced
@@ -296,6 +294,7 @@ fn analyse(src: &str) -> (Document, Vec<Spanned<'_>>) {
     // treats as prose. Walking them separately keeps that loop readable and
     // costs one more pass over what is usually a small part of the note.
     collect_links_in_code_blocks(&events, &base, &mut doc.links);
+    doc.tags = knowledge::tags(src, &events, doc.front_matter);
     doc.links.sort_by_key(|l| (l.span.start, l.span.end));
 
     (doc, events)
@@ -446,6 +445,13 @@ fn rewrite<'a>(
                         )));
                         open_links.push(true);
                     }
+                    LinkPolicy::Wiki(target) => {
+                        out.push(html(format!(
+                            "<a href=\"#\" data-wiki-target=\"{}\">",
+                            attr(&target)
+                        )));
+                        open_links.push(true);
+                    }
                     LinkPolicy::Refused => open_links.push(false),
                 }
             }
@@ -565,6 +571,9 @@ fn classify(
     link_type: pulldown_cmark::LinkType,
     dest: &str,
 ) -> (LinkKind, LinkPolicy) {
+    if matches!(link_type, pulldown_cmark::LinkType::WikiLink { .. }) {
+        return (LinkKind::Wiki, LinkPolicy::Wiki(dest.to_owned()));
+    }
     if link_type == pulldown_cmark::LinkType::Email {
         return (LinkKind::Refused, LinkPolicy::Refused);
     }
@@ -829,6 +838,7 @@ fn build() -> ammonia::Builder<'static> {
                         "title",
                         "target",
                         "rel",
+                        "data-wiki-target",
                         "data-note-path",
                         "data-note-anchor",
                     ]

@@ -476,7 +476,7 @@ impl super::WorkspaceService {
     ///
     /// Uses the same ignore rules as the sidebar, so a change inside `.git/`
     /// never reaches reconciliation.
-    fn walk(&self) -> super::Result<BTreeSet<RelPath>> {
+    pub(crate) fn walk(&self) -> super::Result<BTreeSet<RelPath>> {
         let mut out = BTreeSet::new();
         let mut stack = vec![RelPath::root()];
         // A workspace is a folder the user chose, and a pathological tree is

@@ -10,13 +10,13 @@ fn sql(e: rusqlite::Error) -> CoreError {
     }
 }
 
-fn open(path: &Path, schema: &str) -> Result<Connection> {
+fn open(path: &Path, schema: &str, supported: u32) -> Result<Connection> {
     let mut db = Connection::open(path).map_err(sql)?;
     db.busy_timeout(Duration::from_secs(5)).map_err(sql)?;
     let found: u32 = db
         .pragma_query_value(None, "user_version", |r| r.get(0))
         .map_err(sql)?;
-    if found > 1 {
+    if found > supported {
         return Err(CoreError::SchemaAhead {
             store: path
                 .file_name()
@@ -24,17 +24,18 @@ fn open(path: &Path, schema: &str) -> Result<Connection> {
                 .to_string_lossy()
                 .into_owned(),
             found,
-            supported: 1,
+            supported,
         });
     }
     db.pragma_update(None, "journal_mode", "WAL").map_err(sql)?;
     db.pragma_update(None, "synchronous", "NORMAL")
         .map_err(sql)?;
     db.pragma_update(None, "foreign_keys", "ON").map_err(sql)?;
-    if found == 0 {
+    if found < supported {
         let tx = db.transaction().map_err(sql)?;
         tx.execute_batch(schema).map_err(sql)?;
-        tx.pragma_update(None, "user_version", 1).map_err(sql)?;
+        tx.pragma_update(None, "user_version", supported)
+            .map_err(sql)?;
         tx.commit().map_err(sql)?;
     }
     Ok(db)
@@ -48,6 +49,7 @@ impl RegistryStore {
         open(
             path,
             "CREATE TABLE registry (id INTEGER PRIMARY KEY CHECK(id=1), payload BLOB NOT NULL);",
+            1,
         )
         .map(Self)
     }
@@ -135,8 +137,8 @@ pub struct WordHit {
 pub struct Index(Connection);
 impl Index {
     pub fn open(path: &Path) -> Result<Self> {
-        open(path, "CREATE TABLE notes(path TEXT PRIMARY KEY, size INTEGER NOT NULL, mtime TEXT NOT NULL, hash TEXT NOT NULL, document TEXT NOT NULL);
-            CREATE VIRTUAL TABLE fts USING fts5(path UNINDEXED, text, tokenize='unicode61 remove_diacritics 2');").map(Self)
+        open(path, "DROP TABLE IF EXISTS notes; DROP TABLE IF EXISTS fts; CREATE TABLE notes(path TEXT PRIMARY KEY, size INTEGER NOT NULL, mtime TEXT NOT NULL, hash TEXT NOT NULL, document TEXT NOT NULL);
+            CREATE VIRTUAL TABLE fts USING fts5(path UNINDEXED, text, tokenize='unicode61 remove_diacritics 2');", 2).map(Self)
     }
     pub fn documents(&self) -> Result<Vec<(String, notes_markdown::Document)>> {
         let mut q = self

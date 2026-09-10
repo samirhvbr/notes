@@ -150,7 +150,7 @@ fn destination(s: &str, definition: bool) -> Option<Range<usize>> {
     }
     (!angle).then_some(start..i)
 }
-fn relative(base: &RelPath, target: &RelPath) -> String {
+pub fn relative(base: &RelPath, target: &RelPath) -> String {
     let a: Vec<_> = base.as_str().split('/').filter(|s| !s.is_empty()).collect();
     let b: Vec<_> = target.as_str().split('/').collect();
     let common = a.iter().zip(&b).take_while(|(a, b)| a == b).count();

@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.16.0 - build local knowledge and scoped agent operations
+
+Implement the milestone 0.3 core: read-only YAML and tags, wiki resolution,
+backlinks/graph data, reviewed wiki renames, validated clipboard imports and
+standalone scoped stdio MCP. Rebuild derived schema 1 documents for the new
+parser while retaining operational identity. Cross-process tests found and
+now prevent overwrites hidden by equal size/mtime; shared enrollment and
+identity locking plus durable append receipts cover concurrent starts and
+retries. Version 0.15.0 remains reserved by the independent mobile PR; its merge
+must reconcile version and ADR numbering. Owner acceptance remains pending.
+
 ## 0.14.1 - isolate empty-file content correlation from inode reuse
 
 Arch CI exposed a fixture that deleted the original empty file before creating

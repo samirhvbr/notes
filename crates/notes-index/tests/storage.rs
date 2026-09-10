@@ -87,3 +87,21 @@ fn stale_registry_snapshots_merge_unrelated_notes_but_refuse_conflicts() {
         )
         .is_err());
 }
+
+#[test]
+fn upgrading_derived_parser_schema_clears_only_index_data() {
+    let d = tempfile::tempdir().unwrap();
+    let path = d.path().join("index.db");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TABLE notes(path TEXT); INSERT INTO notes VALUES('old.md'); CREATE TABLE fts(text TEXT); PRAGMA user_version=1;").unwrap();
+    drop(db);
+    let index = Index::open(&path).unwrap();
+    assert!(index.plan().unwrap().is_empty());
+    drop(index);
+    let db = rusqlite::Connection::open(&path).unwrap();
+    assert_eq!(
+        db.pragma_query_value::<u32, _>(None, "user_version", |r| r.get(0))
+            .unwrap(),
+        2
+    );
+}

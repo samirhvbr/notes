@@ -80,11 +80,22 @@ impl WorkspaceService {
         let mut files = Vec::new();
         let mut originals = Vec::new();
         let mut skipped = status.skipped;
+        let paths = self
+            .walk()?
+            .into_iter()
+            .filter(RelPath::is_note)
+            .collect::<Vec<_>>();
         for (path, doc) in index.documents()? {
             let path = RelPath::parse(&path)?;
             let base = path.parent().unwrap_or_else(RelPath::root);
             let candidate = rewrite::repath(&path, from, to) != path
                 || doc.links.iter().any(|l| {
+                    if l.kind == notes_markdown::LinkKind::Wiki {
+                        let candidates = crate::knowledge::candidates(&paths, &l.target);
+                        return candidates
+                            .iter()
+                            .any(|p| rewrite::repath(p, from, to) != *p);
+                    }
                     let end = l.target.find(['#', '?']).unwrap_or(l.target.len());
                     notes_markdown::url::resolve_relative(&base, &l.target[..end])
                         .is_some_and(|p| rewrite::repath(&p, from, to) != p)
@@ -103,7 +114,51 @@ impl WorkspaceService {
                 skipped += 1;
                 continue;
             }
-            let edits = rewrite::edits(&text, &path, from, to);
+            let mut edits = rewrite::edits(&text, &path, from, to);
+            // Resolve wiki names in the core; the parser only identifies source spans.
+            for link in notes_markdown::parse(&text)
+                .links
+                .into_iter()
+                .filter(|l| l.kind == notes_markdown::LinkKind::Wiki && !l.in_code)
+            {
+                let targets = crate::knowledge::candidates(&paths, &link.target);
+                if targets.len() != 1 {
+                    skipped += 1;
+                    continue;
+                }
+                let next = rewrite::repath(&targets[0], from, to);
+                if next == targets[0] {
+                    continue;
+                }
+                let raw = &text[link.span.start..link.span.end];
+                let Some(start) = raw.find("[[").map(|i| link.span.start + i + 2) else {
+                    continue;
+                };
+                let Some(end) = text[start..link.span.end]
+                    .find(['|', ']'])
+                    .map(|i| start + i)
+                else {
+                    continue;
+                };
+                if text[start..end] != link.target || next.as_str().contains(['[', ']']) {
+                    skipped += 1;
+                    continue;
+                }
+                let fragment = link
+                    .target
+                    .find('#')
+                    .map(|i| &link.target[i..])
+                    .unwrap_or("");
+                let after = format!("./{next}{fragment}");
+                edits.push(LinkEdit {
+                    start,
+                    end,
+                    before: link.target,
+                    after,
+                });
+            }
+            edits.sort_by_key(|e| e.start);
+
             if edits.is_empty() {
                 skipped += 1;
                 continue;

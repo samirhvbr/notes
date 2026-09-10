@@ -1246,3 +1246,46 @@ boundary. A third registry crate adds no useful isolation between the two DB
 lifecycles. Normalized registry rows can replace the snapshot in a later backed-up
 migration if measurements justify it; the current per-note merge semantics must
 survive that change. Tags, graph and wiki-link semantics remain 0.3.
+
+---
+
+## ADR-041 — Local knowledge and agents share the parser and guarded core
+
+**Status:** `ACCEPTED` · 10/09/2026
+
+**Number reservation.** ADR-040 is reserved by the independently open mobile
+PR #2. That PR also collides with the already published ADR-039 and must
+reconcile its numbers at merge. No existing decision is renumbered here.
+
+**Context.** The owner requested all of milestone 0.3 while another agent
+implements mobile in PR #2. Knowledge relationships need one semantic source;
+MCP must run without the app and must not silently overwrite app buffers.
+
+**Decision.** The Rust Markdown crate uses pulldown-cmark's wiki syntax and
+`serde_yaml_ng` 0.10 for bounded, read-only YAML interpretation. It never
+serializes metadata into notes. Core resolves wiki homonyms explicitly and
+derives backlinks/graph from index schema 2. Frontend shows the same facts,
+with bounded graph rendering and partial-state labels. The `image` crate
+with PNG/JPEG decoders validates clipboard bytes under allocation/dimension
+limits; original bytes are exclusively created in root attachments.
+
+`notes-mcp` is a stdio executable over core, without a listener or application
+dependency. Configuration explicitly scopes paths and independent permissions;
+review writes stay in proposals. Note contents never grant authority. Global
+enrollment locking gives simultaneous processes the same workspace ID, while
+the existing workspace lock serializes identity assignment and mutations.
+Disk hashes are always compared even when metadata matches: a two-process
+test demonstrated that matching size/mtime could otherwise destroy a newer
+write before the registry reported its conflict. Append receipts persist in
+operational app data to make retries across process restarts idempotent. Agent
+reads do not alter GUI visit history. Configuration and operational limits
+are [documented separately](KNOWLEDGE-0.3.md).
+
+**Consequences.** Disposable schema 1 indexes rebuild; operational schema stays
+unchanged. Saving reads the current bytes even on a metadata match. Coordination
+requires a shared app-data directory and cannot exclude unrelated editors from
+the filesystem. Linux releases publish a standalone MCP archive; unsigned
+macOS/Windows publication remains disabled under ADR-024. Version 0.16.0 avoids
+the mobile PR's reserved 0.15.0; merging the PR must choose a newer version.
+Owner acceptance remains the installed-release walk and following-release
+repeat; automated process/UI tests do not tick those boxes.

@@ -220,14 +220,13 @@ impl FileSystem for LocalFs {
         if let Some(base) = expect {
             match Self::stat_at(&abs) {
                 Ok(current) => {
-                    if !base.cheap_match(&current) {
-                        let same = fs::read(&abs)
-                            .map(|b| hash(&b) == base.hash)
-                            .unwrap_or(false);
-                        if !same {
-                            let _ = fs::remove_file(&tmp);
-                            return Ok(WriteOutcome::Diverged(current));
-                        }
+                    // The final guard checks content even if size and mtime match.
+                    let same = fs::read(&abs)
+                        .map(|b| hash(&b) == base.hash)
+                        .unwrap_or(false);
+                    if !same {
+                        let _ = fs::remove_file(&tmp);
+                        return Ok(WriteOutcome::Diverged(current));
                     }
                 }
                 Err(CoreError::Io {

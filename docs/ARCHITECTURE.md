@@ -333,15 +333,12 @@ note_save(note_id, text, buffer_version, base_rev)
  1. take per-document async mutex
  2. take write.lock (§6)                                    ── LockTimeout → step 9
  3. encode: text + TextProfile → bytes (re-add BOM, EOL, final newline); hash
- 4. if hash == registry.hash and stat(disk) == registry.(size,mtime)
-       → release; return Saved { unchanged: true }          (no write, no mtime bump)
- 5. stat(disk); compare to base_rev (sent by the caller)
-       size+mtime equal                       → proceed
-       differ → read + hash
-         hash == base_rev.hash                → proceed (touch-only change; refresh base)
-         hash == new buffer hash              → convergence; update registry; return Saved
-         else                                 → CONFLICT (step 8)
- 6. fs.write_atomic(path, bytes, expect: Some(base_rev))    ── fs re-stats immediately before rename
+ 4. read + hash disk under the lock (metadata equality is not proof of content)
+       hash == new buffer hash              → convergence; return Saved unchanged
+ 5. compare disk hash to base_rev.hash (sent by the caller)
+       equal                                → proceed; refresh size/mtime
+       different                            → CONFLICT (step 8)
+ 6. fs.write_atomic(path, bytes, expect: Some(base_rev))    ── fs re-hashes immediately before rename
  7. registry: size, mtime, hash, rev += 1; arm self-write expectation (path, hash, ttl 2 s);
     delete draft if draft.buffer_version ≤ buffer_version;
     release; return Saved { base_rev, buffer_version }
@@ -1044,3 +1041,12 @@ edits with per-file guarded writes. This is explicitly not an atomic multi-file
 transaction. See [ACCEPTANCE-0.2.md](ACCEPTANCE-0.2.md) for semantics, recovery,
 limits and measured performance; this section supersedes earlier proposed
 0.2 command names in §7.
+
+## Milestone 0.3 implementation
+
+[KNOWLEDGE-0.3.md](KNOWLEDGE-0.3.md) specifies the implemented parser, wiki
+resolution, bounded graph, attachments and scoped stdio MCP surfaces. Index
+schema 2 invalidates old derived parser documents; registry schema stays 1.
+`notes-mcp` depends on core and has no Tauri or frontend dependency. Both
+processes use the same app-data directory, enrollment lock, identity lock and
+guarded save protocol. ADR-041 records these choices and their limits.

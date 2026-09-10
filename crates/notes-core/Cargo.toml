@@ -8,6 +8,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"] }
 notes-index.workspace = true
 notes-model = { workspace = true }
 notes-fs = { workspace = true }

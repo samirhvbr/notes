@@ -26,7 +26,7 @@ pub enum LinkKind {
     Url,
     /// `#section`, within this note.
     Anchor,
-    /// `[[wiki]]` — reported from 0.3, never produced today.
+    /// `[[wiki]]` — resolved by the core with explicit ambiguity handling.
     Wiki,
     /// Anything else: a scheme we refuse, or a relative path that escapes the
     /// workspace. Reported so the outline is honest; never rendered as a link.
@@ -36,6 +36,8 @@ pub enum LinkKind {
 /// What the renderer does with a link destination.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LinkPolicy {
+    /// Resolved by the core; ambiguous names require a user choice.
+    Wiki(String),
     /// Kept verbatim; scrolls within the rendered note.
     Anchor(String),
     /// `http(s)` — opened by the shell, never by the WebView.

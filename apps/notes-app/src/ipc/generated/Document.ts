@@ -13,15 +13,11 @@ import type { Task } from "./Task";
  */
 export type Document = { 
 /**
- * The byte span of the YAML front matter, delimiters included, when the
- * note opens with one. **The bytes are not parsed here and never
- * rewritten** — front matter survives because nothing touches the buffer
- * (`ARCHITECTURE.md` §5.1), not because this crate preserves it. Reading
- * it is the 0.3 index's job.
+ * Original YAML span, delimiters included. Interpretation is read-only;
+ * no parser or metadata operation serializes it back into the note.
  */
 front_matter: Span | null, headings: Array<Heading>, links: Array<Link>, tasks: Array<Task>, 
 /**
- * `#tag` and YAML tags, from 0.3. Always empty today, and named now so
- * that arriving there is not a wire change.
+ * Normalized inline and YAML tags, excluding code and destinations.
  */
 tags: Array<string>, };
