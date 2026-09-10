@@ -17,7 +17,7 @@ fd-lock.workspace = true
 tempfile.workspace = true
 axum = "=0.8.9"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "net", "signal", "time"] }
-base64 = "0.22"
+base64 = "0.23"
 subtle = "2.6"
 percent-encoding = "2"
 serde_urlencoded = "0.7"

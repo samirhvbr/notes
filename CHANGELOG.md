@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.4 - carry base64, dirs and ts-rs to their current majors
+
+`base64` 0.22 to 0.23 in the three crates that encode credentials and payloads,
+`dirs` 6 to 7, and `ts-rs` 10 to 12. No call site changed: the APIs this
+repository actually uses are the same across all three majors.
+
+`ts-rs` is the one that could have been expensive, because it writes the
+TypeScript the frontend compiles against and a changed emitter is a changed wire
+contract. Regenerating under 12 produces all 72 files byte-identical, so the
+generated-types gate stays a no-op and the frontend needed nothing.
+
 ## 0.20.4 - carry the CI actions to their current majors
 
 `actions/setup-node` 4 to 7, `actions/setup-python` 5 to 7,
