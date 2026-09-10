@@ -165,7 +165,9 @@ notes-server restore /secure/backups/notes.tar.gz /srv/notes-restored
 ```
 
 The archive is created exclusively; an existing destination is never replaced.
-Backup refuses a running server, symlinks and special files. Restore extracts
+Backup refuses a running server, symlinks and special files. From 0.18.1,
+regenerable process lock files are excluded while their guards remain held;
+user files and SQLite operational state are included. Restore extracts
 into a private staging directory, rejects links/traversal and unknown backup
 schemas, and publishes only to a new destination. Failed extraction leaves the
 previous data untouched. The restored core enrollment is rebound to the new
@@ -180,11 +182,13 @@ named data volume and a separate writable backup bind mount. For example:
 ```sh
 docker compose -f server/compose.yml stop notes-server
 # /secure/backups must be writable by container UID 10001.
-docker compose -f server/compose.yml run --rm --no-deps \
-  -v /secure/backups:/backups notes-server backup /backups/notes.tar.gz
+notes_container="$(docker compose -f server/compose.yml ps -a -q notes-server)"
+docker run --rm --network none --volumes-from "$notes_container" \
+  -v /secure/backups:/backups notes-server:local backup /backups/notes.tar.gz
 ```
 
-To restore, mount the target parent at `/restore` and the archive at `/backups`,
+The one-off process has no network and reuses the stopped container's volume,
+avoiding a competing static backend address. To restore, mount the target parent at `/restore` and the archive at `/backups`,
 run `restore /backups/notes.tar.gz /restore/data /data` with the server stopped, then
 use that resulting directory as the replacement `/data` bind mount. The optional
 final argument records the eventual mounted data root (`/data`)
@@ -208,7 +212,9 @@ concurrent writes, append replay, pagination, rate limiting, HTTPS peer checks,
 bounded bodies, audit redaction, backup restrictions and restored identity.
 `python3 server/tests/smoke.py` runs an actual native TCP process and offline
 restore. CI also builds the non-root image and exercises CRUD/revocation through
-Caddy using its actual test CA, rather than disabling certificate validation.
+Caddy using its actual test CA, rather than disabling certificate validation. The container check also stops
+the backend, backs up its volume with no network, restores into a new mount,
+and verifies source bytes and revoked credentials.
 Owner acceptance is tracked in [ACCEPTANCE-0.5.md](ACCEPTANCE-0.5.md).
 
 Implementation references: [Axum 0.8](https://docs.rs/axum/0.8.9/axum/) and

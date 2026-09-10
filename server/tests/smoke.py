@@ -118,8 +118,29 @@ with tempfile.TemporaryDirectory() as temp:
         if proc:
             proc.terminate()
             proc.wait(timeout=15)
+    if compose:
+        container = run(cmd + ["ps", "-q", "notes-server"])
+        run(cmd + ["stop", "notes-server"])
+        backups = temp / "backups"
+        backups.mkdir(mode=0o777)
+        backups.chmod(0o777)  # Disposable CI directory writable by container UID 10001.
+        run(["docker", "run", "--rm", "--network", "none", "--volumes-from", container,
+             "-v", str(backups) + ":/backup", "notes-server:local", "backup", "/backup/notes.tar.gz"])
+        run(["docker", "run", "--rm", "--network", "none", "-v", str(backups) + ":/backup",
+             "notes-server:local", "restore", "/backup/notes.tar.gz", "/backup/restored", "/data"])
+        restored_mount = str(backups / "restored") + ":/data"
+        rows = json.loads(run(["docker", "run", "--rm", "--network", "none", "-v", restored_mount,
+                               "notes-server:local", "token", "list"]))
+        assert rows[0]["revoked"] is True
+        data = subprocess.check_output(["docker", "run", "--rm", "--network", "none", "-v", restored_mount,
+                                        "--entrypoint", "cat", "notes-server:local", "/data/workspaces/smoke/smoke.md"])
+        assert data == b"changed\r\nonce\r\n"
+        # Remove only this disposable volume fixture using its owning UID so
+        # TemporaryDirectory can clean up the host-side test directory too.
+        run(["docker", "run", "--rm", "--network", "none", "-v", str(backups) + ":/backup",
+             "--entrypoint", "sh", "notes-server:local", "-c", "rm -rf /backup/restored /backup/notes.tar.gz"])
     if not compose:
         cli("backup", str(temp / "backup.tar.gz"))
         cli("restore", str(temp / "backup.tar.gz"), str(temp / "restored"))
         assert (temp / "restored/workspaces/smoke/smoke.md").read_bytes() == b"changed\r\nonce\r\n"
-    print("HTTPS container smoke passed" if compose else "native TCP and offline restore smoke passed")
+    print("HTTPS container and offline restore smoke passed" if compose else "native TCP and offline restore smoke passed")

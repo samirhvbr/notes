@@ -24,6 +24,38 @@ fn check_tree(path: &Path) -> Result<()> {
     }
     Ok(())
 }
+fn process_lock(relative: &Path) -> bool {
+    matches!(
+        relative.to_str(),
+        Some("server.lock" | "admin/lock" | "audit/lock")
+    ) || relative == Path::new("admin").join("lock")
+        || relative == Path::new("audit").join("lock")
+        || (relative.starts_with("state")
+            && relative
+                .file_name()
+                .is_some_and(|n| n == "write.lock" || n == "workspaces.lock"))
+}
+fn append_tree<W: Write>(archive: &mut tar::Builder<W>, root: &Path, path: &Path) -> Result<()> {
+    let relative = path.strip_prefix(root)?;
+    if process_lock(relative) {
+        return Ok(());
+    }
+    let name = Path::new("data").join(relative);
+    let meta = fs::symlink_metadata(path)?;
+    if meta.is_dir() {
+        archive.append_dir(&name, path)?;
+        let mut entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
+        entries.sort_by_key(|e| e.file_name());
+        for entry in entries {
+            append_tree(archive, root, &entry.path())?;
+        }
+    } else if meta.is_file() {
+        archive.append_path_with_name(path, name)?;
+    } else {
+        return Err("backup refuses symlinks and special files".into());
+    }
+    Ok(())
+}
 pub fn backup(root: &Path, output: &Path) -> Result<()> {
     let mut instance = instance_lock(root)?;
     let _instance = instance
@@ -43,7 +75,7 @@ pub fn backup(root: &Path, output: &Path) -> Result<()> {
             flate2::write::GzEncoder::new(temp.as_file_mut(), flate2::Compression::default());
         let mut archive = tar::Builder::new(gzip);
         archive.follow_symlinks(false);
-        archive.append_dir_all("data", root)?;
+        append_tree(&mut archive, root, root)?;
         let manifest = serde_json::to_vec(&serde_json::json!({"schema":1,"source_root":root}))?;
         let mut header = tar::Header::new_gnu();
         header.set_size(manifest.len() as u64);

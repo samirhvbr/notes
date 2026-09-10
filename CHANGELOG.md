@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.18.1 - exclude process locks from portable server backups
+
+Windows enforces locked byte ranges even when the lock file contains no data,
+so archiving a live backup guard failed before the archive could be published.
+Keep the guards held and omit only regenerable operational lock files; source
+files, credentials, identities and SQLite state remain in the backup. Exercise
+the documented offline container backup/restore path as well as HTTPS, using
+an isolated one-off container without a network or competing static address.
+
 ## 0.18.0 - package the self-hosted server with HTTPS operations
 
 Provide a non-root container, a Compose deployment behind Caddy HTTPS, a

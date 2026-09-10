@@ -528,3 +528,25 @@ fn restore_to_another_directory_preserves_workspace_and_note_identity() {
     );
     assert_eq!(service.open_note(&path).unwrap().note_id, note.note_id);
 }
+
+#[test]
+fn backup_omits_only_operational_locks_and_keeps_user_files_with_similar_names() {
+    let f = Fixture::new(&all());
+    fs::write(f.data.join("workspaces/home/server.lock"), "user-owned").unwrap();
+    let archive = f._dir.path().join("locks.tar.gz");
+    backup::backup(&f.data, &archive).unwrap();
+    let gzip = flate2::read::GzDecoder::new(fs::File::open(archive).unwrap());
+    let mut tar = tar::Archive::new(gzip);
+    let paths: Vec<_> = tar
+        .entries()
+        .unwrap()
+        .map(|e| e.unwrap().path().unwrap().into_owned())
+        .collect();
+    assert!(!paths.contains(&std::path::PathBuf::from("data/server.lock")));
+    assert!(!paths.contains(&std::path::PathBuf::from("data/admin/lock")));
+    assert!(!paths.contains(&std::path::PathBuf::from("data/audit/lock")));
+    assert!(paths.contains(&std::path::PathBuf::from(
+        "data/workspaces/home/server.lock"
+    )));
+    assert!(paths.contains(&std::path::PathBuf::from("data/admin/tokens.json")));
+}
