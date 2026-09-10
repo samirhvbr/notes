@@ -1,3 +1,4 @@
+import {KnowledgePanel} from "../app/Knowledge";
 import { useEffect, useState } from "react";
 import * as ipc from "../ipc";
 import { t } from "../i18n";
@@ -7,7 +8,7 @@ import { Tree } from "./Tree";
 import { ExplorerToolbar } from "./ExplorerToolbar";
 
 export function WorkspaceBrowser() {
-  const [mode,setMode]=useState<"files"|"recent"|"outline">("files");
+  const [mode,setMode]=useState<"files"|"recent"|"outline"|"tags"|"backlinks"|"properties">("files");
   const [recent,setRecent]=useState<ipc.RecentNote[]>([]);
   const [headings,setHeadings]=useState<ipc.Heading[]>([]);
   const [error,setError]=useState(false);
@@ -26,9 +27,9 @@ export function WorkspaceBrowser() {
   },[mode,doc?.path,doc?.text]);
   return <>
     <div className="browser-modes" role="group" aria-label={t("browser.title")}>
-      {(["files","recent","outline"] as const).map(m=><button key={m} aria-pressed={mode===m} onClick={()=>setMode(m)}>{t(`browser.${m}`)}</button>)}
+      {(["files","recent","outline","tags","backlinks","properties"] as const).map(m=><button key={m} aria-pressed={mode===m} onClick={()=>setMode(m)}>{t(`browser.${m}`)}</button>)}
     </div>
-    {mode==="files" ? <><ExplorerToolbar/><div className="side-scroll"><Tree/></div></> : <div className="side-scroll">
+    {(mode==="tags"||mode==="backlinks"||mode==="properties") ? <KnowledgePanel mode={mode}/> : mode==="files" ? <><ExplorerToolbar/><div className="side-scroll"><Tree/></div></> : <div className="side-scroll">
       {error && <p role="alert">{t("error.internal")}</p>}
       {mode==="recent" ? recent.map(n=><button className="row" key={n.note_id} title={n.path} onClick={()=>void useTabs.getState().openPath(n.path)}>{n.path}</button>) : headings.map((h,i)=><button className="row" key={i} onClick={()=>{
         if(!doc)return;

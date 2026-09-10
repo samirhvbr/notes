@@ -1,9 +1,8 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `ACTIVE` through 0.2, `PROPOSED` from 0.3 onward. The code for
-> the desktop editor, interface and index exists in 0.14.0. Installed-release
-> owner acceptance remains pending in `ACCEPTANCE-0.1d.md` and
-> `ACCEPTANCE-0.2.md`; future intent remains in the queue.
+> **Status:** `ACTIVE` through 0.3, `PROPOSED` from 0.4 onward. Code through
+> local knowledge/MCP exists in 0.16.0; installed-release owner acceptance
+> remains pending. Mobile foundation is independently in PR #2.
 
 The stage numbers below are **product milestones, not repository versions.** The
 repository version is whatever `../version.md` says and moves per commit; a
@@ -19,11 +18,11 @@ milestone is reached when everything under it works. Do not read `0.3` here as
      0.1c  navigation      tabs, quick open, global search, palette, settings
      0.1d  interface       the shell: rail, sidebar, tabs, note header, status bar
 0.2  index                 SQLite, global search, external-change detection
-0.3  Markdown depth        front matter, tags, links, backlinks, attachments
+0.3  local knowledge       metadata, tags, wiki links, graph, images, local MCP
 0.4  mobile                iOS and Android against the same core
 0.5  self-hosting          Notes Server, REST API, tokens, Docker
 0.6  sync                  revisions, hashes, tombstones, conflicts, offline
-0.7  AI                    MCP server over the same API and the same scopes
+0.7  remote MCP            MCP over the server API and the same scopes
 ```
 
 Each stage is useful on its own. That is the constraint that sets the order: a
@@ -80,15 +79,14 @@ External reconciliation, tabs and the command palette remain from 0.1.
 **Acceptance:** reindexing changes neither note bytes nor identity, and search
 semantics never switch implicitly. See [ACCEPTANCE-0.2.md](ACCEPTANCE-0.2.md).
 
-## 0.3 — Markdown depth
+## 0.3 — Knowledge and local agents
 
-- YAML front matter;
-- tags, from both `#tag` and front matter, related in the index;
-- internal links;
-- backlinks;
-- images and attachments;
-- tables;
-- preview improvements.
+Implemented in 0.16.0: interpreted YAML properties; inline/YAML tags outside
+code; wiki links with explicit ambiguity; backlinks and graph; paste images
+into noncolliding root attachments; standalone stdio `notes-mcp`. App/MCP
+cross-process conflict refusal and append retries are exercised by real
+process tests. See [the implemented contract](KNOWLEDGE-0.3.md) and
+[owner acceptance](ACCEPTANCE-0.3.md). Tables were already in the shared parser.
 
 ## 0.4 — Mobile
 

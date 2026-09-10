@@ -59,6 +59,10 @@ pub fn run() {
         .register_uri_scheme_protocol("notes-asset", asset::serve)
         .invoke_handler(tauri::generate_handler![
             commands::env_report,
+            commands::knowledge_get,
+            commands::wiki_candidates,
+            commands::metadata_get,
+            commands::attachment_import,
             commands::reference_preview,
             commands::reference_apply,
             commands::index_start,

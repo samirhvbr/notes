@@ -191,5 +191,18 @@
   "references.failed": "Moved, but {count} files changed or could not be written. Review the backup and remaining links.",
   "references.expired": "The workspace changed. Start the move again.",
   "references.unavailable": "The link index is unavailable. Move without updating references? Existing links may need manual repair.",
-  "references.moveOnly": "Move without updating links"
+  "references.moveOnly": "Move without updating links",
+  "browser.tags": "Tags",
+  "browser.backlinks": "Backlinks",
+  "browser.properties": "Properties",
+  "knowledge.partial": "The index or displayed graph is partial. Rebuild or narrow the filter.",
+  "knowledge.invalidYaml": "Invalid or oversized YAML front matter. The note remains editable.",
+  "knowledge.allTags": "All tags",
+  "knowledge.filter": "Filter notes by path",
+  "knowledge.graphDescription": "Notes connected by internal links",
+  "knowledge.noteList": "Open a note from the graph",
+  "knowledge.unresolved": "{count} unresolved or ambiguous wiki links",
+  "knowledge.choose": "Choose the linked note",
+  "knowledge.missing": "No matching note.",
+  "attachment.created": "Image saved at {path}; insert its link in the intended note."
 }

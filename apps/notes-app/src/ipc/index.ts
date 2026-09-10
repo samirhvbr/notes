@@ -256,3 +256,10 @@ export const recentNotes = () => invoke<import("./generated/RecentNote").RecentN
 export type { ReferencePlan } from "./generated/ReferencePlan";
 export const referencePreview = (from:RelPath,to:RelPath) => invoke<import("./generated/ReferencePlan").ReferencePlan>("reference_preview",{from,to});
 export const referenceApply = (token:string,selected:number[]) => invoke<import("./generated/ReferenceResult").ReferenceResult>("reference_apply",{token,selected});
+
+export type {Knowledge} from "./generated/Knowledge";
+export type {Metadata} from "./generated/Metadata";
+export const knowledgeGet=()=>invoke<import("./generated/Knowledge").Knowledge>("knowledge_get");
+export const metadataGet=(text:string)=>invoke<import("./generated/Metadata").Metadata>("metadata_get",{text});
+export const wikiCandidates=(target:string)=>invoke<RelPath[]>("wiki_candidates",{target});
+export const attachmentImport=(note:RelPath,bytes:number[])=>invoke<import("./generated/Attachment").Attachment>("attachment_import",{note,bytes});

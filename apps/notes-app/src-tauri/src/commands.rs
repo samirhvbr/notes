@@ -431,3 +431,28 @@ pub fn reference_apply(
 ) -> Result<notes_core::references::ReferenceResult, notes_model::CoreError> {
     svc(&app)?.reference_apply(&token, &selected)
 }
+
+#[tauri::command]
+pub fn knowledge_get(app: State<'_, App>) -> Result<notes_core::knowledge::Knowledge, CoreError> {
+    svc(&app)?.knowledge()
+}
+#[tauri::command]
+pub fn wiki_candidates(app: State<'_, App>, target: String) -> Result<Vec<RelPath>, CoreError> {
+    svc(&app)?.wiki_candidates(&target)
+}
+#[tauri::command]
+pub fn metadata_get(
+    app: State<'_, App>,
+    text: String,
+) -> Result<notes_core::knowledge::Metadata, CoreError> {
+    svc(&app)?.outline(&text)?;
+    Ok(notes_core::knowledge::metadata(&text))
+}
+#[tauri::command]
+pub fn attachment_import(
+    app: State<'_, App>,
+    note: RelPath,
+    bytes: Vec<u8>,
+) -> Result<notes_core::attachments::Attachment, CoreError> {
+    svc(&app)?.import_attachment(&note, &bytes)
+}

@@ -72,7 +72,7 @@ Unsupported escaped/entity-encoded destinations are left alone; skipped
 candidates are counted in review. Skipped notes mean the reference list may be
 incomplete. A user can leave every checkbox clear or explicitly choose to move
 without updating links if the index is unavailable. Wiki links, tags, backlinks,
-graph and MCP remain 0.3 work.
+graph and MCP are implemented separately in [0.3](KNOWLEDGE-0.3.md).
 
 ## Performance observation
 

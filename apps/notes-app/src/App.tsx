@@ -1,3 +1,4 @@
+import {Graph,WikiDialog} from "./app/Knowledge";
 import { ReferenceReview } from "./app/ReferenceReview";
 import { WorkspaceBrowser } from "./explorer/WorkspaceBrowser";
 import { IndexControls } from "./app/IndexControls";
@@ -213,7 +214,7 @@ export default function App() {
             the whole window. */}
         {panel && (
           <aside className="side">
-            {panel === "files" ? (
+            {panel !== "search" ? (
               <>
                 <WorkspaceBrowser />
               </>
@@ -229,6 +230,7 @@ export default function App() {
         )}
 
         <main className="main">
+          {panel === "graph" ? <Graph/> : <>
           <Tabs onNew={newNote} />
           <NoteHeader />
           {doc?.draft && (
@@ -302,11 +304,13 @@ export default function App() {
               {view !== "source" && doc && <Preview />}
             </div>
           )}
+          </>}
         </main>
       </div>
 
       <Dialog />
       <ReferenceReview />
+      <WikiDialog/>
       {palette && (
         <Palette mode={palette} commands={commands} onClose={() => setPalette(null)} />
       )}

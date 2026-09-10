@@ -8,6 +8,16 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.16.0 - expose knowledge navigation and package local MCP
+
+Add Properties, Tags and Backlinks panels, wiki destination selection, an
+accessible graph with usable node targets, and safe asynchronous clipboard
+image insertion. Publish the standalone Linux MCP archive alongside app
+packages. The complete local gate, six real MCP process tests and 72 frontend
+tests pass; native debug interaction verified metadata, ambiguity, graph
+navigation and backlinks. Installed Linux owner acceptance and its repeat
+remain explicitly pending. Keep the independently developed mobile PR intact.
+
 ## 0.16.0 - build local knowledge and scoped agent operations
 
 Implement the milestone 0.3 core: read-only YAML and tags, wiki resolution,
