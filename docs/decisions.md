@@ -1449,3 +1449,47 @@ synchronize a user's workspace by itself. Device outboxes, conflict import,
 application with draft protection, attachments, background work and UI remain
 queued. The bounded JSON design deliberately limits scale; its replacement
 needs a documented migration and recovery path. See SYNC-0.6.md and OpenAPI.
+
+## ADR-046 — Device transfer uses durable queues before source application
+
+**Status:** ACTIVE · Implemented in 0.20.0; milestone 0.6 remains open.
+
+**Context.** The server inbox can store immutable revisions, but a device must
+survive offline edits and lost responses without regenerating UUIDs or treating
+a storage receipt as proof of source application.
+
+**Decision.** Add `notes-sync-client` as a separate desktop CLI/transport crate.
+Core captures saved original bytes against its identity/hash inventory. The
+shared publication contract and byte validation live in `notes-sync`; neither
+core nor domain imports an HTTP client. Explicit initialization pins endpoint,
+workspace UUID and source root. The first upload requires an empty server inbox;
+the first client only supports whole-workspace non-review credentials.
+
+Offline staging atomically persists immutable publications in order. Transfer
+checkpoints each validated receipt and reuses the exact publication on an unknown
+outcome. Conflicts retain the rejected publication and successors. Receive
+validates complete pages/content before committing its cursor. Received bytes
+can be exported to a new private state file, never applied to a source note.
+Missing source files are reported, not inferred as deletions. Draft protection
+and application acknowledgments are not claimed by this block.
+
+Use pinned reqwest 0.13.4 with rustls and the ring provider, bounded responses,
+timeouts, no redirects, no automatic retries and no inherited proxies. The
+operator-selected origin is the only network authority; no received URL is
+followed. Resolve, validate and pin addresses per process while retaining TLS
+hostname verification. Credentials come from a private regular file and remain
+outside persisted client state and command-line values.
+
+**Narrow amendment to security.md §4.4.** Explicit initialization with
+`--allow-private` can authorize that selected private server, including plain
+HTTP only at a literal loopback IP for local use. Link-local/metadata,
+unspecified and multicast addresses remain denied. This does not authorize URLs
+from note content, HTTP responses or arbitrary future integrations. A selected
+PEM trust anchor augments certificate trust without disabling verification.
+
+**Consequences.** Atomic schema-1 client state contains bounded queued and
+received content. It must be backed up while stopped and preserved on conflict;
+unknown/corrupt schemas are refused unchanged. Retention/migration, scoped or
+populated pairing, deletion capture, divergent import, source application,
+background work and UI remain in the queue. CI tests real client processes over
+TCP and the existing HTTPS proxy, in addition to fault-injected lost receipts.

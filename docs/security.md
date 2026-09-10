@@ -120,6 +120,12 @@ and link-local ranges (`127.0.0.0/8`, `10/8`, `172.16/12`, `192.168/16`,
 allow-list of hosts. Cloud metadata endpoints are the target that makes this
 non-theoretical.
 
+The device sync CLI has a narrow operator-selected exception (ADR-046): one
+persisted endpoint can explicitly allow private addresses, with literal-loopback
+HTTP permitted only under that flag. Redirects and inherited proxies are disabled;
+resolved addresses are validated and pinned, and link-local/metadata destinations
+remain denied. This exception does not apply to URLs read from notes or servers.
+
 ### 4.5 Mass assignment and IDOR
 Never bind a whole request payload to a model. Whitelist the fields. Every
 record fetched by an id from a request is scoped to the caller's ownership or

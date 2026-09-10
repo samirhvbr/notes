@@ -1066,5 +1066,6 @@ The first 0.6 block adds `notes-sync` as a dependency of core, beside `notes-fs`
 It supplies revision/ancestry planning and locked operational metadata storage;
 core supplies source inventories. `notes-sync-plan` is a core-owned CLI for
 explicit pairing previews. The 0.19.1 server inbox transports immutable revisions and bytes under existing
-authentication, without applying them to source files. Device transport and
-source application remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+authentication, without applying them to source files. The 0.20.0 `notes-sync-client` owns HTTPS and durable device queues, consuming
+core capture and the shared publication contract. Source application and app
+integration remain open (ADR-046). ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.

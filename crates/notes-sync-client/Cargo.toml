@@ -1,0 +1,20 @@
+[package]
+name = "notes-sync-client"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+notes-core.workspace = true
+notes-model.workspace = true
+notes-sync.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+blake3.workspace = true
+fd-lock.workspace = true
+tempfile.workspace = true
+base64 = "0.22"
+thiserror.workspace = true
+reqwest = { version = "=0.13.4", default-features = false, features = ["blocking", "json", "rustls-no-provider"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

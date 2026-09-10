@@ -1,7 +1,6 @@
 //! Immutable replication inbox, separate from live workspace files.
 //! One atomic document commits content and heads together: no dangling blobs.
 use crate::admin::{self, Credential};
-use base64::{engine::general_purpose::STANDARD, Engine};
 use notes_core::agent::Permission;
 use notes_model::{NoteId, RelPath};
 use notes_sync::{Journal, Revision};
@@ -14,7 +13,7 @@ use std::{
 };
 use uuid::Uuid;
 
-pub const MAX_CONTENT: usize = 8 * 1024 * 1024;
+pub use notes_sync::transfer::MAX_CONTENT;
 const MAX_TOTAL: usize = 32 * 1024 * 1024;
 const MAX_STATE: u64 = 64 * 1024 * 1024;
 const MAX_REVISIONS: usize = 10_000;
@@ -30,15 +29,7 @@ pub enum Error {
     Storage,
 }
 pub type Result<T> = std::result::Result<T, Error>;
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(deny_unknown_fields)]
-pub struct Publication {
-    pub workspace: Uuid,
-    pub expected: Option<Uuid>,
-    pub revision: Revision,
-    /// Canonical standard base64; None only for a tombstone.
-    pub content_base64: Option<String>,
-}
+pub use notes_sync::transfer::Publication;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Vault {
@@ -97,22 +88,10 @@ impl Vault {
     }
 }
 fn content(p: &Publication) -> Result<Vec<u8>> {
-    match (&p.revision.content, &p.content_base64) {
-        (None, None) => Ok(vec![]),
-        (Some(hash), Some(encoded)) if encoded.len() <= MAX_CONTENT.div_ceil(3) * 4 => {
-            let bytes = STANDARD.decode(encoded).map_err(|_| Error::Invalid)?;
-            if bytes.len() > MAX_CONTENT {
-                return Err(Error::Limit);
-            }
-            if STANDARD.encode(&bytes) != *encoded
-                || blake3::hash(&bytes).as_bytes() != hash.as_bytes()
-            {
-                return Err(Error::Invalid);
-            }
-            Ok(bytes)
-        }
-        _ => Err(Error::Invalid),
-    }
+    notes_sync::transfer::content(p).map_err(|e| match e {
+        notes_sync::Error::Limit => Error::Limit,
+        _ => Error::Invalid,
+    })
 }
 fn within(path: &RelPath, scope: &RelPath) -> bool {
     scope.is_root() || path == scope || path.as_str().starts_with(&format!("{scope}/"))

@@ -72,12 +72,12 @@ one-line version of both:
 
 - **Stack:** Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite.
 - **Layout:** `apps/notes-app/` (the Tauri app: `src/` React, `src-tauri/` thin
-  shell) · `crates/` (`notes-core`, `notes-fs`, `notes-index`, `notes-mcp`, `notes-sync` —
+  shell) · `crates/` (`notes-core`, `notes-fs`, `notes-index`, `notes-mcp`, `notes-sync`, `notes-sync-client` —
   where the Rust logic lives) · `packages/ui/` · `server/notes-server/` (standalone REST process, milestone 0.5).
   [ADR-003](docs/decisions.md#adr-003--the-rust-logic-lives-in-crates-and-the-tauri-shell-stays-thin).
 - **Runs locally with:** `cd apps/notes-app && npm ci && npm run tauri dev`.
-  Milestones 0.1a–0.1d, 0.2, 0.3 and 0.5 are implemented; 0.4 has its mobile core foundation. The 0.6 blocks provide causal planning, a pairing preview and a server revision inbox;
-  device synchronization and source application remain open. Owner verification on installed
+  Milestones 0.1a–0.1d, 0.2, 0.3 and 0.5 are implemented; 0.4 has its mobile core foundation. The 0.6 blocks provide causal planning, a server inbox and a durable CLI transfer client;
+  source application, conflict flows and app integration remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).
 - **Never do, without an ADR that reverses the one named:**

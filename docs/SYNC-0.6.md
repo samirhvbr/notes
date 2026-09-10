@@ -1,13 +1,13 @@
 # Synchronization domain and pairing preview
 
-> **Status:** ACTIVE · Causal domain in 0.19.0; server inbox in 0.19.1.
+> **Status:** ACTIVE · Domain in 0.19.0, server inbox in 0.19.1, device client in 0.20.0.
 > **Milestone 0.6 remains open.** This release does not synchronize remote notes.
 
 The `notes-sync` crate defines causal revision histories and produces plans.
 `notes-core` supplies bounded inventories of real folders, and the standalone
 `notes-sync-plan` command previews initial pairing. Planning never copies,
-overwrites or deletes source notes. The server revision inbox below transfers immutable bytes; durable device
-outboxes, source application, background scheduling and app controls remain in the queue.
+overwrites or deletes source notes. The server inbox and device client below transfer immutable bytes with durable
+queues. Source application, background scheduling and app controls remain open.
 
 ## Run the preview
 
@@ -117,7 +117,7 @@ completed sync stage; the shipped local MCP and 0.5 REST server are unchanged.
 The server now accepts and returns immutable revisions over its existing
 HTTPS/authentication boundary. This is an inbox for replication, **not live
 workspace synchronization**: neither publication nor download changes a file
-under `workspaces/`. The device outbox, source application, conflict workflow,
+under `workspaces/`. The 0.20.0 client below supplies the outbox. Source application, conflict workflow,
 attachments and background/UI integration remain open.
 
 The authenticated OpenAPI contract describes three operations:
@@ -186,3 +186,104 @@ head advancement, concurrent writers, stale writes, path collisions, quota
 refusal, scope and review permissions, revocation, future/corrupt state refusal,
 restart and offline backup/restore. No test claims remote source application or
 mobile synchronization.
+
+## Device transfer client (0.20.0)
+
+`notes-sync-client` is an explicit command-line client with a persistent offline
+outbox and received-content cache. **It still does not apply revisions to source
+files.** The app's dirty buffers and drafts are untouched. This block supports
+whole-workspace, non-review credentials only; subfolder pairing and reconciliation
+with an already populated remote are future client work. The server retains
+its existing subfolder and review policies for other callers.
+
+Build with `cargo build --locked -p notes-sync-client`, or use the standalone
+Linux release archive. Pair an existing source folder with an empty server inbox:
+
+```sh
+notes-sync-client init-upload /private/sync-state /home/me/notes https://notes.example home /private/integration.secret
+notes-sync-client stage /private/sync-state
+notes-sync-client transfer /private/sync-state /private/integration.secret
+notes-sync-client status /private/sync-state
+```
+
+The explicit `init-upload` command confirms the chosen source, endpoint and
+workspace. It refuses a populated server inbox or an existing client state.
+There is no reset-by-reinitialization. The state directory must be absolute and
+outside the source folder. Pairing fixes the remote inbox UUID, source root and
+endpoint in schema-1 `client.json`. The token is read only when connecting, from
+an absolute regular file (private permissions on Unix); it is never persisted
+in client state, placed in command arguments or printed.
+
+`stage` works offline. Core inventories retain note identities, capture original
+bytes and check them against observed hashes. Changed/new notes append immutable
+publications; unambiguous external renames retain identity. Pending predecessors
+remain ordered even when several edits are staged before connecting. Source
+bytes that change during capture cause refusal, preserving the prior queue.
+Only saved bytes are captured, never an unsaved editor buffer. Missing tracked
+notes are reported and **do not infer deletion**. Automatic tombstone capture,
+rename cycles and explicit deletion/application flows remain queued.
+
+`transfer` executes one bounded batch: at most 20 publications and one page of
+20 incoming revisions. Run it again to continue. Each valid storage receipt is
+checkpointed separately; a lost response leaves the exact publication UUID and
+bytes queued for an idempotent retry. A stale head returns a conflict and keeps
+that publication and its successors. No retry loop elects a winner. Offline,
+revoked credential, busy/rate-limited and capacity errors stop the batch with
+accepted progress already durable. Status can be inspected without connecting.
+
+To receive into a second device's private cache:
+
+```sh
+notes-sync-client init-receive /private/receiver-state /home/me/notes https://notes.example home /private/integration.secret
+notes-sync-client transfer /private/receiver-state /private/integration.secret
+notes-sync-client received /private/receiver-state
+notes-sync-client export /private/receiver-state REVISION_UUID
+```
+
+`init-receive` does not promise a download into the selected folder; it binds a
+future source location while received revisions remain in private state. The
+receiver validates the workspace UUID, append cursor, immutable metadata,
+parentage and original-byte hashes. It saves the whole page and its content
+before advancing the cursor. An interrupted or invalid fetch leaves that page
+unconsumed. `received` lists metadata; `export` creates a new
+`received-<revision>.md` file in the state directory, never overwriting an
+existing file. This makes received bytes inspectable without claiming source
+application. Every status includes `applied: false`.
+
+### Client transport and storage limits
+
+The operator supplies one origin, with no credentials, path, query or fragment.
+The client disables redirects, automatic retries and environment/system proxies.
+It resolves and validates addresses, then pins those addresses for the process
+while preserving TLS hostname verification. HTTPS is required. `--allow-private`
+at initialization explicitly permits a private/loopback server and also permits
+plain HTTP at a literal loopback IP for local operation. Link-local, unspecified,
+multicast and cloud metadata addresses remain refused. The selected exception
+is persisted with the endpoint. `NOTES_SYNC_CA_FILE` can add an explicitly
+selected PEM trust anchor without disabling certificate verification.
+
+The client uses reqwest 0.13.4 with its blocking, JSON and provider-free rustls
+features, selecting ring explicitly. No HTTP dependency enters the domain or
+core crates. See the [reqwest transport documentation](https://docs.rs/reqwest/0.13.4/reqwest/)
+for the underlying redirect, proxy and TLS defaults overridden here. Connect
+and request timeouts are 10 and 30 seconds; DNS resolution also depends on the
+operating system resolver. Responses are bounded to 16 MiB. The credential must
+still identify the original whole workspace on every connection.
+
+Client state has a 64 MiB serialized limit, 32 MiB cumulative decoded pending
+and received content, and 10,000 pending/received publications. Source capture
+is limited to 32 MiB total and 8 MiB per file. Private temporary files, OS locks,
+file sync and atomic replacement protect checkpoints. Future/corrupt state is
+refused unchanged. A state directory backup while the client is stopped includes
+queued bytes and core identities; do not discard it to resolve a conflict.
+There is no pruning or state migration yet. Received history is not a backup
+policy and no device application acknowledgment is sent.
+
+Validation includes fault-injected lost receipts, restart, repeated offline
+edits, rejected incoming bytes, stale/server-rebound conflicts, unsafe state
+paths, future schema and over-limit capture. The server smoke runs two actual
+client processes over TCP, disconnects/restarts the native server, and repeats
+the exchange through the CI HTTPS proxy. The HTTPS test first refuses its
+untrusted certificate, then uses the test CA explicitly. Original BOM/CRLF and
+non-UTF-8 bytes are compared after receipt and export; source folders remain
+unchanged.

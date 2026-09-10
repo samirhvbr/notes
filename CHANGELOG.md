@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.0 - resume device revision transfers from durable queues
+
+Add an explicit sync client that captures saved source bytes through core,
+queues immutable publications offline and retries unchanged UUIDs after restart.
+Pin the selected server and workspace, verify bounded responses and persist
+received content before advancing its cursor. Keep conflicts and failures in
+the local queue, never acknowledge source application or modify dirty notes.
+Document the remaining sync, mobile, MCP and installed-release acceptance queue.
+
 ## 0.19.1 - expose immutable revision transfer over authenticated HTTP
 
 Expose incremental metadata pages, original revision fetches and idempotent

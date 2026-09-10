@@ -115,3 +115,30 @@ pub fn inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
         })
         .collect()
 }
+
+/// Original bytes captured against the inventory hash. A concurrent edit aborts
+/// capture instead of enqueuing a revision with a hash from different bytes.
+pub fn capture(root: &Path, data: &Path) -> Result<Vec<(File, Vec<u8>)>> {
+    let files = inventory(root, data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_workspace(root)?;
+    let mut total = 0usize;
+    let mut result = Vec::new();
+    for file in files {
+        if service.open()?.fs.stat(&file.path)?.size > 8 * 1024 * 1024 {
+            return Err(CoreError::Unsupported {
+                cap: "sync capture exceeds its limits".into(),
+            });
+        }
+        let bytes = service.open()?.fs.read(&file.path)?;
+        total = total.saturating_add(bytes.len());
+        if total > 32 * 1024 * 1024 || notes_fs::hash(&bytes) != file.content {
+            return Err(CoreError::Unsupported {
+                cap: "sync capture changed or exceeds its limits".into(),
+            });
+        }
+        result.push((file, bytes));
+    }
+    Ok(result)
+}

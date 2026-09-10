@@ -15,3 +15,4 @@ thiserror.workspace = true
 blake3.workspace = true
 fd-lock.workspace = true
 tempfile.workspace = true
+base64 = "0.22"
