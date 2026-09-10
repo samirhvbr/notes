@@ -167,7 +167,15 @@ impl Index {
                 Ok((
                     r.get(0)?,
                     Cached {
-                        size: r.get(1)?,
+                        // A SQLite INTEGER *is* an i64, and rusqlite 0.40 stopped
+                        // pretending otherwise: it dropped the `u64` impls rather
+                        // than keep a conversion that can fail at runtime. The
+                        // cast lives here, at the one boundary that has to know,
+                        // and `size` stays `u64` for every caller. Nothing about
+                        // the stored bytes changes, so no reindex is forced — a
+                        // file large enough to lose information here would have to
+                        // exceed 8 EiB.
+                        size: r.get::<_, i64>(1)? as u64,
                         mtime: r.get(2)?,
                         hash: r.get(3)?,
                     },
@@ -187,7 +195,7 @@ impl Index {
                         message: e.to_string(),
                     }
                 })?;
-            tx.execute("INSERT INTO notes VALUES(?1,?2,?3,?4,?5) ON CONFLICT(path) DO UPDATE SET size=excluded.size,mtime=excluded.mtime,hash=excluded.hash,document=excluded.document", params![note.seen.path,note.seen.size,note.seen.mtime,note.hash,document]).map_err(sql)?;
+            tx.execute("INSERT INTO notes VALUES(?1,?2,?3,?4,?5) ON CONFLICT(path) DO UPDATE SET size=excluded.size,mtime=excluded.mtime,hash=excluded.hash,document=excluded.document", params![note.seen.path,note.seen.size as i64,note.seen.mtime,note.hash,document]).map_err(sql)?;
             tx.execute("DELETE FROM fts WHERE path=?1", [&note.seen.path])
                 .map_err(sql)?;
             tx.execute(
@@ -198,7 +206,7 @@ impl Index {
         } else {
             tx.execute(
                 "UPDATE notes SET size=?2,mtime=?3 WHERE path=?1",
-                params![note.seen.path, note.seen.size, note.seen.mtime],
+                params![note.seen.path, note.seen.size as i64, note.seen.mtime],
             )
             .map_err(sql)?;
         }
@@ -225,7 +233,7 @@ impl Index {
         }
         let mut stmt = self.0.prepare("SELECT path,highlight(fts,1,char(1),char(2)) FROM fts WHERE fts MATCH ?1 ORDER BY rank,path LIMIT ?2").map_err(sql)?;
         let rows = stmt
-            .query_map(params![terms.join(" AND "), limit as u64], |r| {
+            .query_map(params![terms.join(" AND "), limit as i64], |r| {
                 Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
             })
             .map_err(sql)?;

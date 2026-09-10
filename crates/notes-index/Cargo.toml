@@ -7,7 +7,7 @@ license.workspace = true
 [dependencies]
 notes-model.workspace = true
 notes-markdown.workspace = true
-rusqlite = { version = "0.37", features = ["bundled", "backup"] }
+rusqlite = { version = "0.40", features = ["bundled", "backup"] }
 serde_json.workspace = true
 
 [dev-dependencies]

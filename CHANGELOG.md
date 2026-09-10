@@ -8,6 +8,20 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.4 - convert index sizes at the SQL boundary for rusqlite 0.40
+
+`rusqlite` 0.37 to 0.40 and `libsqlite3-sys` 0.35 to 0.38. The major removes the
+`ToSql` and `FromSql` impls for `u64`, which is the honest thing to do — a SQLite
+INTEGER is an i64, and the old impls hid a conversion that could fail at runtime
+on a value no file size will ever reach. Three statements and one row read in
+`notes-index` were relying on them.
+
+The conversion now happens explicitly at the four sites that touch SQL, and
+`Seen::size` and `Cached::size` stay `u64` for every caller: this is a boundary
+detail, not a change to the crate's surface. The stored representation is
+identical, so the schema version stays 2 and **no reindex is forced** — an
+existing index opens and answers as before.
+
 ## 0.20.4 - carry base64, dirs and ts-rs to their current majors
 
 `base64` 0.22 to 0.23 in the three crates that encode credentials and payloads,
