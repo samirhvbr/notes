@@ -1,5 +1,8 @@
 use crate::{Error, Result};
-use notes_sync::{transfer::Publication, Revision};
+use notes_sync::{
+    transfer::{ApplicationAcknowledgment, Publication},
+    Revision,
+};
 use reqwest::{
     blocking::{Client, Response},
     Url,
@@ -100,6 +103,7 @@ pub trait Transport {
     fn page(&mut self, cursor: usize) -> Result<Page>;
     fn fetch(&mut self, id: Uuid) -> Result<Publication>;
     fn publish(&mut self, publication: &Publication) -> Result<()>;
+    fn acknowledge(&mut self, receipt: &ApplicationAcknowledgment) -> Result<()>;
 }
 pub struct Remote {
     client: Client,
@@ -228,6 +232,25 @@ fn decode<T: serde::de::DeserializeOwned>(response: Response) -> Result<T> {
     serde_json::from_slice(&bytes).map_err(|_| Error::Protocol)
 }
 impl Transport for Remote {
+    fn acknowledge(&mut self, receipt: &ApplicationAcknowledgment) -> Result<()> {
+        let response: ApplicationAcknowledgment = decode(
+            self.client
+                .post(
+                    self.base
+                        .join("acknowledgments")
+                        .map_err(|_| Error::Invalid)?,
+                )
+                .bearer_auth(&self.bearer)
+                .json(receipt)
+                .send()
+                .map_err(|_| Error::Offline)?,
+        )?;
+        if response != *receipt {
+            return Err(Error::Protocol);
+        }
+        Ok(())
+    }
+
     fn page(&mut self, cursor: usize) -> Result<Page> {
         let mut url = self.base.clone();
         url.set_query(Some(&format!("cursor={cursor}&limit=20")));

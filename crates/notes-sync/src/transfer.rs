@@ -31,3 +31,12 @@ pub fn content(p: &Publication) -> Result<Vec<u8>> {
         _ => Err(Error::InvalidState),
     }
 }
+
+/// A device reports a durable source-application receipt, never mere storage.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct ApplicationAcknowledgment {
+    pub workspace: Uuid,
+    pub device: Uuid,
+    pub revision: Uuid,
+}

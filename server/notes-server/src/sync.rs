@@ -37,6 +37,8 @@ struct Vault {
     journal: Journal,
     // In insertion order, making an integer cursor stable as revisions append.
     publications: Vec<Publication>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    device_owners: BTreeMap<Uuid, Uuid>,
 }
 impl Vault {
     fn new() -> Self {
@@ -44,6 +46,7 @@ impl Vault {
             schema: 1,
             journal: Journal::new(Uuid::new_v4()),
             publications: vec![],
+            device_owners: BTreeMap::new(),
         }
     }
     fn validate(&self) -> Result<()> {
@@ -73,6 +76,14 @@ impl Vault {
             }
             rebuilt.heads.insert(r.note, r.id);
         }
+        if self
+            .device_owners
+            .keys()
+            .ne(self.journal.acknowledgments.keys())
+        {
+            return Err(Error::Storage);
+        }
+        rebuilt.acknowledgments = self.journal.acknowledgments.clone();
         rebuilt.validate().map_err(|_| Error::Storage)?;
         if rebuilt != self.journal {
             return Err(Error::Storage);
@@ -299,5 +310,52 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
         let id = p.revision.id;
         v.publications.push(p);
         Ok((id, true))
+    })
+}
+
+/// Authenticated historical assertion; never authorizes pruning or source writes.
+pub fn acknowledge(
+    root: &Path,
+    c: &Credential,
+    receipt: &notes_sync::transfer::ApplicationAcknowledgment,
+) -> Result<()> {
+    require(c, Permission::Read)?;
+    if receipt.device.is_nil() {
+        return Err(Error::Invalid);
+    }
+    transaction(root, c, |v| {
+        if receipt.workspace != v.journal.workspace {
+            return Err(Error::Stale);
+        }
+        if v.device_owners
+            .get(&receipt.device)
+            .is_some_and(|id| *id != c.id)
+        {
+            return Err(Error::Forbidden);
+        }
+        let r = v
+            .journal
+            .revisions
+            .get(&receipt.revision)
+            .ok_or(Error::Missing)?;
+        if !v.visible(r.note, c) {
+            return Err(Error::Missing);
+        }
+        let note = r.note;
+        let old = v
+            .journal
+            .acknowledgments
+            .get(&receipt.device)
+            .and_then(|h| h.get(&note))
+            .copied();
+        v.journal
+            .acknowledge(receipt.device, BTreeMap::from([(note, receipt.revision)]))
+            .map_err(|e| match e {
+                notes_sync::Error::Stale => Error::Stale,
+                notes_sync::Error::Limit => Error::Limit,
+                _ => Error::Invalid,
+            })?;
+        v.device_owners.insert(receipt.device, c.id);
+        Ok(((), old != Some(receipt.revision)))
     })
 }

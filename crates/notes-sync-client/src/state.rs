@@ -95,6 +95,7 @@ pub struct Status {
     pub cursor: usize,
     pub applied: bool,
     pub applied_revisions: usize,
+    pub acknowledged_revisions: usize,
 }
 pub struct Store {
     dir: PathBuf,
@@ -237,13 +238,16 @@ impl Store {
         let lock = self.lock()?;
         let _guard = lock.try_read().map_err(|_| Error::Busy)?;
         let s = self.load()?;
-        let applied = self.application(&s)?.map(|a| a.next).unwrap_or(0);
+        let app = self.application(&s)?;
+        let applied = app.as_ref().map(|a| a.next).unwrap_or(0);
+        let acknowledged = app.as_ref().map(|a| a.acknowledged).unwrap_or(0);
         Ok(Status {
             pending: s.pending.len(),
             received: s.received.len(),
             cursor: s.cursor,
             applied: applied > 0 && applied == s.received.len(),
             applied_revisions: applied,
+            acknowledged_revisions: acknowledged,
         })
     }
     /// Capture only saved bytes. Missing inventory entries are reported, never
@@ -383,6 +387,8 @@ struct Application {
     next: usize,
     notes: std::collections::BTreeMap<notes_model::NoteId, ApplicationReceipt>,
     intent: Option<Uuid>,
+    #[serde(default)]
+    acknowledged: usize,
 }
 impl Store {
     fn application(&self, state: &State) -> Result<Option<Application>> {
@@ -408,6 +414,7 @@ impl Store {
         if app.schema != 1
             || !app.core_data.is_absolute()
             || app.next > state.received.len()
+            || app.acknowledged > app.next
             || app.intent.is_some_and(|id| {
                 state
                     .received
@@ -469,6 +476,7 @@ impl Store {
             next: 0,
             notes: Default::default(),
             intent: None,
+            acknowledged: 0,
         });
         if app.core_data != core_data {
             return Err(Error::Invalid);
@@ -516,6 +524,34 @@ impl Store {
             );
             app.next += 1;
             app.intent = None;
+            self.save_application(&app)?;
+            count += 1;
+        }
+        Ok(count)
+    }
+}
+
+impl Store {
+    /// Send at most twenty durable application receipts. Never touches source files.
+    pub fn acknowledge(&self, transport: &mut impl Transport) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Err(Error::Invalid);
+        }
+        let Some(mut app) = self.application(&state)? else {
+            return Ok(0);
+        };
+        let mut count = 0;
+        while app.acknowledged < app.next && count < 20 {
+            let p = &state.received[app.acknowledged];
+            transport.acknowledge(&notes_sync::transfer::ApplicationAcknowledgment {
+                workspace: state.local.workspace,
+                device: state.device,
+                revision: p.revision.id,
+            })?;
+            app.acknowledged += 1;
             self.save_application(&app)?;
             count += 1;
         }

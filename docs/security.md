@@ -66,6 +66,7 @@ credential disclosure are the concrete failures the core and transports prevent.
 | Operational state and backups | Lost identities or incompatible schema replacement | Offline full-data backup, staged restore, enrollment rebinding and future-schema refusal |
 | Sync revision inbox | Scoped history disclosure or torn content/head publication | Whole-history path authorization, original-byte hash validation, atomic bounded vault, no source application (ADR-045) |
 | Sync source application | Overwriting local edits or unpersisted buffers | Explicit receive-only CLI, shared/exclusive core activity leases using the same app data, draft refusal, BaseRev checks, durable intent before atomic writes and separate local receipts (ADR-047) |
+| Sync application receipts | Spoofed device progress or out-of-scope history | Read and entire-history scope checks, first-credential device binding, monotonic atomic receipts; no pruning authority (ADR-048) |
 | Server audit | Content/token disclosure or unbounded retention | Redacted structured events and five bounded segments |
 
 ## 3. General rules (mandatory)

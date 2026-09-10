@@ -24,6 +24,21 @@ impl Peer {
     }
 }
 impl Transport for Peer {
+    fn acknowledge(&mut self, r: &notes_sync::transfer::ApplicationAcknowledgment) -> Result<()> {
+        if r.workspace != self.journal.workspace {
+            return Err(Error::Protocol);
+        }
+        let note = self.journal.revisions[&r.revision].note;
+        self.journal
+            .acknowledge(r.device, [(note, r.revision)].into())
+            .map_err(|_| Error::Conflict)?;
+        if std::mem::take(&mut self.lose_receipt) {
+            Err(Error::Offline)
+        } else {
+            Ok(())
+        }
+    }
+
     fn page(&mut self, cursor: usize) -> Result<Page> {
         if cursor > self.log.len() {
             return Err(Error::Protocol);
@@ -351,4 +366,68 @@ fn rename_remains_received_without_moving_or_advancing_application() {
     assert_eq!(receiver.status().unwrap().received, 2);
     assert_eq!(fs::read(target.join("test.md")).unwrap(), b"remote");
     assert!(!target.join("renamed.md").exists());
+}
+
+#[test]
+fn application_acknowledgments_resume_after_lost_response_and_exclude_unapplied_bytes() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"first").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 0);
+    assert!(peer.journal.acknowledgments.is_empty());
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    let checkpoint = dir.path().join("receiver/application.json");
+    let before = fs::read(&checkpoint).unwrap();
+    peer.lose_receipt = true;
+    assert!(matches!(
+        receiver.acknowledge(&mut peer),
+        Err(Error::Offline)
+    ));
+    assert_eq!(fs::read(&checkpoint).unwrap(), before);
+    assert_eq!(peer.journal.acknowledgments.len(), 1);
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 1);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 0);
+    assert_eq!(receiver.status().unwrap().acknowledged_revisions, 1);
+    fs::write(root.join("test.md"), b"second").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    fs::write(target.join("test.md"), b"local work").unwrap();
+    assert!(receiver.apply(&data).is_err());
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 0);
+    assert_eq!(
+        peer.journal.acknowledgments.values().next().unwrap()[&peer.log[0].revision.note],
+        peer.log[0].revision.id
+    );
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"local work");
+}
+
+#[test]
+fn acknowledgment_batches_are_bounded_and_old_checkpoints_default_to_pending() {
+    let (dir, root, sender, mut peer) = fixture();
+    for i in 0..21 {
+        fs::write(root.join(format!("{i}.md")), b"content").unwrap();
+    }
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (_, receiver) = receiver(dir.path(), &mut peer);
+    receiver.transfer(&mut peer).unwrap();
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    receiver.apply(&data).unwrap();
+    let path = dir.path().join("receiver/application.json");
+    let mut old: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    old.as_object_mut().unwrap().remove("acknowledged");
+    fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    assert_eq!(receiver.status().unwrap().acknowledged_revisions, 0);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 20);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 1);
+    old["acknowledged"] = serde_json::json!(22);
+    fs::write(&path, serde_json::to_vec(&old).unwrap()).unwrap();
+    assert!(receiver.acknowledge(&mut peer).is_err());
 }

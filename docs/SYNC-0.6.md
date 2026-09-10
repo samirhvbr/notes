@@ -278,7 +278,8 @@ file sync and atomic replacement protect checkpoints. Future/corrupt state is
 refused unchanged. A state directory backup while the client is stopped includes
 queued bytes and core identities; do not discard it to resolve a conflict.
 There is no pruning or state migration yet. Received history is not a backup
-policy and no device application acknowledgment is sent.
+policy. Transfer sends no device application acknowledgment; the explicit
+`acknowledge` command below does.
 
 Validation includes fault-injected lost receipts, restart, repeated offline
 edits, rejected incoming bytes, stale/server-rebound conflicts, unsafe state
@@ -339,8 +340,7 @@ for progress and preserve the received queue on any error.
 `applied_revisions` counts successful historical local receipts. `applied` is
 true only when that count is nonzero and equals the received count. It is **not**
 a live disk scan or an assertion that later local edits match the remote. These
-receipts are distinct from server `stored: true, applied: false` responses; no
-device application acknowledgment is sent to the server yet.
+receipts are distinct from server `stored: true, applied: false` responses; the explicit command below reports them to the server.
 
 Renames, tombstones, divergence resolution, dirty-buffer integration and active
 editor application are still refused/queued. Do not delete drafts or local
@@ -349,3 +349,46 @@ intent persistence, interrupted receipt recovery, drafts and a real second
 process holding the workspace open. Client tests cover checkpoint progress,
 collisions, local edits, incompatible state and rename refusal; the native TCP
 and HTTPS smoke tests exercise explicit application followed by a local conflict.
+
+## Device application acknowledgments (0.20.3)
+
+After applying received notes, explicitly report the durable receipts:
+
+```sh
+notes-sync-client acknowledge /private/receiver-state /private/integration.secret
+notes-sync-client status /private/receiver-state
+```
+
+The command requires a receive-mode client and sends at most 20 receipts in
+application order. Each successful echoed response advances a durable
+`acknowledged` cursor in `application.json`. `acknowledged_revisions` in status
+counts confirmed historical receipts; it is not a live disk assertion. Cached
+content, exports and an unfinished write intent never qualify. Application and
+transfer remain offline-capable/separate operations; neither sends receipts.
+
+The authenticated `POST /v1/workspaces/{workspace}/sync/acknowledgments` endpoint
+accepts the pinned workspace UUID, device UUID and one applied revision UUID.
+It requires Read and whole-history path visibility. The first accepted receipt
+binds a device to that credential ID; another credential cannot claim that
+device. Token replacement with a new credential ID requires future explicit
+rebinding support; preserve state instead of changing the device UUID by hand.
+There is no remote proof of disk contents: receipts are authenticated client
+assertions and do not authorize deletion, pruning or automatic recovery.
+
+Exact retries are idempotent. A lost response or local checkpoint failure leaves
+the same receipt pending; retry sends it again without touching source notes.
+An older ancestor after a newer acknowledgment is refused, preserving the
+server's progress. Restoring an older client/server backup can therefore require
+the still-pending recovery/reconciliation flow. No automatic rollback or reset
+is attempted. Revocation, workspace mismatch, hidden/out-of-scope history and
+unknown revisions are refused. Existing server request/body limits apply; the
+journal allows at most 1,024 acknowledging devices and evicts none.
+
+Server receipts and device owners are atomic with the existing vault and survive
+its offline backup/restore. Existing vaults default to no owners/receipts;
+existing application checkpoints default to zero acknowledgments. Once written,
+the new fields are intentionally refused by older binaries rather than silently
+lost. Keep the updated binaries and both state directories during recovery.
+ADR-048 records the boundary. Tests cover lost responses, restart, batch bounds,
+legacy checkpoints, unapplied/local-conflicting content, ownership, monotonicity,
+scope, revocation, backup/restore and the real CLI over the TCP/HTTPS smoke path.

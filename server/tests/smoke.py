@@ -178,10 +178,15 @@ with tempfile.TemporaryDirectory() as temp:
         assert (receiver / ("received-" + received[0]["id"] + ".md")).read_bytes() == original
         assert list(target.iterdir()) == []
         assert (source / "original.md").read_bytes() == original
+        run([client, "acknowledge", str(receiver), str(client_secret)])
+        assert json.loads(run([client, "status", str(receiver)]))["acknowledged_revisions"] == 0
         app_data = temp / "receiver-app-data"
         run([client, "apply", str(receiver), str(app_data)])
         assert (target / "original.md").read_bytes() == original
         assert json.loads(run([client, "status", str(receiver)]))["applied_revisions"] == 1
+        run([client, "acknowledge", str(receiver), str(client_secret)])
+        run([client, "acknowledge", str(receiver), str(client_secret)])
+        assert json.loads(run([client, "status", str(receiver)]))["acknowledged_revisions"] == 1
         (source / "original.md").write_bytes(b"remote update\r\n")
         run([client, "stage", str(sender)])
         run([client, "transfer", str(sender), str(client_secret)])
