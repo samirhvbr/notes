@@ -8,7 +8,10 @@
 `notes-markdown` interprets YAML front matter without rewriting it. Properties
 shows scalar and structured values as text; an invalid mapping reports a
 warning and leaves the entire source untouched. Interpretation is limited to
-64 KiB of front matter. `title` is exposed as metadata, never used to rename a
+64 KiB of front matter. Indented separators inside YAML block scalars remain
+content (corrected in 0.16.1). When upgrading from 0.16.0, use Rebuild index
+to refresh cached tags in affected unchanged notes; properties read the live
+buffer and reflect the correction immediately. `title` is exposed as metadata, never used to rename a
 file. Tags combine YAML `tags` (a string or string sequence) and inline `#tag`.
 Tags are lowercase, deduplicated, allow Unicode letters/numbers and `_-/`, and
 must contain a letter. Code, escaped hashes, link/image destinations and raw

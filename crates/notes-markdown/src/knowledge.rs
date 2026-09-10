@@ -38,7 +38,7 @@ pub(crate) fn front_matter(src: &str, span: Option<Span>) -> Metadata {
     let body = raw
         .lines()
         .skip(1)
-        .take_while(|l| l.trim() != "---" && l.trim() != "...")
+        .take_while(|l| l.trim_end() != "---" && l.trim_end() != "...")
         .collect::<Vec<_>>()
         .join("\n");
     let value = match serde_yaml_ng::from_str::<serde_yaml_ng::Value>(&body) {
@@ -158,6 +158,16 @@ mod tests {
         assert_eq!(m.tags, vec!["projeto/ação", "rust", "visible"]);
         assert!(m.error.is_none());
     }
+    #[test]
+    fn indented_fences_are_yaml_scalar_content_not_metadata_delimiters() {
+        let src =
+            "---\nsummary: |\n  before\n  ---\n  middle\n  ...\n  after\ntags: [kept]\n---\nbody\n";
+        let m = metadata(src);
+        assert!(m.error.is_none());
+        assert_eq!(m.tags, vec!["kept"]);
+        assert_eq!(m.properties[0].value, "before\n---\nmiddle\n...\nafter\n");
+    }
+
     #[test]
     fn invalid_yaml_does_not_hide_body_tags() {
         let m = metadata("---\ntags: [broken\n---\n#visible\n");

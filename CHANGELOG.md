@@ -8,6 +8,16 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.16.1 - preserve indented separators in YAML properties
+
+Only an unindented Markdown metadata fence ends front matter. An indented
+`---` or `...` inside a YAML block scalar is content; trimming its indentation
+silently truncated properties and could hide tags after the scalar. Keep the
+original source unchanged and cover both separators and trailing tags in a
+regression test. Properties update immediately; upgrading from 0.16.0 requires
+Rebuild index for affected cached tags. Publish refreshed packages for this
+milestone correction.
+
 ## 0.16.0 - expose knowledge navigation and package local MCP
 
 Add Properties, Tags and Backlinks panels, wiki destination selection, an

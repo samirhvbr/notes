@@ -1,6 +1,6 @@
 # Acceptance — milestone 0.3
 
-> **Status:** `ACTIVE` · Implementation in 0.16.0; owner acceptance pending.
+> **Status:** `ACTIVE` · Implementation in 0.16.0, YAML correction in 0.16.1; owner acceptance pending.
 > As required for 0.1d and every later milestone, Samir walks the installed
 > Linux release and repeats the flows on the following release. Automated or
 > local debug checks never tick the owner columns.
@@ -14,7 +14,7 @@ with the newer master. This delivery does not merge or modify that PR.
 
 | Criterion | Evidence |
 |---|---|
-| YAML/tags are read-only; code and destinations do not become tags | `notes-markdown::knowledge` tests and the reviewed front-matter golden |
+| YAML/tags are read-only; code and destinations do not become tags | `notes-markdown::knowledge` tests (including indented block-scalar separators) and the reviewed front-matter golden |
 | Backlinks and graph do not invent a homonym target | `notes-core/tests/knowledge.rs` |
 | Wiki rename preserves aliases, fragments and code | Reviewed rename integration test |
 | Clipboard import preserves image and note bytes, uses unique names and rejects invalid content | Core image import integration test |
