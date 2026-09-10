@@ -29,6 +29,11 @@ export default defineConfig({
   build: {
     target: ["es2021", "chrome100", "safari15"],
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
-    minify: process.env.TAURI_ENV_DEBUG ? false : "esbuild",
+    // `oxc`, not `esbuild`: Vite 8 minifies with oxc and no longer ships
+    // esbuild at all, so naming esbuild here asks for a package that is not
+    // installed and fails the build in `renderChunk` — after a successful
+    // transform, which is what makes it read like a plugin bug. The `target`
+    // above is still what decides the syntax floor.
+    minify: process.env.TAURI_ENV_DEBUG ? false : "oxc",
   },
 });

@@ -8,6 +8,26 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.4 - move the frontend to React 19 and Vite 8
+
+`react` and `react-dom` 18 to 19 with their `@types`, `@vitejs/plugin-react` 4
+to 6, `vite` 6 to 8. The two React packages are one subject and not two, because
+a tree holding `react` 19 against `react-dom` 18 is broken in a way no
+typecheck reports. Nothing in `src/` needed a change: the app renders through
+`createRoot` already and uses no API that 19 removed.
+
+Vite 8 bundles with rolldown and minifies with oxc, and no longer ships esbuild
+at all — so `minify: "esbuild"` in the config became a request for a package
+that is not installed. It failed in `renderChunk`, *after* 2 034 modules
+transformed successfully, which reads like a plugin bug rather than a
+configuration one; the comment now in `vite.config.ts` is there to save the next
+reader that ten minutes. `build.target` still decides the syntax floor, checked
+rather than assumed: building the same tree at `es2015` and at
+`es2021/chrome100/safari15` produces different bytes, so the WebView floor this
+app ships against is still being applied.
+
+72 frontend tests and the whole of `tools/check.sh` pass.
+
 ## 0.20.4 - convert index sizes at the SQL boundary for rusqlite 0.40
 
 `rusqlite` 0.37 to 0.40 and `libsqlite3-sys` 0.35 to 0.38. The major removes the
