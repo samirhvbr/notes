@@ -247,7 +247,7 @@ jobs:
           pacman -Syu --noconfirm
           pacman -S --noconfirm base-devel git webkit2gtk-4.1 gtk3 github-cli
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: linux-tarball
           path: dist-release
