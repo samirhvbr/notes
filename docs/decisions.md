@@ -1453,6 +1453,7 @@ needs a documented migration and recovery path. See SYNC-0.6.md and OpenAPI.
 ## ADR-046 — Device transfer uses durable queues before source application
 
 **Status:** ACTIVE · Implemented in 0.20.0; milestone 0.6 remains open.
+Explicit source application is added separately by ADR-047 in 0.20.1.
 
 **Context.** The server inbox can store immutable revisions, but a device must
 survive offline edits and lost responses without regenerating UUIDs or treating
@@ -1493,3 +1494,39 @@ unknown/corrupt schemas are refused unchanged. Retention/migration, scoped or
 populated pairing, deletion capture, divergent import, source application,
 background work and UI remain in the queue. CI tests real client processes over
 TCP and the existing HTTPS proxy, in addition to fault-injected lost receipts.
+
+
+## ADR-047 — Apply received notes only through guarded closed-workspace writes
+
+**Status:** ACTIVE · Implemented in 0.20.1; milestone 0.6 remains open.
+
+**Context.** Durable transfer is not proof that a note was safely applied. The
+editor owns buffers outside the transport process, and a crash can separate a
+source write from the receipt that records it.
+
+**Decision.** Extend the CLI with explicit receive-only application of creations
+and same-path updates. Keep HTTP outside core. Core acquires an exclusive
+workspace activity lease against shared leases held by open core workspaces,
+then the existing write lock. The actual app data directory is required and
+pinned. Any pending draft blocks application; updates require the observed
+BaseRev and local identity, and creations refuse collisions. Core preflight
+precedes the durable client intent; every source write follows it. LocalFs
+creation publishes a synced temporary file without replacing an existing file,
+so incomplete new bytes cannot appear as the destination. Unix new files use
+0600. Existing atomic updates preserve their mode.
+
+A separate schema-1 application checkpoint maps remote revisions to local
+identity/BaseRev and persists intent before writing. Exact intended bytes allow
+recovery of a lost receipt without another write; different content refuses
+recovery. Successful receipts advance individually. Transfer receipts and server
+state do not become device application acknowledgments. Existing schema-1
+transfer state remains readable without migration.
+
+**Consequences.** Updated cooperating processes must share the app data path and
+workspace path; older binaries and unrelated editors cannot be protected by the
+lease. Native root identities unify activity leases where available. The normal
+filesystem adapter's external-writer race limits still apply. Renames, deletes,
+conflict resolution, active buffers, server acknowledgments and mobile lifecycle
+remain separate work. Owner installed-release acceptance is not inferred from
+CLI tests. Server backup skips activity lock files; device backups must retain application
+checkpoints.

@@ -153,8 +153,9 @@ pairing preview](SYNC-0.6.md). It does not transfer remote content; the
 [ADR-005](decisions.md#adr-005--sync-is-out-of-the-mvp-but-the-file-identity-model-is-not-foreclosed).
 
 The 0.19.1 sync block adds a scoped server revision inbox with atomic content,
-idempotent publication and incremental metadata pages. The 0.20.0 device client adds durable queues and resumable transfer. Source
-application and UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
+idempotent publication and incremental metadata pages. The 0.20.0 device client adds durable queues and resumable transfer. The 0.20.1 block applies creations and same-path updates through core while the
+workspace is closed and draft-free. Active-editor application, conflicts and UI
+remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 ## 0.7 — AI
 

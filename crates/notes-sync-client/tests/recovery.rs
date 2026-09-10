@@ -226,3 +226,129 @@ fn oversized_capture_preserves_existing_queue_and_source() {
     assert_eq!(fs::read(root.join("small.md")).unwrap(), b"queued");
     assert_eq!(file.metadata().unwrap().len(), 8 * 1024 * 1024 + 1);
 }
+
+fn receiver(dir: &std::path::Path, peer: &mut Peer) -> (std::path::PathBuf, Store) {
+    let root = dir.join("receiver-root");
+    fs::create_dir(&root).unwrap();
+    let store = Store::open(&dir.join("receiver")).unwrap();
+    store
+        .initialize(&root, endpoint(), Mode::Receive, peer)
+        .unwrap();
+    store.transfer(peer).unwrap();
+    (root, store)
+}
+
+#[test]
+fn apply_checkpoints_updates_and_preserves_local_edits() {
+    let (dir, root, sender, mut peer) = fixture();
+    let bytes = b"\xef\xbb\xbfhello\r\n\xff";
+    fs::write(root.join("test.md"), bytes).unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    assert_eq!(receiver.apply(&data).unwrap(), 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), bytes);
+    assert!(receiver.status().unwrap().applied);
+    assert_eq!(receiver.apply(&data).unwrap(), 0);
+    fs::write(root.join("test.md"), b"second\r\n").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    assert_eq!(receiver.apply(&data).unwrap(), 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"second\r\n");
+    fs::write(target.join("test.md"), b"local work").unwrap();
+    fs::write(root.join("test.md"), b"third").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    assert!(matches!(
+        receiver.apply(&data),
+        Err(Error::ApplicationBlocked)
+    ));
+    assert_eq!(receiver.status().unwrap().applied_revisions, 2);
+    assert_eq!(receiver.status().unwrap().received, 3);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"local work");
+    assert!(receiver.apply(&dir.path().join("wrong-app-data")).is_err());
+}
+
+#[test]
+fn durable_intent_recovers_lost_receipt_without_rewriting_but_rejects_later_edits() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"remote").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    let meta = fs::metadata(target.join("test.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    let checkpoint = serde_json::json!({"schema":1,"core_data":fs::canonicalize(&data).unwrap(),"next":0,"notes":{},"intent":peer.log[0].revision.id});
+    let state_path = dir.path().join("receiver/application.json");
+    // Crash boundary: intent was durable and the source was written, but the
+    // application receipt did not reach disk. Replay the exact durable state.
+    fs::write(&state_path, serde_json::to_vec(&checkpoint).unwrap()).unwrap();
+    assert_eq!(receiver.apply(&data).unwrap(), 1);
+    assert_eq!(
+        fs::metadata(target.join("test.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        meta
+    );
+    fs::write(&state_path, serde_json::to_vec(&checkpoint).unwrap()).unwrap();
+    fs::write(target.join("test.md"), b"newer local").unwrap();
+    assert!(matches!(
+        receiver.apply(&data),
+        Err(Error::ApplicationBlocked)
+    ));
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"newer local");
+    assert_eq!(receiver.status().unwrap().applied_revisions, 0);
+}
+
+#[test]
+fn collision_never_creates_intent_and_future_application_state_is_preserved() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"same").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    fs::write(target.join("test.md"), b"same").unwrap();
+    let app = dir.path().join("receiver/application.json");
+    for _ in 0..2 {
+        assert!(matches!(
+            receiver.apply(&data),
+            Err(Error::ApplicationBlocked)
+        ));
+        assert!(!app.exists());
+    }
+    fs::write(&app, b"{\"schema\":999}").unwrap();
+    assert!(receiver.apply(&data).is_err());
+    assert_eq!(fs::read(app).unwrap(), b"{\"schema\":999}");
+}
+
+#[test]
+fn rename_remains_received_without_moving_or_advancing_application() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"remote").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    fs::rename(root.join("test.md"), root.join("renamed.md")).unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    assert!(matches!(
+        receiver.apply(&data),
+        Err(Error::UnsupportedApplication)
+    ));
+    assert_eq!(receiver.status().unwrap().applied_revisions, 1);
+    assert_eq!(receiver.status().unwrap().received, 2);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"remote");
+    assert!(!target.join("renamed.md").exists());
+}

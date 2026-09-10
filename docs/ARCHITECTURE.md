@@ -1067,5 +1067,7 @@ It supplies revision/ancestry planning and locked operational metadata storage;
 core supplies source inventories. `notes-sync-plan` is a core-owned CLI for
 explicit pairing previews. The 0.19.1 server inbox transports immutable revisions and bytes under existing
 authentication, without applying them to source files. The 0.20.0 `notes-sync-client` owns HTTPS and durable device queues, consuming
-core capture and the shared publication contract. Source application and app
-integration remain open (ADR-046). ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+core capture and the shared publication contract (ADR-046). In 0.20.1, explicit
+application uses core guards and a separate durable client checkpoint; shared
+workspace activity leases protect open cooperating processes (ADR-047).
+Active-editor application and app integration remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.

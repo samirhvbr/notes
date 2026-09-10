@@ -94,6 +94,7 @@ pub struct Status {
     pub received: usize,
     pub cursor: usize,
     pub applied: bool,
+    pub applied_revisions: usize,
 }
 pub struct Store {
     dir: PathBuf,
@@ -236,11 +237,13 @@ impl Store {
         let lock = self.lock()?;
         let _guard = lock.try_read().map_err(|_| Error::Busy)?;
         let s = self.load()?;
+        let applied = self.application(&s)?.map(|a| a.next).unwrap_or(0);
         Ok(Status {
             pending: s.pending.len(),
             received: s.received.len(),
             cursor: s.cursor,
-            applied: false,
+            applied: applied > 0 && applied == s.received.len(),
+            applied_revisions: applied,
         })
     }
     /// Capture only saved bytes. Missing inventory entries are reported, never
@@ -362,5 +365,160 @@ impl Store {
             .into_iter()
             .map(|p| p.revision)
             .collect())
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplicationReceipt {
+    revision: Uuid,
+    path: notes_model::RelPath,
+    local: notes_core::sync::Applied,
+}
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Application {
+    schema: u32,
+    core_data: PathBuf,
+    next: usize,
+    notes: std::collections::BTreeMap<notes_model::NoteId, ApplicationReceipt>,
+    intent: Option<Uuid>,
+}
+impl Store {
+    fn application(&self, state: &State) -> Result<Option<Application>> {
+        let path = self.dir.join("application.json");
+        let meta = match fs::symlink_metadata(&path) {
+            Ok(meta) => meta,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(_) => return Err(Error::Storage),
+        };
+        if !meta.is_file() || meta.len() > MAX_STATE as u64 {
+            return Err(Error::Invalid);
+        }
+        let mut bytes = vec![];
+        File::open(path)
+            .map_err(|_| Error::Storage)?
+            .take(MAX_STATE as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Storage)?;
+        if bytes.len() > MAX_STATE {
+            return Err(Error::Limit);
+        }
+        let app: Application = serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)?;
+        if app.schema != 1
+            || !app.core_data.is_absolute()
+            || app.next > state.received.len()
+            || app.intent.is_some_and(|id| {
+                state
+                    .received
+                    .get(app.next)
+                    .is_none_or(|p| p.revision.id != id)
+            })
+        {
+            return Err(Error::Invalid);
+        }
+        let mut latest = std::collections::BTreeMap::new();
+        for p in &state.received[..app.next] {
+            latest.insert(p.revision.note, &p.revision);
+        }
+        if latest.len() != app.notes.len()
+            || latest.iter().any(|(id, r)| {
+                app.notes.get(id).is_none_or(|n| {
+                    n.revision != r.id
+                        || n.path != r.path
+                        || r.content.as_ref() != Some(&n.local.base_rev.hash)
+                })
+            })
+        {
+            return Err(Error::Invalid);
+        }
+        Ok(Some(app))
+    }
+    fn save_application(&self, app: &Application) -> Result<()> {
+        let bytes = serde_json::to_vec(app).map_err(|_| Error::Storage)?;
+        if bytes.len() > MAX_STATE {
+            return Err(Error::Limit);
+        }
+        let mut temp = tempfile::NamedTempFile::new_in(&self.dir).map_err(|_| Error::Storage)?;
+        temp.write_all(&bytes).map_err(|_| Error::Storage)?;
+        temp.as_file().sync_all().map_err(|_| Error::Storage)?;
+        temp.persist(self.dir.join("application.json"))
+            .map_err(|_| Error::Storage)?;
+        #[cfg(unix)]
+        File::open(&self.dir)
+            .and_then(|f| f.sync_all())
+            .map_err(|_| Error::Storage)?;
+        Ok(())
+    }
+    /// Apply received creations/updates to the bound folder, with the workspace
+    /// closed in every cooperating client using this same application data path.
+    pub fn apply(&self, core_data: &Path) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive || !state.pending.is_empty() {
+            return Err(Error::Invalid);
+        }
+        notes_core::sync::validate_state_location(&[&state.source], core_data)
+            .map_err(|_| Error::Invalid)?;
+        fs::create_dir_all(core_data).map_err(|_| Error::Storage)?;
+        let core_data = fs::canonicalize(core_data).map_err(|_| Error::Storage)?;
+        let mut app = self.application(&state)?.unwrap_or(Application {
+            schema: 1,
+            core_data: core_data.clone(),
+            next: 0,
+            notes: Default::default(),
+            intent: None,
+        });
+        if app.core_data != core_data {
+            return Err(Error::Invalid);
+        }
+        let mut count = 0;
+        for p in state.received.iter().skip(app.next).take(20) {
+            if p.revision.content.is_none() {
+                return Err(Error::UnsupportedApplication);
+            }
+            let previous = app.notes.get(&p.revision.note).cloned();
+            if previous.as_ref().map(|n| n.revision) != p.expected {
+                return Err(Error::Conflict);
+            }
+            if previous.as_ref().is_some_and(|n| n.path != p.revision.path) {
+                return Err(Error::UnsupportedApplication);
+            }
+            let bytes = content(p).map_err(|_| Error::Invalid)?;
+            let retry = app.intent == Some(p.revision.id);
+            let applied = notes_core::sync::apply_received(
+                &state.source,
+                &core_data,
+                &p.revision.path,
+                &bytes,
+                previous.as_ref().map(|n| &n.local),
+                retry,
+                || {
+                    app.intent = Some(p.revision.id);
+                    self.save_application(&app)
+                        .map_err(|_| notes_model::CoreError::Internal {
+                            message: "could not persist application intent".into(),
+                        })
+                },
+            )
+            .map_err(|e| match e {
+                notes_model::CoreError::LockTimeout => Error::Busy,
+                _ => Error::ApplicationBlocked,
+            })?;
+            app.notes.insert(
+                p.revision.note,
+                ApplicationReceipt {
+                    revision: p.revision.id,
+                    path: p.revision.path.clone(),
+                    local: applied,
+                },
+            );
+            app.next += 1;
+            app.intent = None;
+            self.save_application(&app)?;
+            count += 1;
+        }
+        Ok(count)
     }
 }

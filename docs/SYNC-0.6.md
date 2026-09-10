@@ -1,13 +1,14 @@
 # Synchronization domain and pairing preview
 
 > **Status:** ACTIVE · Domain in 0.19.0, server inbox in 0.19.1, device client in 0.20.0.
-> **Milestone 0.6 remains open.** This release does not synchronize remote notes.
+> **Milestone 0.6 remains open.** Guarded CLI application was added in 0.20.1.
 
 The `notes-sync` crate defines causal revision histories and produces plans.
 `notes-core` supplies bounded inventories of real folders, and the standalone
 `notes-sync-plan` command previews initial pairing. Planning never copies,
 overwrites or deletes source notes. The server inbox and device client below transfer immutable bytes with durable
-queues. Source application, background scheduling and app controls remain open.
+queues. Explicit closed-workspace application is described below; background scheduling
+and app controls remain open.
 
 ## Run the preview
 
@@ -64,7 +65,7 @@ foreign-note parents, duplicate conflicting revision UUIDs, unrelated roots
 claiming the same note identity and incompatible schemas. A head changes only
 through compare-and-set of the observed head. Exact path collisions refuse the
 change. Filesystem case/normalization constraints must additionally be checked
-by the future application step using the target adapter.
+by application using the target adapter.
 
 The incremental planner compares ancestry:
 
@@ -117,7 +118,7 @@ completed sync stage; the shipped local MCP and 0.5 REST server are unchanged.
 The server now accepts and returns immutable revisions over its existing
 HTTPS/authentication boundary. This is an inbox for replication, **not live
 workspace synchronization**: neither publication nor download changes a file
-under `workspaces/`. The 0.20.0 client below supplies the outbox. Source application, conflict workflow,
+under `workspaces/`. The client below supplies the outbox and explicit guarded application. Conflict workflow,
 attachments and background/UI integration remain open.
 
 The authenticated OpenAPI contract describes three operations:
@@ -190,8 +191,8 @@ mobile synchronization.
 ## Device transfer client (0.20.0)
 
 `notes-sync-client` is an explicit command-line client with a persistent offline
-outbox and received-content cache. **It still does not apply revisions to source
-files.** The app's dirty buffers and drafts are untouched. This block supports
+outbox and received-content cache. **Transfer does not apply revisions to source
+files.** Explicit application is a separate command added in 0.20.1. This block supports
 whole-workspace, non-review credentials only; subfolder pairing and reconciliation
 with an already populated remote are future client work. The server retains
 its existing subfolder and review policies for other callers.
@@ -248,7 +249,7 @@ before advancing the cursor. An interrupted or invalid fetch leaves that page
 unconsumed. `received` lists metadata; `export` creates a new
 `received-<revision>.md` file in the state directory, never overwriting an
 existing file. This makes received bytes inspectable without claiming source
-application. Every status includes `applied: false`.
+application. Before explicit application, status includes `applied: false`.
 
 ### Client transport and storage limits
 
@@ -287,3 +288,64 @@ the exchange through the CI HTTPS proxy. The HTTPS test first refuses its
 untrusted certificate, then uses the test CA explicitly. Original BOM/CRLF and
 non-UTF-8 bytes are compared after receipt and export; source folders remain
 unchanged.
+
+
+## Guarded source application (0.20.1)
+
+After receiving revisions, close this workspace in notes and every local MCP or
+server process using it. Use the updated 0.20.1 core in those processes. Then run:
+
+```sh
+notes-sync-client apply /private/receiver-state /home/me/.local/share/notes
+notes-sync-client status /private/receiver-state
+```
+
+The second argument is the **actual application data directory**, not the
+client's private `core/` directory. Use the configured `NOTES_DATA_DIR` when set;
+otherwise core uses the platform data directory plus `notes` (on macOS,
+`~/Library/Application Support/notes`; on Windows, `%APPDATA%/notes`). It must be
+outside the source workspace. The first application pins its canonical location;
+a later invocation with a different directory is refused. Keep the client state
+and application data when backing up or recovering a device.
+
+Only receive-mode clients can apply, at most 20 revisions per invocation, in
+received order. New Markdown files and same-path updates are supported. The
+core holds an exclusive activity lease and its existing write lock, refuses any
+pending draft entry, validates names/path jail/collisions, and checks the full
+observed BaseRev and local identity before updating. Existing files are not
+adopted merely because their bytes match. Parent directories can be created;
+original bytes are never decoded or normalized. New files are published from a
+synced temporary file without replacement (Unix permissions 0600). An
+interruption before publication leaves no partial destination; an abrupt process
+exit may leave a hidden `.notes-create-*.tmp` file, which is not a source note.
+
+Every open core workspace holds a shared OS lease in application state. The
+lease uses the native root identity when available, falling back to its canonical
+path. It coordinates cooperating updated processes sharing the same data
+location. Older binaries, separate application data directories, and third-party
+editors do not participate. Use the same workspace path as the app. External
+saved edits are checked using BaseRev/hash; this is not a transaction against an
+uncooperative external writer changing the filesystem at the publication instant.
+
+`application.json` is a separate bounded schema-1 checkpoint. Preflight checks
+must succeed before a durable revision intent is stored; source writes happen
+only afterward. If the write succeeded but its receipt was lost, retry accepts
+the exact intended bytes without rewriting them. Differing newer content blocks
+retry. A successful local receipt records remote revision, local identity and
+observed BaseRev; it is persisted before advancing the application cursor. If
+later work in a batch fails, earlier receipts remain committed. Inspect `status`
+for progress and preserve the received queue on any error.
+
+`applied_revisions` counts successful historical local receipts. `applied` is
+true only when that count is nonzero and equals the received count. It is **not**
+a live disk scan or an assertion that later local edits match the remote. These
+receipts are distinct from server `stored: true, applied: false` responses; no
+device application acknowledgment is sent to the server yet.
+
+Renames, tombstones, divergence resolution, dirty-buffer integration and active
+editor application are still refused/queued. Do not delete drafts or local
+notes merely to bypass a refusal. Core tests cover byte preservation, failed
+intent persistence, interrupted receipt recovery, drafts and a real second
+process holding the workspace open. Client tests cover checkpoint progress,
+collisions, local edits, incompatible state and rename refusal; the native TCP
+and HTTPS smoke tests exercise explicit application followed by a local conflict.

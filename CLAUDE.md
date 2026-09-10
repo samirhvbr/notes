@@ -77,7 +77,8 @@ one-line version of both:
   [ADR-003](docs/decisions.md#adr-003--the-rust-logic-lives-in-crates-and-the-tauri-shell-stays-thin).
 - **Runs locally with:** `cd apps/notes-app && npm ci && npm run tauri dev`.
   Milestones 0.1a–0.1d, 0.2, 0.3 and 0.5 are implemented; 0.4 has its mobile core foundation. The 0.6 blocks provide causal planning, a server inbox and a durable CLI transfer client;
-  source application, conflict flows and app integration remain open. Owner verification on installed
+  0.20.1 adds guarded closed-workspace application of creations/updates.
+  Active-editor application, conflict flows and app integration remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).
 - **Never do, without an ADR that reverses the one named:**

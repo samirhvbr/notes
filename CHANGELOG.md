@@ -8,6 +8,18 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.1 - resume guarded application from durable client checkpoints
+
+Add an explicit receive-only apply command with a pinned app data directory,
+per-revision local receipts and recoverable write intent. Refuse local edits,
+preexisting destinations, incompatible state and unsupported renames/deletions
+without discarding received bytes. Exercise real transfer/application and local
+conflict refusal, plus a lost application receipt without a second source write.
+Document the closed-workspace boundary and keep active-editor integration and
+server device acknowledgments in the queue. The full local gate passed with
+Rust tests serialized after the unchanged watcher timing test exceeded its
+100 ms limit under parallel macOS load; native and Windows clippy also passed.
+
 ## 0.20.1 - apply received content through guarded core writes
 
 Apply received creations and same-path updates only while the workspace is

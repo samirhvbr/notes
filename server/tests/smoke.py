@@ -178,6 +178,19 @@ with tempfile.TemporaryDirectory() as temp:
         assert (receiver / ("received-" + received[0]["id"] + ".md")).read_bytes() == original
         assert list(target.iterdir()) == []
         assert (source / "original.md").read_bytes() == original
+        app_data = temp / "receiver-app-data"
+        run([client, "apply", str(receiver), str(app_data)])
+        assert (target / "original.md").read_bytes() == original
+        assert json.loads(run([client, "status", str(receiver)]))["applied_revisions"] == 1
+        (source / "original.md").write_bytes(b"remote update\r\n")
+        run([client, "stage", str(sender)])
+        run([client, "transfer", str(sender), str(client_secret)])
+        run([client, "transfer", str(receiver), str(client_secret)])
+        (target / "original.md").write_bytes(b"local work")
+        blocked = subprocess.run([client, "apply", str(receiver), str(app_data)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert blocked.returncode != 0
+        assert (target / "original.md").read_bytes() == b"local work"
+        assert json.loads(run([client, "status", str(receiver)]))["applied_revisions"] == 1
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])
