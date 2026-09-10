@@ -41,6 +41,7 @@ impl IoKind {
             }
         }
         match e.kind() {
+            std::io::ErrorKind::StorageFull | std::io::ErrorKind::QuotaExceeded => IoKind::DiskFull,
             std::io::ErrorKind::PermissionDenied => IoKind::PermissionDenied,
             std::io::ErrorKind::NotFound => IoKind::NotFound,
             std::io::ErrorKind::IsADirectory => IoKind::IsADirectory,
@@ -174,6 +175,18 @@ impl From<crate::PathError> for CoreError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn contextual_disk_errors_keep_their_classification_without_an_errno() {
+        for kind in [
+            std::io::ErrorKind::StorageFull,
+            std::io::ErrorKind::QuotaExceeded,
+        ] {
+            let contextual = std::io::Error::new(kind, "temporary file context");
+            assert_eq!(contextual.raw_os_error(), None);
+            assert_eq!(IoKind::classify(&contextual), IoKind::DiskFull);
+        }
+    }
 
     #[test]
     fn disk_full_is_distinguishable_from_permission_denied() {

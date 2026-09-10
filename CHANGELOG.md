@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.2 - preserve disk-full classification through contextual IO errors
+
+Classify StorageFull and QuotaExceeded even when a library adds path context
+and removes the raw OS error code. The Linux ENOSPC gate caught this when
+atomic note creation used tempfile: the write failed safely but was reported
+as generic IO. Cover both contextual error kinds and retain the real full-disk
+regression, with a diagnostic that prints any unexpected result.
+
 ## 0.20.1 - resume guarded application from durable client checkpoints
 
 Add an explicit receive-only apply command with a pinned app data directory,

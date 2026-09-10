@@ -91,13 +91,17 @@ fn a_full_disk_is_reported_and_leaves_the_buffer_recoverable() {
     use notes_fs::FileSystem;
     let filesystem = notes_fs::LocalFs::open(&root).unwrap();
     let fresh = RelPath::parse("received.md").unwrap();
-    assert!(matches!(
-        filesystem.create_new(&fresh, typed.as_bytes()),
-        Err(notes_model::CoreError::Io {
-            kind: IoKind::DiskFull,
-            ..
-        })
-    ));
+    let creation = filesystem.create_new(&fresh, typed.as_bytes());
+    assert!(
+        matches!(
+            creation,
+            Err(notes_model::CoreError::Io {
+                kind: IoKind::DiskFull,
+                ..
+            })
+        ),
+        "expected DiskFull, got {creation:?}"
+    );
     assert!(!root.join("received.md").exists());
 
     // …and the temporary file did not survive to litter the user's folder.
