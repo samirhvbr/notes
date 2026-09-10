@@ -1065,5 +1065,6 @@ security boundary. No desktop listener or synchronization engine is added.
 The first 0.6 block adds `notes-sync` as a dependency of core, beside `notes-fs`.
 It supplies revision/ancestry planning and locked operational metadata storage;
 core supplies source inventories. `notes-sync-plan` is a core-owned CLI for
-explicit pairing previews. No sync network transport or source application is
-present yet. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+explicit pairing previews. The 0.19.1 server inbox transports immutable revisions and bytes under existing
+authentication, without applying them to source files. Device transport and
+source application remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.

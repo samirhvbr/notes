@@ -15,6 +15,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 compose = sys.argv[1:] == ["--compose"]
 root = pathlib.Path(__file__).resolve().parents[2]
@@ -111,9 +112,26 @@ with tempfile.TemporaryDirectory() as temp:
         assert request("GET", note)[2]["text"] == "changed\nonce\n"
         assert request("GET", "/unknown")[0] == 404
         assert request("GET", "/v1/openapi.json")[2]["openapi"] == "3.1.0"
+        sync = "/v1/workspaces/smoke/sync/revisions"
+        status, _, page = request("GET", sync)
+        assert status == 200 and page["revisions"] == []
+        revision = str(uuid.uuid4())
+        publication = {"workspace": page["workspace"], "expected": None,
+                       "revision": {"id": revision, "note": str(uuid.uuid4()), "parents": [],
+                                    "device": str(uuid.uuid4()), "path": "empty.md",
+                                    "content": "b3:af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"},
+                       "content_base64": ""}
+        for _ in range(2):
+            status, _, receipt = request("POST", sync, publication)
+            assert status == 200 and receipt == {"revision": revision, "stored": True, "applied": False}
+        assert request("GET", sync + "/" + revision)[2] == publication
+        status, _, page = request("GET", sync)
+        assert status == 200 and len(page["revisions"]) == 1 and page["next_cursor"] == 1
+        assert request("GET", collection + "/empty.md")[0] == 404
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])
         assert request("GET", note)[0] == 401
+        assert request("GET", sync)[0] == 401
     finally:
         if proc:
             proc.terminate()
@@ -135,6 +153,9 @@ with tempfile.TemporaryDirectory() as temp:
         data = subprocess.check_output(["docker", "run", "--rm", "--network", "none", "-v", restored_mount,
                                         "--entrypoint", "cat", "notes-server:local", "/data/workspaces/smoke/smoke.md"])
         assert data == b"changed\r\nonce\r\n"
+        vault = json.loads(subprocess.check_output(["docker", "run", "--rm", "--network", "none", "-v", restored_mount,
+                                                   "--entrypoint", "cat", "notes-server:local", "/data/sync/smoke/vault.json"]))
+        assert vault["publications"] == [publication]
         # Remove only this disposable volume fixture using its owning UID so
         # TemporaryDirectory can clean up the host-side test directory too.
         run(["docker", "run", "--rm", "--network", "none", "-v", str(backups) + ":/backup",
@@ -143,4 +164,5 @@ with tempfile.TemporaryDirectory() as temp:
         cli("backup", str(temp / "backup.tar.gz"))
         cli("restore", str(temp / "backup.tar.gz"), str(temp / "restored"))
         assert (temp / "restored/workspaces/smoke/smoke.md").read_bytes() == b"changed\r\nonce\r\n"
+        assert json.loads((temp / "restored/sync/smoke/vault.json").read_text())["publications"] == [publication]
     print("HTTPS container and offline restore smoke passed" if compose else "native TCP and offline restore smoke passed")

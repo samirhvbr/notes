@@ -1,13 +1,13 @@
 # Synchronization domain and pairing preview
 
-> **Status:** ACTIVE · First 0.6 block implemented in 0.19.0.
+> **Status:** ACTIVE · Causal domain in 0.19.0; server inbox in 0.19.1.
 > **Milestone 0.6 remains open.** This release does not synchronize remote notes.
 
 The `notes-sync` crate defines causal revision histories and produces plans.
 `notes-core` supplies bounded inventories of real folders, and the standalone
 `notes-sync-plan` command previews initial pairing. Planning never copies,
-overwrites or deletes source notes. REST replication, content transfer, durable
-outboxes, background scheduling and app controls remain in the queue.
+overwrites or deletes source notes. The server revision inbox below transfers immutable bytes; durable device
+outboxes, source application, background scheduling and app controls remain in the queue.
 
 ## Run the preview
 
@@ -111,3 +111,78 @@ modes. These tests exercise actual CLI execution, not only JSON fixtures.
 Remaining work and owner acceptance are in
 [the 0.6 queue](../.continue/0.6-sync.md). Milestone 0.7 remote MCP follows the
 completed sync stage; the shipped local MCP and 0.5 REST server are unchanged.
+
+## Server revision inbox (0.19.1)
+
+The server now accepts and returns immutable revisions over its existing
+HTTPS/authentication boundary. This is an inbox for replication, **not live
+workspace synchronization**: neither publication nor download changes a file
+under `workspaces/`. The device outbox, source application, conflict workflow,
+attachments and background/UI integration remain open.
+
+The authenticated OpenAPI contract describes three operations:
+
+- `GET /v1/workspaces/{workspace}/sync/revisions?cursor=0&limit=100` returns
+  the inbox workspace UUID, a page of revision metadata, current heads for the
+  notes on that page, the next append-log position and `has_more`.
+- `GET /v1/workspaces/{workspace}/sync/revisions/{revision}` returns the
+  immutable publication with canonical base64 of the original bytes.
+- `POST /v1/workspaces/{workspace}/sync/revisions` atomically accepts a
+  publication containing `workspace`, `expected`, `revision` and
+  `content_base64`. The response says `stored: true, applied: false`.
+
+`expected` is the observed inbox head UUID, or null for a new note. All parents
+must already be stored. A stale head, reused UUID with different facts, foreign
+workspace UUID or exact path collision returns 409. The device must retain its
+unaccepted revision locally; this endpoint does not yet import divergent
+branches. Retrying the identical accepted publication succeeds even after the
+head advances, without moving the head backward. No timestamp chooses a winner.
+
+Read permission is mandatory. Genesis and resurrection also require Create;
+live successors require Update, path changes require Move and tombstones require
+Delete. Review-mode writes check both old and new paths under `scope/proposals`.
+Every historical path for a note must be visible to the credential: a move out
+of a subfolder hides the whole history from that subfolder's token. Hidden paths
+are refused. Workspace names come from the credential, never from a supplied
+filesystem path. UUIDs do not grant access. Device UUIDs are causal claims;
+the authenticated credential remains the audit author.
+
+Cursors count scanned append-log entries, including entries filtered by scope,
+so they can reveal aggregate activity within the authorized workspace. Empty
+pages can advance and must not terminate traversal while `has_more` is true.
+Heads are current, not a snapshot across pages. Save `next_cursor` only after
+processing the page and fetching required bytes. A restored older backup may
+require restarting at cursor zero; already accepted revision UUIDs make retries
+safe. A storage receipt is not a device application acknowledgment. The inbox
+UUID is created on first authorized inventory access and retained across restart
+and backup/restore.
+
+### Storage, limits and recovery
+
+`sync/<workspace>/vault.json` is private server data containing both the causal
+journal and append-ordered publications. This bounded first implementation
+stores copies of revision content as base64 in the same atomic document rather
+than publishing a head before a separate blob exists. Live Markdown remains the
+source of truth. Loading verifies schema, parent order, head transitions and
+content hashes. Publication holds a per-workspace OS lock, writes and syncs a
+private temporary file, atomically replaces the document, and syncs the directory
+on Unix. A lost response is recovered by retrying the same publication. An
+abandoned temporary file is never loaded as state; future/corrupt committed
+state is refused without replacement. Operators can remove abandoned temporary
+files while the server is stopped, after backing up the data.
+
+Limits are 8 MiB per revision content, 10,000 revisions, 32 MiB cumulative
+decoded content and 64 MiB serialized state per workspace. Identical bytes in
+different revisions count separately. Capacity refusal is HTTP 507 and leaves
+all accepted content intact. History and tombstones are retained for the life
+of the inbox; there is no automatic garbage collection or credential-driven
+purge. This conservative retention is for a bounded first transport block,
+not unlimited production history. Offline full-data backup includes the vault
+and excludes its process lock. Restore preserves UUIDs, cursors and original
+bytes. Retention migration and device-confirmed pruning remain future work.
+
+Tests exercise HTTP publication/fetch, exact-byte preservation, retries after
+head advancement, concurrent writers, stale writes, path collisions, quota
+refusal, scope and review permissions, revocation, future/corrupt state refusal,
+restart and offline backup/restore. No test claims remote source application or
+mobile synchronization.

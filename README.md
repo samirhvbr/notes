@@ -137,3 +137,7 @@ reconciliation between two mounted folders without changing their notes.
 Build it with `cargo build -p notes-core --bin notes-sync-plan`, or use the
 standalone Linux release archive. See [SYNC-0.6.md](docs/SYNC-0.6.md) for its
 causal model and the remaining work before remote synchronization is available.
+
+The 0.19.1 server also exposes a scoped immutable revision inbox. It transfers
+original bytes and acknowledges storage, without applying changes to workspace
+files. See [the sync contract](docs/SYNC-0.6.md#server-revision-inbox-0191).

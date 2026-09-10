@@ -335,6 +335,9 @@ fn dispatch(
     if route.0 != credential.workspace {
         return Err(err(StatusCode::FORBIDDEN, "forbidden"));
     }
+    if route.1 == "sync/revisions" || route.1.starts_with("sync/revisions/") {
+        return sync_dispatch(server, credential, parts, bytes, route.1, offset, limit);
+    }
     let config = AgentConfig {
         workspace: admin::workspace(&server.data, &credential.workspace).map_err(|_| internal())?,
         scope: credential.scope.clone(),
@@ -410,4 +413,44 @@ fn dispatch(
         };
     }
     Ok(reply(value, status))
+}
+
+fn sync_dispatch(
+    server: &Server,
+    credential: &admin::Credential,
+    parts: &axum::http::request::Parts,
+    bytes: &[u8],
+    route: &str,
+    cursor: usize,
+    limit: usize,
+) -> ApiResult<Response> {
+    use crate::sync;
+    let map = |e| match e {
+        sync::Error::Forbidden => err(StatusCode::FORBIDDEN, "forbidden"),
+        sync::Error::Invalid => err(StatusCode::BAD_REQUEST, "invalid_sync_revision"),
+        sync::Error::Missing => err(StatusCode::NOT_FOUND, "not_found"),
+        sync::Error::Stale => err(StatusCode::CONFLICT, "sync_revision_changed"),
+        sync::Error::Limit => err(StatusCode::INSUFFICIENT_STORAGE, "sync_capacity_reached"),
+        sync::Error::Busy => err(StatusCode::SERVICE_UNAVAILABLE, "busy"),
+        sync::Error::Storage => internal(),
+    };
+    match (parts.method.as_str(), route) {
+        ("GET", "sync/revisions") => Ok(Json(
+            sync::page(&server.data, credential, cursor, limit).map_err(map)?,
+        )
+        .into_response()),
+        ("POST", "sync/revisions") => {
+            let input: sync::Publication = body(bytes, &parts.headers)?;
+            let revision = sync::publish(&server.data, credential, input).map_err(map)?;
+            Ok(Json(json!({"revision":revision,"stored":true,"applied":false})).into_response())
+        }
+        ("GET", path) => {
+            let id = path
+                .strip_prefix("sync/revisions/")
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .ok_or(err(StatusCode::BAD_REQUEST, "invalid_revision_id"))?;
+            Ok(Json(sync::fetch(&server.data, credential, id).map_err(map)?).into_response())
+        }
+        _ => Err(err(StatusCode::METHOD_NOT_ALLOWED, "method_not_allowed")),
+    }
 }

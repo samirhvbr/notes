@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.19.1 - expose immutable revision transfer over authenticated HTTP
+
+Expose incremental metadata pages, original revision fetches and idempotent
+conditional publication through the existing HTTPS and bearer boundary. Reuse
+workspace permissions, protect entire historical paths and report storage
+separately from source application. HTTP and TCP tests cover retries, stale
+writes, concurrency, quota refusal, review scope and backup recovery. The device
+outbox, workspace application and sync UI remain open.
+
 ## 0.19.1 - persist scoped sync revision inboxes
 
 Persist original revision bytes and causal heads in one bounded, atomic server

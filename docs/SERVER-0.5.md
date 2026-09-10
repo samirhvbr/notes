@@ -219,3 +219,10 @@ Owner acceptance is tracked in [ACCEPTANCE-0.5.md](ACCEPTANCE-0.5.md).
 
 Implementation references: [Axum 0.8](https://docs.rs/axum/0.8.9/axum/) and
 [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy).
+
+## Synchronization inbox extension
+
+Version 0.19.1 adds the separate scoped revision inbox documented in
+[SYNC-0.6.md](SYNC-0.6.md). Its `sync/` data is included in offline backups;
+its lock is excluded. Publication acknowledges storage, never live note
+application. The REST note endpoints retain their existing behavior.

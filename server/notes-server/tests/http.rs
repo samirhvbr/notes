@@ -550,3 +550,342 @@ fn backup_omits_only_operational_locks_and_keeps_user_files_with_similar_names()
     )));
     assert!(paths.contains(&std::path::PathBuf::from("data/admin/tokens.json")));
 }
+
+const SYNC: &str = "/v1/workspaces/home/sync/revisions";
+fn publication(
+    workspace: uuid::Uuid,
+    prior: Option<&notes_server::sync::Publication>,
+    path: &str,
+    bytes: Option<&[u8]>,
+) -> notes_server::sync::Publication {
+    use base64::Engine;
+    let expected = prior.map(|p| p.revision.id);
+    notes_server::sync::Publication {
+        workspace,
+        expected,
+        revision: notes_sync::Revision::new(
+            prior.map(|p| p.revision.note).unwrap_or_default(),
+            expected.into_iter().collect(),
+            uuid::Uuid::new_v4(),
+            RelPath::parse(path).unwrap(),
+            bytes.map(|b| notes_model::ContentHash::from_bytes(*blake3::hash(b).as_bytes())),
+        ),
+        content_base64: bytes.map(|b| base64::engine::general_purpose::STANDARD.encode(b)),
+    }
+}
+async fn sync_workspace(f: &Fixture) -> uuid::Uuid {
+    let (status, _, page) = f.request("GET", SYNC, None, &[]).await;
+    assert_eq!(status, StatusCode::OK);
+    serde_json::from_value(page["workspace"].clone()).unwrap()
+}
+async fn post_revision(f: &Fixture, p: &notes_server::sync::Publication) -> StatusCode {
+    f.request("POST", SYNC, Some(serde_json::to_value(p).unwrap()), &[])
+        .await
+        .0
+}
+
+#[tokio::test]
+async fn sync_exact_bytes_retry_stale_head_tombstone_and_restart() {
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let first = publication(
+        workspace,
+        None,
+        "allowed/byte.md",
+        Some(b"\xef\xbb\xbfhello\r\n\xff"),
+    );
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let state = f.data.join("sync/home/vault.json");
+    let original = fs::read(&state).unwrap();
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    assert_eq!(fs::read(&state).unwrap(), original);
+    let second = publication(
+        workspace,
+        Some(&first),
+        "allowed/renamed.md",
+        Some(b"new\r\n"),
+    );
+    assert_eq!(post_revision(&f, &second).await, StatusCode::OK);
+    let accepted = fs::read(&state).unwrap();
+    let stale = publication(workspace, Some(&first), "allowed/byte.md", Some(b"stale"));
+    assert_eq!(post_revision(&f, &stale).await, StatusCode::CONFLICT);
+    assert_eq!(fs::read(&state).unwrap(), accepted);
+    // Retrying an older accepted publication must not roll the current head back.
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    assert_eq!(fs::read(&state).unwrap(), accepted);
+    let deletion = publication(workspace, Some(&second), "allowed/renamed.md", None);
+    assert_eq!(post_revision(&f, &deletion).await, StatusCode::OK);
+    f.app = api::router(api::Server::new(f.data.clone(), None));
+    let (status, _, fetched) = f
+        .request("GET", &format!("{SYNC}/{}", first.revision.id), None, &[])
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched, serde_json::to_value(&first).unwrap());
+    let (_, _, page) = f
+        .request("GET", &format!("{SYNC}?limit=1&cursor=1"), None, &[])
+        .await;
+    assert_eq!(page["revisions"][0]["id"], second.revision.id.to_string());
+    assert_eq!(page["next_cursor"], 2);
+    assert_eq!(page["has_more"], true);
+    assert_eq!(
+        page["heads"][first.revision.note.to_string()],
+        deletion.revision.id.to_string()
+    );
+    assert!(fs::read_dir(f.data.join("workspaces/home/allowed"))
+        .unwrap()
+        .next()
+        .is_none());
+    let logs = fs::read_to_string(f.data.join("audit/events.jsonl")).unwrap();
+    assert!(!logs.contains("byte.md"));
+    assert!(!logs.contains(first.content_base64.as_ref().unwrap()));
+}
+
+#[tokio::test]
+async fn sync_permissions_scope_and_historical_paths_are_enforced() {
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let secret = publication(workspace, None, "secret.md", Some(b"PRIVATE"));
+    assert_eq!(post_revision(&f, &secret).await, StatusCode::FORBIDDEN);
+    let first = publication(workspace, None, "allowed/test.md", Some(b"first"));
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let moved = publication(workspace, Some(&first), "secret.md", Some(b"first"));
+    assert_eq!(post_revision(&f, &moved).await, StatusCode::FORBIDDEN);
+    // An operator-scoped publisher can move it; the old subfolder token cannot
+    // retrieve any historical revision afterward, even by guessing its UUID.
+    let scoped = f.token.clone();
+    let output = f._dir.path().join("root.secret");
+    admin::create_token(
+        &f.data,
+        "root".into(),
+        "home".into(),
+        RelPath::root(),
+        all().into_iter().collect(),
+        false,
+        &output,
+    )
+    .unwrap();
+    f.token = fs::read_to_string(output).unwrap();
+    assert_eq!(post_revision(&f, &moved).await, StatusCode::OK);
+    f.token = scoped;
+    assert_eq!(
+        f.request("GET", &format!("{SYNC}/{}", first.revision.id), None, &[])
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
+    let (_, _, page) = f.request("GET", SYNC, None, &[]).await;
+    assert_eq!(page["revisions"], json!([]));
+    assert_eq!(page["heads"], json!({}));
+    assert_eq!(
+        f.request("GET", "/v1/workspaces/other/sync/revisions", None, &[])
+            .await
+            .0,
+        StatusCode::FORBIDDEN
+    );
+    let read = Fixture::new(&[Permission::Read]);
+    let workspace = sync_workspace(&read).await;
+    assert_eq!(
+        post_revision(
+            &read,
+            &publication(workspace, None, "allowed/test.md", Some(b"no"))
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+}
+
+#[tokio::test]
+async fn sync_rejects_hash_forgery_collisions_and_future_state_without_replacement() {
+    let f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let first = publication(workspace, None, "allowed/test.md", Some(b"first"));
+    let mut forged = first.clone();
+    forged.content_base64 = Some("YmFk".into());
+    assert_eq!(post_revision(&f, &forged).await, StatusCode::BAD_REQUEST);
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let conflict = publication(workspace, None, "allowed/test.md", Some(b"collision"));
+    assert_eq!(post_revision(&f, &conflict).await, StatusCode::CONFLICT);
+    let mut reuse = first.clone();
+    reuse.revision.device = uuid::Uuid::new_v4();
+    assert_eq!(post_revision(&f, &reuse).await, StatusCode::CONFLICT);
+    let path = f.data.join("sync/home/vault.json");
+    let mut state: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    state["publications"][0]["content_base64"] = json!("YmFk");
+    let corrupt = serde_json::to_vec(&state).unwrap();
+    fs::write(&path, &corrupt).unwrap();
+    assert_eq!(
+        f.request("GET", SYNC, None, &[]).await.0,
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(fs::read(&path).unwrap(), corrupt);
+    state["schema"] = json!(999);
+    let future = serde_json::to_vec(&state).unwrap();
+    fs::write(&path, &future).unwrap();
+    assert_eq!(
+        f.request("GET", SYNC, None, &[]).await.0,
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(fs::read(&path).unwrap(), future);
+    fs::write(&path, b"incomplete").unwrap();
+    assert_eq!(
+        post_revision(&f, &first).await,
+        StatusCode::INTERNAL_SERVER_ERROR
+    );
+    assert_eq!(fs::read(&path).unwrap(), b"incomplete");
+}
+
+#[tokio::test]
+async fn sync_vault_survives_offline_backup_restore() {
+    let f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let p = publication(workspace, None, "allowed/test.md", Some(b"\xff\r\n"));
+    assert_eq!(post_revision(&f, &p).await, StatusCode::OK);
+    // Simulate an abandoned temporary write: recovery must use the committed file.
+    fs::write(f.data.join("sync/home/.abandoned.tmp"), b"partial").unwrap();
+    let output = f._dir.path().join("backup.tar.gz");
+    backup::backup(&f.data, &output).unwrap();
+    let restored = f._dir.path().join("restored");
+    backup::restore(&output, &restored).unwrap();
+    let c = admin::authenticate(&admin::load(&restored).unwrap(), &f.token).unwrap();
+    assert_eq!(
+        notes_server::sync::fetch(&restored, &c, p.revision.id).unwrap(),
+        p
+    );
+    assert!(
+        !restored
+            .join("sync/home/vault.lock")
+            .metadata()
+            .unwrap()
+            .len()
+            > 0
+    );
+}
+
+#[tokio::test]
+async fn sync_concurrent_publications_consume_one_head_and_capacity_refuses_without_loss() {
+    let f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let first = publication(workspace, None, "allowed/test.md", Some(b"base"));
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let a = publication(workspace, Some(&first), "allowed/test.md", Some(b"a"));
+    let b = publication(workspace, Some(&first), "allowed/test.md", Some(b"b"));
+    let (ra, rb) = tokio::join!(post_revision(&f, &a), post_revision(&f, &b));
+    assert_eq!(
+        [ra, rb]
+            .into_iter()
+            .filter(|s| *s == StatusCode::OK)
+            .count(),
+        1
+    );
+    assert!([ra, rb]
+        .into_iter()
+        .any(|s| s == StatusCode::CONFLICT || s == StatusCode::SERVICE_UNAVAILABLE));
+    let loser = if ra == StatusCode::OK { &b } else { &a };
+    assert_eq!(post_revision(&f, loser).await, StatusCode::CONFLICT);
+    // Exercise the actual byte quota; rejected content must not evict history.
+    let bytes = vec![b'x'; notes_server::sync::MAX_CONTENT];
+    for n in 0..3 {
+        let large = publication(
+            workspace,
+            None,
+            &format!("allowed/large{n}.md"),
+            Some(&bytes),
+        );
+        assert_eq!(post_revision(&f, &large).await, StatusCode::OK);
+    }
+    let before = fs::read(f.data.join("sync/home/vault.json")).unwrap();
+    let exceeds = publication(workspace, None, "allowed/excess.md", Some(&bytes));
+    assert_eq!(
+        post_revision(&f, &exceeds).await,
+        StatusCode::INSUFFICIENT_STORAGE
+    );
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        before
+    );
+}
+
+#[tokio::test]
+async fn sync_review_and_distinct_mutation_permissions_are_preserved() {
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let first = publication(workspace, None, "allowed/test.md", Some(b"base"));
+    assert_eq!(post_revision(&f, &first).await, StatusCode::OK);
+    let restricted = f._dir.path().join("restricted.secret");
+    admin::create_token(
+        &f.data,
+        "restricted".into(),
+        "home".into(),
+        RelPath::parse("allowed").unwrap(),
+        [Permission::Read, Permission::Update].into_iter().collect(),
+        false,
+        &restricted,
+    )
+    .unwrap();
+    f.token = fs::read_to_string(restricted).unwrap();
+    assert_eq!(
+        post_revision(
+            &f,
+            &publication(workspace, Some(&first), "allowed/moved.md", Some(b"base"))
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        post_revision(
+            &f,
+            &publication(workspace, Some(&first), "allowed/test.md", None)
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+    let review = f._dir.path().join("review.secret");
+    admin::create_token(
+        &f.data,
+        "review".into(),
+        "home".into(),
+        RelPath::parse("allowed").unwrap(),
+        all().into_iter().collect(),
+        true,
+        &review,
+    )
+    .unwrap();
+    f.token = fs::read_to_string(review).unwrap();
+    assert_eq!(
+        post_revision(
+            &f,
+            &publication(
+                workspace,
+                Some(&first),
+                "allowed/proposals/stolen.md",
+                Some(b"base")
+            )
+        )
+        .await,
+        StatusCode::FORBIDDEN
+    );
+    assert_eq!(
+        post_revision(
+            &f,
+            &publication(
+                workspace,
+                None,
+                "allowed/proposals/new.md",
+                Some(b"proposal")
+            )
+        )
+        .await,
+        StatusCode::OK
+    );
+    admin::revoke(
+        &f.data,
+        admin::authenticate(&admin::load(&f.data).unwrap(), &f.token)
+            .unwrap()
+            .id,
+    )
+    .unwrap();
+    assert_eq!(
+        f.request("GET", SYNC, None, &[]).await.0,
+        StatusCode::UNAUTHORIZED
+    );
+}
