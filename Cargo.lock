@@ -2558,7 +2558,7 @@ name = "notes-server"
 version = "0.0.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "blake3",
  "fd-lock",
  "flate2",
@@ -2582,7 +2582,7 @@ dependencies = [
 name = "notes-sync"
 version = "0.0.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "blake3",
  "fd-lock",
  "notes-model",
@@ -2597,7 +2597,7 @@ dependencies = [
 name = "notes-sync-client"
 version = "0.0.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "blake3",
  "fd-lock",
  "notes-core",
