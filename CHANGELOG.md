@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.19.1 - persist scoped sync revision inboxes
+
+Persist original revision bytes and causal heads in one bounded, atomic server
+transaction, so a stored revision cannot refer to missing content. Validate
+history and hashes on reopen, retain tombstones until explicit capacity refusal,
+and include inbox data in offline backups while excluding its process lock.
+Future or corrupt state is refused without replacement.
+
 ## 0.19.0 - preview pairing through core inventories
 
 Expose a standalone notes-sync-plan command over bounded core inventories of

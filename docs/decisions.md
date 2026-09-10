@@ -1413,3 +1413,39 @@ continues to open no listener. No remote wire format, background transfer,
 content retention or UI completion is claimed by this first block. Those
 remaining items stay in `.continue/0.6-sync.md`; MCP remote is still 0.7.
 See SYNC-0.6.md for the implemented contract and limits.
+
+## ADR-045 — The first server sync transport stores revisions before application
+
+**Status:** ACTIVE · Implemented in 0.19.1; milestone 0.6 remains open.
+
+**Context.** After causal planning, replication needs durable original bytes and
+an authenticated resumable exchange. A storage acknowledgment cannot honestly
+claim that a revision was applied to a source file or a dirty device buffer.
+
+**Decision.** Add a separate `/v1/workspaces/{workspace}/sync/revisions` inbox
+under the existing bearer, HTTPS, rate, concurrency and audit controls. Reuse
+operation permissions and review scopes. Authorize every historical note path;
+a token cannot recover old content through a UUID after the note leaves its
+scope. The existing machine-only CSRF exemption covers these `/v1` endpoints.
+
+The first vault is a bounded atomic document containing causal metadata and
+base64 original content together, with verified hashes, expected-head checks
+and immutable UUID retry receipts. It acknowledges storage only. No source file
+is read or written through the vault, and no application receipt is invented.
+Parents must already be accepted; divergent branches remain on the device until
+a later conflict/import flow. Append-log cursors enable metadata paging; filtered
+entries still advance the cursor and may reveal aggregate workspace activity.
+Device UUIDs are asserted metadata, not authentication principals.
+
+Retain all accepted revisions and tombstones within the documented byte/count
+bounds; refuse capacity without eviction. No automatic pruning or migration is
+introduced. Per-workspace OS locks serialize writes, atomic replacement binds
+content to heads, and offline backup/restore includes the vault but not its lock.
+Corrupt or future-schema state is refused unchanged. Original workspace files
+remain the source of truth; the inbox contains replication copies.
+
+**Consequences.** This block can transfer and recover immutable bytes but cannot
+synchronize a user's workspace by itself. Device outboxes, conflict import,
+application with draft protection, attachments, background work and UI remain
+queued. The bounded JSON design deliberately limits scale; its replacement
+needs a documented migration and recovery path. See SYNC-0.6.md and OpenAPI.

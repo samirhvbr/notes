@@ -2519,6 +2519,7 @@ dependencies = [
  "notes-core",
  "notes-fs",
  "notes-model",
+ "notes-sync",
  "percent-encoding",
  "serde",
  "serde_json",
