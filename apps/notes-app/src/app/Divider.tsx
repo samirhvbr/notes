@@ -53,6 +53,7 @@ export function Divider({ panes }: { panes: React.RefObject<HTMLElement | null> 
     return () => {
       document.removeEventListener("mousemove", move);
       document.removeEventListener("mouseup", up);
+      if(dragging.current)up();
     };
   }, [apply, panes]);
 

@@ -60,3 +60,5 @@ regenerated, and which questions are answered upstream rather than here.
 source. It is not restated here. It began as a local rule in this repository
 ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built))
 and the fleet adopted it the same day.
+
+- [Acceptance — milestone 0.2](ACCEPTANCE-0.2.md): index, search semantics, reference review, recovery and pending installed-release flows.

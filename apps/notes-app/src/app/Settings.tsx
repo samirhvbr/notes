@@ -1,3 +1,4 @@
+import { useModalSurface } from "./modal";
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
 import * as ipc from "../ipc";
@@ -31,7 +32,8 @@ export function SettingsPanel({
     ipc.envReport().then(setEnv).catch(() => {});
   }, []);
 
-  if (!settings) return null;
+  const modal=useModalSurface(!!settings);
+  if (!settings) return <div className="overlay"><div {...modal} className="dialog" role="dialog" aria-label={t("settings.title")}><p>{error ? t("error.internal") : t("settings.loading")}</p><button onClick={onClose}>{t("dialog.cancel")}</button></div></div>;
 
   const write = async (next: CoreSettings) => {
     setSettings(next);
@@ -54,11 +56,13 @@ export function SettingsPanel({
       }}
     >
       <div
+        {...modal}
         className="dialog settings"
         role="dialog"
         aria-modal="true"
         aria-label={t("settings.title")}
         onKeyDown={(e) => {
+          modal.onKeyDown(e);
           if (e.key === "Escape") onClose();
         }}
       >

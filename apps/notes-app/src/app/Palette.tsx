@@ -1,3 +1,4 @@
+import { useModalSurface } from "./modal";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { t } from "../i18n";
 import * as ipc from "../ipc";
@@ -40,6 +41,7 @@ export function Palette({
   commands: Command[];
   onClose: () => void;
 }) {
+  const modal=useModalSurface();
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState<QuickMatch[]>([]);
   /**
@@ -64,21 +66,20 @@ export function Palette({
   useEffect(() => {
     if (mode !== "files") return;
     let live = true;
-    ipc
-      .quickOpen(query, 50)
-      .then((r) => {
-        if (!live) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const refresh = async () => {
+      try {
+        const r=await ipc.quickOpen(query,50);
+        if(!live)return;
         setFiles(r.matches);
-        setIndexing(r.building ? { indexed: r.indexed } : null);
-      })
-      .catch(() => {
-        if (!live) return;
-        setFiles([]);
-        setIndexing(null);
-      });
-    return () => {
-      live = false;
+        setIndexing(r.building ? {indexed:r.indexed} : null);
+        if(r.building)timer=setTimeout(()=>void refresh(),100);
+      } catch {
+        if(live){setFiles([]);setIndexing(null);}
+      }
     };
+    void refresh();
+    return () => {live=false;clearTimeout(timer);};
   }, [mode, query]);
 
   const rows: Row[] = useMemo(() => {
@@ -117,11 +118,13 @@ export function Palette({
       }}
     >
       <div
+        {...modal}
         className="palette"
         role="dialog"
         aria-modal="true"
         aria-label={t(mode === "files" ? "palette.files" : "palette.commands")}
         onKeyDown={(e) => {
+          modal.onKeyDown(e);
           if (e.key === "Escape") {
             e.preventDefault();
             onClose();

@@ -76,9 +76,9 @@ one-line version of both:
   where the Rust logic lives) · `packages/ui/` · `server/` (from milestone 0.5).
   [ADR-003](docs/decisions.md#adr-003--the-rust-logic-lives-in-crates-and-the-tauri-shell-stays-thin).
 - **Runs locally with:** `cd apps/notes-app && npm ci && npm run tauri dev`.
-  Milestones 0.1a and 0.1b have shipped; 0.1c (quick open, global search, tab
-  restoration) is next in [docs/roadmap.md](docs/roadmap.md). The whole gate is
-  `tools/check.sh`. Update this line in the same commit that makes it wrong.
+  Milestones 0.1a–0.1d and 0.2 are implemented. Owner verification on installed
+  releases remains tracked in the acceptance documents and the queue.
+  The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).
 - **Never do, without an ADR that reverses the one named:**
   - store a note anywhere but as a `.md` file on the filesystem, or put the only
     copy of anything the user wrote in SQLite or `.notes/`

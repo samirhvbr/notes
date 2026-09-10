@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 08/09/2026, repository at 0.11.x
+> **Status:** `ACTIVE` · Last reviewed 09/09/2026, repository at 0.14.0
 
 Work in progress: drafts, plans under discussion, notes on things still being
 built, briefings for picking the work back up later.
@@ -42,11 +42,10 @@ here would be a second source of truth.
 |---|---|---|
 | [`SCOPE_final.md`](SCOPE_final.md) — **the specification to build**, v2.0 | Written, not built. Supersedes the two v1 drafts below | — |
 | [`0.1d-interface.md`](0.1d-interface.md) — **the interface milestone** | **Built and on screen** as of `0.13.0`: rail, sidebar, workspace selector, tabs, note header, column, divider, status bar. It stays here until the owner has walked [`../docs/ACCEPTANCE-0.1d.md`](../docs/ACCEPTANCE-0.1d.md) on the installed `.deb` **and repeated it on the release after** — the rule they set for this milestone and every one after | Samir |
-| [`0.2-indice.md`](0.2-indice.md) — **where 0.2 stopped, and what was already decided** | Started and stopped on 08/09/2026, when 0.1d went in front. The code written — the `notes-index` crate, the SQLite plumbing, the migrations — was **discarded**, because §5 says a crate exists only once the milestone that uses it begins. What is kept is the reasoning: the crate cut ADR-003 deferred, and the two-phase indexing protocol | — |
+| [`0.2-indice.md`](0.2-indice.md) — index acceptance | Implemented in `0.14.0`; retained for the installed-release owner walk and repeat on the following release in [`ACCEPTANCE-0.2.md`](../docs/ACCEPTANCE-0.2.md). The crate boundary is now ADR-039 | Samir |
 | **Milestone 0.0 — the spike** | **Open.** The application builds, is tested and lints clean; what it establishes and what it does not is [`../docs/SPIKE-0.0.md`](../docs/SPIKE-0.0.md). It stays here until the §2 checklist is marked on Arch/Wayland/NVIDIA, an iPhone and an Android device — none of which exist on the machine that wrote it | Samir |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) — my §20 proposal | **Superseded** by [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), Samir's v2.0-aligned document. Kept, not deleted: it is where the questions were asked. Three of its §5 questions are answered there; the bundle identifier is answered only for the spike | — |
 | [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the v1 drafts | Superseded by `SCOPE_final.md`; kept until the work they describe exists | — |
-| Cut the concrete boundaries between `notes-core`, `notes-fs` and `notes-index` | Deferred to the first code that needs them, on purpose — see [ADR-003](../docs/decisions.md) | — |
 
 ## 2. Where things went
 
@@ -57,7 +56,7 @@ here would be a second source of truth.
 | It was here | It is now at |
 |---|---|
 | The repodocs skeleton's `CHANGELOG.md` header defect | **Not this repository's item** — it is a defect in [samirhvbr/repodocs](https://github.com/samirhvbr/repodocs)'s skeleton, fixed *here* at `0.1.0` and still shipping to every new repository from there. Tracked where it can be fixed, not where it was noticed |
-| _(nothing yet — nothing here has been built)_ | |
+| Concrete index/core/filesystem boundaries | [ADR-039](../docs/decisions.md#adr-039--sqlite-stores-facts-the-core-owns-workspace-io) |
 
 ## 3. Pending decisions
 

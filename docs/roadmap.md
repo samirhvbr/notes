@@ -1,19 +1,9 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `ACTIVE` for 0.1, `PROPOSED` from 0.2 on. Milestone **0.1 is
-> built** — the desktop editor exists, is tested on four platforms and is
-> packaged for Linux — with the interface flows still unwalked by a person
-> (`ACCEPTANCE-0.1b.md`, `ACCEPTANCE-0.1c.md`). Everything from 0.2 down is
-> still the worked-out form of a specification that lives in the queue,
-> [`../.continue/`](../.continue/README.md), and **the queue is the authority on
-> intent while both exist** — intent changes there, and this page is updated
-> when the thing is built ([ADR-009](decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built)).
-> A section becomes `ACTIVE` when its code exists and works.
->
-> What is built when, and what each stage must be able to
-> do before the next one starts. What the product *is* lives in
-> [product.md](product.md); how it is put together, in
-> [architecture.md](architecture-v1.md).
+> **Status:** `ACTIVE` through 0.2, `PROPOSED` from 0.3 onward. The code for
+> the desktop editor, interface and index exists in 0.14.0. Installed-release
+> owner acceptance remains pending in `ACCEPTANCE-0.1d.md` and
+> `ACCEPTANCE-0.2.md`; future intent remains in the queue.
 
 The stage numbers below are **product milestones, not repository versions.** The
 repository version is whatever `../version.md` says and moves per commit; a
@@ -44,7 +34,7 @@ and one who stops after 0.3 has a good one.
 
 ## 0.1 — Desktop MVP
 
-> **0.1a–0.1c built; 0.1d in progress.** Shipped across `0.3.0`–`0.11.x` as
+> **0.1a–0.1d built; owner acceptance pending.** Shipped across `0.3.0`–`0.11.x` as
 > 0.1a (editor and write protocol), 0.1b (watcher, entry operations, preview,
 > conflicts) and 0.1c (tabs, quick open, global search, palette, settings,
 > `en`/`pt-BR`). Packaged for Linux: `.deb`, AppImage and the AUR `notes-bin`;
@@ -77,16 +67,18 @@ with nothing but a folder. No index, no server, no account.
 
 ## 0.2 — Index
 
-- SQLite index under `.notes/`;
-- incremental indexing;
-- workspace-wide search (name, path, content);
-- recent files;
-- external-change detection via filesystem watching;
-- tab state restored on restart;
-- command palette.
+Implemented in 0.14.0:
 
-**Done means:** deleting `.notes/` costs a reindex and nothing else — see
-[ADR-004](decisions.md#adr-004--notes-holds-only-data-that-can-be-rebuilt-and-must-be-deletable).
+- separate operational `registry.db` and derived `index.db` in app data;
+- incremental, cancellable SQLite/FTS5 indexing and explicit rebuild;
+- named Words, Literal and Regex modes, with partial results labelled;
+- Recent notes and live Outline navigation;
+- rename/move with reviewed incoming and outgoing Markdown references,
+  original-byte backups and per-file concurrency checks.
+
+External reconciliation, tabs and the command palette remain from 0.1.
+**Acceptance:** reindexing changes neither note bytes nor identity, and search
+semantics never switch implicitly. See [ACCEPTANCE-0.2.md](ACCEPTANCE-0.2.md).
 
 ## 0.3 — Markdown depth
 
@@ -161,7 +153,7 @@ implementation.
 
 ## What is deliberately absent from every stage above
 
-Collaborative editing, a full WYSIWYG editor, canvas, graph view, a plugin
+Collaborative editing, a full WYSIWYG editor, canvas, a plugin
 system, multiple themes, web publishing, an embedded AI chat, native Git
 integration, user accounts on infrastructure we run, and an official cloud.
 

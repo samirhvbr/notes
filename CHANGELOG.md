@@ -8,6 +8,22 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.14.0 - complete the desktop navigation workflow
+
+Expose Files/Recent/Outline, named Words/Literal/Regex modes, index progress,
+cancellation/rebuild, and reference review before rename/move. The review lets
+users select affected files and cancel without writes; an unavailable index
+requires an explicit choice to move without updating links.
+
+Finish the 0.1d implementation pass: mount the Welcome creation dialog, trap
+and restore Settings/palette focus, refresh Quick Open while its cache builds,
+clean up a divider unmounted mid-drag, cancel late search-start responses, and
+prevent reloads from replacing newer typing. English/Portuguese catalogues and
+IPC types match. All 69 frontend tests and the full local gate pass. A debug
+macOS UI smoke test exercised Outline, Recent and a Words hit at the correct
+line. The installed-release owner checks remain unticked in both acceptance
+documents; 0.3 is still proposed.
+
 ## 0.14.0 - implement the milestone 0.2 core
 
 Add separate operational registry.db and derived index.db, legacy identity

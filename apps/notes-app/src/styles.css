@@ -838,3 +838,11 @@ code { font-family: var(--font-mono); }
   font-weight: 600;
 }
 .welcome .recent button { display: flex; gap: 10px; align-items: baseline; }
+
+.browser-modes, .index-controls { display:flex; gap:4px; padding:8px; flex-wrap:wrap; }
+.browser-modes button { flex:1; }
+.index-controls { font-size:11px; border-top:1px solid var(--border); }
+.index-controls span { flex-basis:100%; }
+
+.reference-review { max-height:80vh; overflow:auto; width:min(700px,90vw); }
+.reference-review pre { white-space:pre-wrap; overflow-wrap:anywhere; }

@@ -40,7 +40,10 @@ demonstrated defect is a claim. The tests stay: they pin the property
 exercised the switch path at all, because until this milestone the only route to
 it was a Welcome screen that disappears after the first open.
 
-**What this leaves.** Two documents that disagree. The day the debounce is
+**Resolved at 0.14.0.** ADR-039 and architecture §4.1 now document immediate
+SQLite persistence; no debounce is claimed. The original finding follows.
+
+**What this left at 0.13.0.** Two documents that disagreed. The day the debounce is
 implemented — and §4.1 is right that it should be, since `~/x` writes the whole
 registry on every note opened — `open_workspace` becomes a loss path and
 `tests/switch.rs` starts failing, which is the outcome to want.

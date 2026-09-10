@@ -245,3 +245,14 @@ export const sessionGet = () => invoke<Session>("session_get");
 export const sessionSave = (session: Session) => invoke<void>("session_save", { session });
 export const settingsGet = () => invoke<Settings>("settings_get");
 export const settingsSet = (settings: Settings) => invoke<void>("settings_set", { settings });
+
+export type { IndexStatus } from "./generated/IndexStatus";
+export type { RecentNote } from "./generated/RecentNote";
+export const indexStart = (force = false) => invoke<import("./generated/IndexStatus").IndexStatus>("index_start", { force });
+export const indexStatus = () => invoke<import("./generated/IndexStatus").IndexStatus>("index_status");
+export const indexCancel = () => invoke<void>("index_cancel");
+export const recentNotes = () => invoke<import("./generated/RecentNote").RecentNote[]>("recent_notes");
+
+export type { ReferencePlan } from "./generated/ReferencePlan";
+export const referencePreview = (from:RelPath,to:RelPath) => invoke<import("./generated/ReferencePlan").ReferencePlan>("reference_preview",{from,to});
+export const referenceApply = (token:string,selected:number[]) => invoke<import("./generated/ReferenceResult").ReferenceResult>("reference_apply",{token,selected});
