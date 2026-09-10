@@ -8,6 +8,19 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.4 - carry the CI actions to their current majors
+
+`actions/setup-node` 4 to 7, `actions/setup-python` 5 to 7,
+`actions/upload-artifact` 4 to 7 and `actions/download-artifact` 8. Every call
+site passes only inputs that survived the majors — `node-version`, `cache`,
+`cache-dependency-path`, `python-version`, `name`, `path`, `retention-days` —
+so the bump is the version and nothing else.
+
+The upload/download pair is the one worth checking rather than assuming:
+`build.yml` uploads `linux-tarball` in one job and reads it back in another, and
+an artifact written by one generation is not readable by the other. Both ends
+stay on the post-v4 generation, so the handoff is unchanged.
+
 ## 0.20.3 - acknowledge durable device application receipts
 
 Add explicit, resumable device acknowledgments derived only from durable local
