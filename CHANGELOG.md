@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.18 - verify interrupted two-device effects
+
+Reconstruct receipt loss after receiver moves and deletions with separate CLI
+processes over TCP and HTTPS. Verify unchanged moved-file bytes and timestamps,
+retry acknowledgments, and retain files recreated before a replay. Exercise
+restored uploader recovery against the same real server. Keep physical mobile
+lifecycle and installed-release acceptance in the queue.
+
 ## 0.20.18 - recover restored client transfer queues
 
 Audit an older unscoped client cache against the complete server prefix before

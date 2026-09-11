@@ -1106,3 +1106,19 @@ If application data was rolled back while source files advanced, ordinary guarde
 application can still refuse; preserve those files and resolve that mismatch
 separately. No timestamp chooses a winner. Retention/pruning and scoped backup
 reconciliation remain unimplemented.
+
+### Interrupted two-device effects (0.20.18)
+
+The recovery suite now reconstructs the durable boundary after a receiver rename
+or deletion reached disk but before its application receipt was saved. A new
+client instance replays the intent, confirms the effect without rewriting the
+moved file, and retries a lost server acknowledgment. A file recreated at the
+original path blocks replay and is preserved. Existing local receipt checks remain
+in force; no production fault-injection switch was added.
+
+The real native TCP and Compose HTTPS smoke runs the same move/delete receipt
+loss with separate CLI processes, checks exact bytes and modification times, then
+restores an older uploader queue and recovers its published history without
+changing either source folder. These are deterministic persisted-state crash
+boundaries, not an operating-system kill at an instruction. Physical mobile
+suspension/resumption and installed-release owner acceptance remain open.

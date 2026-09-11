@@ -172,6 +172,9 @@ referenced binary bundles with guarded recovery. Version 0.20.14 adds desktop ba
 and pairing/history/conflict controls. Version 0.20.16 adds saved same-path
 receiver publications and opt-in scheduled capture with the workspace closed.
 Version 0.20.17 adds independent new-note and recognized-rename capture.
+Version 0.20.18 adds audited restored-client cache/outbox recovery and two-device
+move/delete receipt-loss tests. Restored application identities and scoped
+backup reconciliation remain open.
 Retention and device acceptance remain pending.
 
 ## 0.7 — AI

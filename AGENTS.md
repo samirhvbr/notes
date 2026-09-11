@@ -94,6 +94,8 @@ one-line version of both:
   recovery from retained unscoped history. Version 0.20.16 adds saved same-path
   receiver publications and separate opt-in scheduled capture with the workspace
   closed. Version 0.20.17 adds independent new-note and recognized-rename capture.
+  Version 0.20.18 adds audited restored-client cache/outbox recovery and
+  two-device move/delete receipt-loss tests.
   Retention, mobile lifecycle and
   broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.

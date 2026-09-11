@@ -458,6 +458,66 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "apply-bundle", str(observer_queue), str(observer_data)])
         assert not (observer_root / "new.md").exists()
         assert (observer_root / "moved.md").read_bytes() == b"new from receiver\r\n"
+        # Dedicated credential isolates the recovery/crash request budget.
+        cli("workspace", "create", "client-recovery")
+        recovery_secret = temp / "recovery.secret"
+        if compose:
+            cli("token", "create", "recovery", "client-recovery", ".", "read,create,update,move,delete", "/tmp/recovery.secret")
+            recovery_secret.write_text(run(cmd + ["exec", "-T", "notes-server", "cat", "/tmp/recovery.secret"]))
+        else:
+            cli("token", "create", "recovery", "client-recovery", ".", "read,create,update,move,delete", str(recovery_secret))
+        recovery_secret.chmod(0o600)
+        recovery_source, recovery_target = temp / "recovery-source", temp / "recovery-target"
+        recovery_source.mkdir(); recovery_target.mkdir()
+        recovery_sender, recovery_receiver = temp / "recovery-sender", temp / "recovery-receiver"
+        recovery_data = temp / "recovery-data"
+        (recovery_source / "original.md").write_bytes(b"recover exact bytes\r\n")
+        run([client, "init-upload", str(recovery_sender), str(recovery_source), base, "client-recovery", str(recovery_secret), "--allow-private"])
+        run([client, "stage", str(recovery_sender)])
+        old_client = (recovery_sender / "client.json").read_bytes()
+        run([client, "transfer", str(recovery_sender), str(recovery_secret)])
+        run([client, "init-receive", str(recovery_receiver), str(recovery_target), base, "client-recovery", str(recovery_secret), "--allow-private"])
+        run([client, "fetch", str(recovery_receiver), str(recovery_secret)])
+        run([client, "apply-bundle", str(recovery_receiver), str(recovery_data)])
+        run([client, "acknowledge", str(recovery_receiver), str(recovery_secret)])
+        for deleted in (False, True):
+            if deleted:
+                head = json.loads((recovery_sender / "client.json").read_text())["received"][-1]["revision"]
+                (recovery_source / "moved.md").unlink()
+                run([client, "stage-delete", str(recovery_sender), head["note"], head["id"]])
+            else:
+                (recovery_source / "original.md").rename(recovery_source / "moved.md")
+                run([client, "stage", str(recovery_sender)])
+            run([client, "transfer", str(recovery_sender), str(recovery_secret)])
+            run([client, "fetch", str(recovery_receiver), str(recovery_secret)])
+            checkpoint_path = recovery_receiver / "application.json"
+            checkpoint = json.loads(checkpoint_path.read_text())
+            revision = json.loads((recovery_receiver / "client.json").read_text())["received"][-1]["revision"]["id"]
+            checkpoint["intent"] = revision
+            run([client, "apply-bundle", str(recovery_receiver), str(recovery_data)])
+            moved_mtime = None if deleted else (recovery_target / "moved.md").stat().st_mtime_ns
+            # Source persisted, but the application receipt was lost at process exit.
+            checkpoint_path.write_text(json.dumps(checkpoint))
+            run([client, "apply-bundle", str(recovery_receiver), str(recovery_data)])
+            assert not (recovery_target / "original.md").exists()
+            if deleted:
+                assert not (recovery_target / "moved.md").exists()
+            else:
+                assert (recovery_target / "moved.md").stat().st_mtime_ns == moved_mtime
+                assert (recovery_target / "moved.md").read_bytes() == b"recover exact bytes\r\n"
+            run([client, "acknowledge", str(recovery_receiver), str(recovery_secret)])
+        # The platform trash backend may leave filesystem metadata in the folder.
+        # Compare all surviving file bytes rather than assuming an empty directory.
+        receiver_files = {p.relative_to(recovery_target): p.read_bytes()
+                          for p in recovery_target.rglob("*") if p.is_file()}
+        (recovery_sender / "client.json").write_bytes(old_client)
+        recovered = json.loads(run([client, "recover-client", str(recovery_sender), str(recovery_secret)]).splitlines()[0])
+        assert recovered["recovered_publications"] == 3
+        assert not recovered["source_written"]
+        assert json.loads(run([client, "status", str(recovery_sender)]))["pending"] == 0
+        assert list(recovery_source.iterdir()) == []
+        assert {p.relative_to(recovery_target): p.read_bytes()
+                for p in recovery_target.rglob("*") if p.is_file()} == receiver_files
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

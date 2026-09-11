@@ -2306,6 +2306,68 @@ fn restored_client_refuses_scopes_and_mixed_application_backups() {
 }
 
 #[test]
+fn receiver_effect_crash_retries_never_rewrite_moves_or_erase_recreated_files() {
+    for deleted in [false, true] {
+        let (dir, root, sender, mut peer) = fixture();
+        fs::write(root.join("test.md"), b"original\r\n").unwrap();
+        sender.stage().unwrap();
+        sender.transfer(&mut peer).unwrap();
+        let (target, receiver) = receiver(dir.path(), &mut peer);
+        let data = dir.path().join("app-data");
+        receiver.apply(&data).unwrap();
+        receiver.acknowledge(&mut peer).unwrap();
+        let checkpoint_path = dir.path().join("receiver/application.json");
+        let mut interrupted: serde_json::Value =
+            serde_json::from_slice(&fs::read(&checkpoint_path).unwrap()).unwrap();
+        if deleted {
+            let head = peer.log.last().unwrap().revision.clone();
+            fs::remove_file(root.join("test.md")).unwrap();
+            sender.stage_delete(head.note, head.id).unwrap();
+        } else {
+            fs::rename(root.join("test.md"), root.join("moved.md")).unwrap();
+            sender.stage().unwrap();
+        }
+        sender.transfer(&mut peer).unwrap();
+        receiver.fetch(&mut peer).unwrap();
+        interrupted["intent"] = serde_json::json!(peer.log.last().unwrap().revision.id);
+        let interrupted = serde_json::to_vec(&interrupted).unwrap();
+        receiver.apply_effects(&data).unwrap();
+        let moved_meta = (!deleted).then(|| {
+            fs::metadata(target.join("moved.md"))
+                .unwrap()
+                .modified()
+                .unwrap()
+        });
+        // The durable source effect survived; the final application receipt did not.
+        fs::write(&checkpoint_path, &interrupted).unwrap();
+        let restarted = Store::open(&dir.path().join("receiver")).unwrap();
+        assert_eq!(restarted.apply_effects(&data).unwrap(), 1);
+        assert!(!target.join("test.md").exists());
+        if let Some(meta) = moved_meta {
+            assert_eq!(
+                fs::metadata(target.join("moved.md"))
+                    .unwrap()
+                    .modified()
+                    .unwrap(),
+                meta
+            );
+        }
+        peer.lose_receipt = true;
+        assert!(matches!(
+            restarted.acknowledge(&mut peer),
+            Err(Error::Offline)
+        ));
+        assert_eq!(restarted.acknowledge(&mut peer).unwrap(), 1);
+        // A file recreated after the interrupted effect must survive a retry.
+        fs::write(&checkpoint_path, &interrupted).unwrap();
+        fs::write(target.join("test.md"), b"new local file").unwrap();
+        assert!(restarted.apply_effects(&data).is_err());
+        assert_eq!(fs::read(target.join("test.md")).unwrap(), b"new local file");
+        assert_eq!(fs::read(&checkpoint_path).unwrap(), interrupted);
+    }
+}
+
+#[test]
 fn restored_client_rejects_corrupt_tail_and_uuid_reuse_without_dropping_outbox() {
     let (dir, root, sender, mut peer) = fixture();
     fs::write(root.join("test.md"), b"pending exact bytes").unwrap();
