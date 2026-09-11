@@ -1719,3 +1719,32 @@ precondition. Retain all pending capture bytes; require publication of a prepare
 choice first. Refuse unfinished application intents and unchanged bytes. New
 resolution remains mandatory, with existing branch/byte limits and no false
 application receipt for the earlier published choice.
+
+
+## ADR-054 — Receiver path effects have durable intent before source changes
+
+**Status:** ACTIVE · Implemented in 0.20.12.
+
+**Decision.** Apply explicit move/tombstone resolutions only in a closed exclusive
+core session, retaining captured bytes in history. A move creates the chosen target
+without replacement before guarded removal of the original; its destination parent
+must exist. Keep identity across recovery and persist the receipt only after all
+effects. A tombstone receipt records completed removal; OS trash is not promised.
+Collisions, drafts, changed identity and changed BaseRev refuse before mutation.
+A durable intent authorizes recovery of partially completed effects. General
+rename cycles and automatic source deletion capture remain separate work.
+
+## ADR-055 — Pairing confirms observed identities within a pinned namespace
+
+**Status:** ACTIVE · Implemented in 0.20.12.
+
+**Decision.** Pin the credential's exact workspace/subfolder scope and translate
+all paths at the transport boundary. Preserve the server's global cursor even
+when scoped pages omit publications. A fresh receive queue previews reconciliation
+before confirmation: equal bytes may link identities, local-only files stage
+uploads, remote-only files wait for application, and divergent bytes block.
+Confirmation binds the snapshot and checks for unseen remote entries. Persist
+pairing receipts/baselines with the client state atomically; never pretend that
+older superseded publications were applied. Retaining both divergent files requires
+an explicit local rename and fresh preview. No new server permission or endpoint
+is introduced, and enrollment does not imply automatic two-way synchronization.

@@ -176,3 +176,7 @@ a remote rename/deletion; see [receiver restoration](docs/SYNC-0.6.md#restore-af
 
 Version 0.20.11 adds `recapture-conflict` for newer saved receiver edits, retaining
 prior branches and requiring a new explicit choice; see [recapture](docs/SYNC-0.6.md#recapture-newer-saved-receiver-edits-02011).
+
+Version 0.20.12 adds recoverable receiver move/delete choices and explicit
+subfolder pairing with reconciliation preview and identity confirmation. See
+[the workflows](docs/SYNC-0.6.md#apply-an-explicit-receiver-move-or-deletion-02012).

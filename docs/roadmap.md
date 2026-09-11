@@ -166,8 +166,8 @@ Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.
 
 The 0.20.10 sync increment restores remote rename/delete conflicts explicitly
 at the receiver's applied path. Version 0.20.11 adds explicit recapture
-of further saved edits, retaining prior branches. Applying local move/delete
-choices remains pending under milestone 0.6.
+of further saved edits, retaining prior branches. Version 0.20.12 applies explicit receiver move/delete choices and confirms
+subfolder/reconciliation pairing. Automatic source effects and cycles remain pending.
 
 ## 0.7 — AI
 

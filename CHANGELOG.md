@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.12 - exercise the expanded device workflows over real transport
+
+Add TCP/HTTPS CLI scenarios for receiver source effects and scoped enrollment,
+including original-byte retention, identity confirmation and accurate receipts.
+Document recovery boundaries and update the implementation queue. Native/Windows
+clippy, new-flow tests, TCP smoke and frontend checks passed. The existing macOS
+watcher startup timing test exceeded its 100 ms local budget in the full suite;
+its isolated repeat passed, and the remaining workspace suite passed separately.
+
 ## 0.20.12 - confirm scoped pairing against observed folder contents
 
 Pin the selected credential namespace and translate all publication paths while

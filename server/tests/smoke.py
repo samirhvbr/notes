@@ -340,6 +340,74 @@ with tempfile.TemporaryDirectory() as temp:
         rr_status = json.loads(run([client, "status", str(rr_receiver)]))
         assert rr_status["applied_revisions"] == rr_status["acknowledged_revisions"] == 4
         assert rr_status["superseded_revisions"] == 3
+        # New source-effect and scoped-pairing scenarios get a fresh real rate window.
+        time.sleep(61)
+        current_path = "test.md"
+        for delete_result in (False, True):
+            parent = json.loads((rr_receiver / "client.json").read_text())["received"][-1]
+            other = json.loads(json.dumps(parent))
+            other.pop("branches", None)
+            other["expected"] = parent["revision"]["id"]
+            other["revision"]["parents"] = [other["expected"]]
+            other["revision"]["id"] = str(uuid.uuid4())
+            other["revision"]["device"] = str(uuid.uuid4())
+            assert request("POST", "/v1/workspaces/receiver-resolution/sync/revisions", other,
+                           {"Authorization": "Bearer " + receiver_secret.read_text().strip()})[0] == 200
+            run([client, "fetch", str(rr_receiver), str(receiver_secret)])
+            (rr_target / current_path).write_bytes(b"edit before source effect")
+            run([client, "capture-conflict", str(rr_receiver), str(rr_data), note_id])
+            conflict = json.loads(run([client, "conflicts", str(rr_receiver)]))[0]
+            choice = [client, "resolve-delete" if delete_result else "resolve-to", str(rr_receiver),
+                      conflict["local"], conflict["remote"], "moved.md"]
+            if not delete_result:
+                choice.append(str(rr_result))
+            output = run(choice)
+            resolution_id = json.loads(output.splitlines()[0])["staged_resolution"]
+            run([client, "transfer", str(rr_receiver), str(receiver_secret)])
+            run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
+            run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
+            run([client, "acknowledge", str(rr_receiver), str(receiver_secret)])
+            assert not (rr_target / current_path).exists()
+            if not delete_result:
+                assert (rr_target / "moved.md").read_bytes() == rr_result.read_bytes()
+            current_path = "moved.md"
+        cli("workspace", "create", "paired-scope")
+        if compose:
+            run(cmd + ["exec", "-T", "notes-server", "mkdir", "-p", "/data/workspaces/paired-scope/shared"])
+        else:
+            (temp / "data/workspaces/paired-scope/shared").mkdir()
+        def pairing_token(label, scope):
+            remote_path = "/tmp/" + label + ".secret" if compose else str(temp / (label + ".secret"))
+            cli("token", "create", label, "paired-scope", scope, "read,create,update,move,delete", remote_path)
+            local_path = temp / (label + "-transport.secret")
+            local_path.write_text(run(cmd + ["exec", "-T", "notes-server", "cat", remote_path]) if compose else pathlib.Path(remote_path).read_text())
+            local_path.chmod(0o600)
+            return local_path
+        full_secret = pairing_token("pair-full", ".")
+        scoped_secret = pairing_token("pair-scoped", "shared")
+        ps_source, ps_target = temp / "ps-source", temp / "ps-target"
+        (ps_source / "shared").mkdir(parents=True); ps_target.mkdir()
+        (ps_source / "shared/same.md").write_bytes(b"same")
+        (ps_source / "shared/remote.md").write_bytes(b"remote only")
+        (ps_source / "outside.md").write_bytes(b"outside scope")
+        ps_sender, ps_receiver, ps_data = temp / "ps-sender", temp / "ps-receiver", temp / "ps-data"
+        run([client, "init-upload", str(ps_sender), str(ps_source), base, "paired-scope", str(full_secret), "--allow-private"])
+        run([client, "stage", str(ps_sender)]); run([client, "transfer", str(ps_sender), str(full_secret)])
+        (ps_target / "same.md").write_bytes(b"same")
+        (ps_target / "local.md").write_bytes(b"local only")
+        run([client, "init-subfolder", str(ps_receiver), str(ps_target), base, "paired-scope", "shared", str(scoped_secret), "--allow-private"])
+        run([client, "fetch", str(ps_receiver), str(scoped_secret)])
+        preview = json.loads(run([client, "pair-preview", str(ps_receiver), str(ps_data)]))
+        run([client, "pair-confirm", str(ps_receiver), str(ps_data), str(scoped_secret), preview["confirmation"]])
+        run([client, "transfer", str(ps_receiver), str(scoped_secret)])
+        run([client, "apply", str(ps_receiver), str(ps_data)])
+        run([client, "acknowledge", str(ps_receiver), str(scoped_secret)])
+        assert (ps_target / "remote.md").read_bytes() == b"remote only"
+        assert (ps_target / "local.md").read_bytes() == b"local only"
+        assert not (ps_target / "outside.md").exists()
+        assert not (ps_target / "shared").exists()
+        ps_status = json.loads(run([client, "status", str(ps_receiver)]))
+        assert ps_status["applied_revisions"] == ps_status["acknowledged_revisions"] == 3
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

@@ -192,10 +192,10 @@ mobile synchronization.
 
 `notes-sync-client` is an explicit command-line client with a persistent offline
 outbox and received-content cache. **Transfer does not apply revisions to source
-files.** Explicit application is a separate command added in 0.20.1. This block supports
-whole-workspace, non-review credentials only; subfolder pairing and reconciliation
-with an already populated remote are future client work. The server retains
-its existing subfolder and review policies for other callers.
+files.** Explicit application is a separate command added in 0.20.1. The initial block supported
+whole-workspace, non-review credentials. Version 0.20.12 adds pinned subfolder
+credentials and confirmed reconciliation with a populated remote, described below.
+Review-mode credentials remain outside this device workflow.
 
 Build with `cargo build --locked -p notes-sync-client`, or use the standalone
 Linux release archive. Pair an existing source folder with an empty server inbox:
@@ -269,7 +269,7 @@ core crates. See the [reqwest transport documentation](https://docs.rs/reqwest/0
 for the underlying redirect, proxy and TLS defaults overridden here. Connect
 and request timeouts are 10 and 30 seconds; DNS resolution also depends on the
 operating system resolver. Responses are bounded to 16 MiB. The credential must
-still identify the original whole workspace on every connection.
+identify the pinned workspace and exact selected scope on every connection.
 
 Client state has a 64 MiB serialized limit, 32 MiB cumulative decoded pending
 and received content, and 10,000 pending/received publications. Source capture
@@ -535,7 +535,7 @@ Linear publication JSON is unchanged. Upgrade server and clients before sending
 resolutions: older readers reject the nonempty `branches` field rather than
 silently dropping history. Keep a backup of operational state before downgrading.
 Version 0.20.9 adds closed-workspace receiver conflict handling below. Conflict
-UI and broader pairing remain queued. Explicit rename/delete choices follow. HTTP and client tests
+UI remains queued; confirmed broader pairing is available in 0.20.12 below. Explicit rename/delete choices follow. HTTP and client tests
 cover stale races, lost receipts, restart, branch scope/hash rejection and source
 application; TCP/HTTPS smoke exercises the actual CLI commands end to end.
 
@@ -569,8 +569,9 @@ These commands only stage history. They do not rename/delete source files or
 apply received filesystem operations. Before `stage` again, bring the saved
 source into agreement with the chosen result: an existing file is captured as a
 new edit or resurrection, and a missing file remains reported rather than
-implicitly deleted. Receiving clients still stop before applying a rename or
-tombstone and retain their content/checkpoint. Safe filesystem rename/deletion application remains queued. Same-path local
+implicitly deleted. Ordinary receiving application still stops before a rename or tombstone and
+retains its checkpoint. Explicit receiver conflict choices apply these effects
+in 0.20.12 below; general history replay and cycles remain queued. Same-path
 receiver conflicts are handled by the 0.20.9 workflow below.
 
 Regression tests cover live/deleted remote heads with both live/tombstone
@@ -612,7 +613,7 @@ cannot be uploaded as a winning linear revision. `resolve` retains both parents
 and all original bytes, using the same server compare-and-set as an uploader.
 A write-capable credential is required to publish; an existing read-only receive
 credential gains no permissions. `resolve-to` may choose bytes at the same path;
-a tombstone result or a new local path is still refused. One captured conflict
+0.20.12 also applies explicit tombstone and new-path results in a closed workspace. One captured conflict
 is handled at a time; after its application, another saved conflict can be captured.
 
 `apply-resolution` applies only a resolution already fetched back from the server.
@@ -650,8 +651,7 @@ Tests cover source preservation, identity mapping, open-session/draft refusal,
 later edits, lost publication replies, resolution and deferred-write recovery,
 interleaved notes, repeated captures and the absence of false acknowledgments.
 TCP/HTTPS smoke exercises capture, resolution, transfer, application and receipts
-through real CLI processes. Editor conflict controls, applying receiver moves/
-deletions and unattended recapture remain queued; owner acceptance is separate.
+through real CLI processes. Editor conflict controls and unattended recapture remain queued; owner acceptance is separate.
 
 
 ### Restore after a remote rename or deletion (0.20.10)
@@ -679,7 +679,7 @@ Move/Create/Delete permissions required by the retained edges.
 
 The source must still match its captured identity and BaseRev. This supports
 restoring the edited receiver copy, not accepting a remote move/deletion as a
-local filesystem operation. Local rename/delete effects remain queued; explicit recapture is described below.
+local filesystem operation. Explicit recapture and local rename/delete effects are described below.
 
 
 ### Recapture newer saved receiver edits (0.20.11)
@@ -718,3 +718,84 @@ limits remain enforced; recapture reserves a branch slot for resolution. At the
 limit, queue state and source bytes are preserved. Resolve/publish before adding
 more captures rather than discarding history. Older clients reject the extended
 capture ancestry; back up operational state before changing client versions.
+
+
+### Apply an explicit receiver move or deletion (0.20.12)
+
+After capturing a saved receiver conflict, `resolve-to` can choose a new relative
+path and result bytes; `resolve-delete` can choose a tombstone. Publish and fetch
+the choice with `transfer`, then run `apply-resolution` with the actual app data
+directory while the workspace is closed. Parent directories of a move target
+must already exist. Hidden/invalid paths, occupied destinations, drafts and
+changed source identity/BaseRev are refused before recording intent.
+
+A move creates the result at the destination without replacement, then removes
+the guarded original. These are recoverable steps, not one atomic rename. The
+durable resolution intent permits restart after destination creation or source
+removal, and the local note identity follows the move. A retry accepts only the
+intended destination bytes; an external source change blocks removal. A deletion
+removes the guarded source through the filesystem adapter. OS trash availability
+is not guaranteed: original captured bytes remain in the sync history and can be
+exported even when the adapter reports permanent removal.
+
+Application records a tombstone receipt only after removal succeeds. A retry
+following a lost final receipt does not remove another file or send duplicate
+progress. Intermediate remote revisions stay superseded, and unrelated work
+stays deferred. The prepared-queue editor operation still supports ordinary
+creations/updates only; these effects use the closed-workspace CLI. Automatic
+capture/application of arbitrary renames/deletions and rename cycles remain
+separate queue work.
+
+### Pair a subfolder or reconcile existing folders (0.20.12)
+
+Use a credential whose single workspace scope exactly matches the selected
+remote subfolder, with review disabled. That server directory must exist when
+the scoped credential is issued. Paths below that scope map to paths
+relative to the local root; the local root is the selected folder itself.
+
+```sh
+notes-sync-client init-subfolder /private/queue /local/folder https://notes.example.net team shared /private/token.secret
+notes-sync-client fetch /private/queue /private/token.secret
+notes-sync-client pair-preview /private/queue /actual/app-data
+notes-sync-client pair-confirm /private/queue /actual/app-data /private/token.secret CONFIRMATION
+notes-sync-client transfer /private/queue /private/token.secret
+notes-sync-client apply /private/queue /actual/app-data
+notes-sync-client acknowledge /private/queue /private/token.secret
+```
+
+Repeat bounded `fetch` calls until no unseen remote entries remain before
+confirmation. An unchanged cursor after a fetch means that the current history
+is drained. A subfolder cursor counts the server's global append positions,
+including filtered entries; it is deliberately separate from received counts.
+All publication paths, including retained branches, are translated at transport
+boundaries. The credential must match the pinned scope on every connection;
+outside-scope files never enter the local queue. Histories that crossed the
+credential boundary remain subject to the server's whole-history visibility
+rules; changing scope is not an automatic migration.
+
+For whole-workspace reconciliation use `init-receive` instead of `init-subfolder`,
+then the same preview/confirmation steps. This workflow operates on a fresh receive
+queue, before source application or conflict capture. The preview lists local-only
+uploads, remote-only downloads, equal-byte identity links and divergent conflicts.
+Its confirmation digest binds the local snapshot, remote cursor/workspace,
+endpoint, root and app data. Confirmation rereads local identities/bytes and checks
+that the server has no unseen entries. Close cooperating editors for confirmation.
+
+Equal-byte links confirm the observed local source as the remote head, without
+rewriting it; older versions are superseded without false receipts. Local-only
+files are staged for upload and retain guarded local baselines for later receipt.
+Remote-only files remain deferred for normal application. Acknowledgments describe
+confirmed source state, not mere transfer. The pairing bootstrap and pending
+publications are saved atomically; retries use ordinary application intents.
+
+Divergent same-path bytes block confirmation. Compare the exported remote bytes
+and the local file first. To retain both, explicitly rename the local file to an
+unused path, rerun preview and confirm: that file uploads as a separate note and
+the remote note downloads at its original path. To link one chosen content version,
+make that choice before generating a fresh preview. Nothing is overwritten merely
+because file names match. Existing ordinary-application limitations for remote
+rename/delete history still apply; pairing does not silently execute those effects.
+This is explicit enrollment and reconciliation, not background bidirectional sync.
+
+The 0.20.12 pairing bootstrap and tombstone receipt fields require updated clients;
+older readers reject them. Preserve a full operational-state backup for rollback.

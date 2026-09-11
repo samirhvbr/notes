@@ -1119,3 +1119,9 @@ original application anchor. Pending raw captures retain their predecessors;
 prepared resolutions must be published before recapture so their history stays
 recoverable. Recapture writes no source or receipt, and application still requires
 a newly published explicit resolution guarded by the latest captured BaseRev.
+
+Version 0.20.12 applies explicit receiver moves/deletions with durable intent and
+retained original bytes (ADR-054). Subfolder transport pins and translates the
+credential namespace while preserving filtered cursor positions. Confirmed pairing
+links observed equal-byte identities, stages local-only files and defers downloads
+in an atomic client-state bootstrap (ADR-055); divergent bytes refuse confirmation.

@@ -85,6 +85,8 @@ one-line version of both:
   Version 0.20.9 adds explicit saved same-path receiver capture/resolution;
   0.20.10 restores remote move/delete conflicts at the applied receiver path;
   0.20.11 explicitly recaptures newer saved edits while retaining earlier branches.
+  Version 0.20.12 adds recoverable receiver move/delete effects and confirmed
+  subfolder/reconciliation pairing.
   Source rename/deletion application, editor conflict controls, broader pairing
   and transport UI remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
