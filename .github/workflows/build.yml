@@ -290,15 +290,21 @@ jobs:
           set -euo pipefail
           pacman -U --noconfirm packaging/aur/notes-bin/*.pkg.tar.zst
           test -x /usr/bin/notes
-          # By glob, not by name: the bundler names the desktop entry after
-          # `productName`, so asserting `notes.desktop` here would have gone red
-          # on the rename release for the same reason the PKGBUILD did. What has
-          # to be true is that an entry landed, and that it launches the binary
-          # this package installs — which is what `Exec=` is checked for.
-          entry="$(find /usr/share/applications -name '*.desktop' -print -quit)"
+          # Ask pacman which entry THIS package installed, rather than naming it
+          # or globbing for it. Naming it is what broke on the rename — the
+          # bundler calls the file after `productName`, so "Tura Notes.desktop"
+          # arrived where `notes.desktop` was asserted. Globbing
+          # /usr/share/applications was the first repair and it was worse: the
+          # container already has entries from gtk3 and friends, so `-print
+          # -quit` handed back somebody else's file and the `Exec=` check failed
+          # on a package that was fine.
+          #
+          # `sed`, not `awk '{print $2}'`: the path contains a space, and the
+          # whole point of this step is that the name is not ours to predict.
+          entry="$(pacman -Ql notes-bin | sed -n 's|^notes-bin ||p' | grep -m1 '\.desktop$')"
           test -n "$entry"
           grep -q '^Exec=notes' "$entry"
-          test -n "$(find /usr/share/icons -name 'notes.png' -print -quit)"
+          pacman -Ql notes-bin | sed -n 's|^notes-bin ||p' | grep -q '/notes\.png$'
           # It links against the system WebKitGTK, which is the whole reason
           # this job runs on rolling Arch: a missing soname is the failure
           # ADR-023 exists to catch before a user does.

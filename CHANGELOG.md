@@ -8,6 +8,22 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.2 - ask pacman which desktop entry the package installed
+
+1.0.1 fixed the PKGBUILD and the Arch job got further: the package builds and
+installs. It then failed on the check 1.0.1 rewrote alongside it, and that check
+was wrong in a way worth naming. Asserting `notes.desktop` broke on the rename,
+so it became a glob over `/usr/share/applications` — but the build container
+already carries entries from gtk3 and its dependencies, and `find -print -quit`
+returned one of those. The `Exec=` assertion then failed against somebody else's
+file, on a package that was correct.
+
+The entry now comes from `pacman -Ql notes-bin`, which is the one source that
+knows what this package installed, parsed with `sed` rather than `awk '{print
+$2}'` because the path contains a space — and a filename this repository has
+just decided not to predict is exactly the kind it must not split on. The icon
+is checked the same way, against the package's own file list.
+
 ## 1.0.1 - install the desktop entry the bundler produced
 
 The Arch job failed on 1.0.0 and that release shipped with no Arch package. The
