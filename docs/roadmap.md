@@ -173,14 +173,15 @@ and pairing/history/conflict controls. Version 0.20.16 adds saved same-path
 receiver publications and opt-in scheduled capture with the workspace closed.
 Version 0.20.17 adds independent new-note and recognized-rename capture.
 Version 0.20.18 adds audited restored-client cache/outbox recovery and two-device
-move/delete receipt-loss tests. Restored application identities and scoped
-backup reconciliation remain open.
+move/delete receipt-loss tests. Version 0.20.20 adds scoped backup
+reconciliation and retirement of devices whose owning credential was revoked.
 Version 0.20.19 adds offline server pruning and matching receiver compaction for
 unanimously acknowledged divergent branch payloads. Linear history, current
 resolution payloads and cursor baselines remain open. Version 0.20.20 adds
-explicit retirement of devices whose owning credential was revoked and restores
-scoped receiver queues across filtered cursor gaps. Restored application
-identity reconciliation remains open.
+restores scoped receiver queues across filtered cursor gaps. Version 0.20.22
+compacts acknowledged linear payloads while retaining a current receive
+baseline. Version 0.20.23 explicitly reconciles restored application identities,
+and 0.20.24 verifies that recovery through real two-device TCP and HTTPS flows.
 Device acceptance remains pending.
 
 ## 0.7 — AI

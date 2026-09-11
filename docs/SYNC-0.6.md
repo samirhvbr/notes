@@ -1224,6 +1224,11 @@ or acknowledges a revision. A changed, missing, deleted, unresolved, or
 incompletely applied file is refused with the checkpoint left unchanged. Resolve
 the local change first; the command does not select a winner by timestamp.
 
+The native TCP and Compose HTTPS smoke tests run this sequence through two real
+client processes, then continue with guarded move and delete effects using the
+restored application data. They assert the original source bytes stay untouched
+during reconciliation.
+
 ### Explicit device retirement (0.20.20)
 
 An abandoned device no longer has to block retention forever. With the server

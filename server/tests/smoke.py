@@ -480,6 +480,20 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "fetch", str(recovery_receiver), str(recovery_secret)])
         run([client, "apply-bundle", str(recovery_receiver), str(recovery_data)])
         run([client, "acknowledge", str(recovery_receiver), str(recovery_secret)])
+        # Restore the application registry independently from the fully applied
+        # receive queue. Reconciliation must only re-observe the unchanged
+        # source, then later guarded move/delete effects use that restored data.
+        restored_recovery_data = temp / "restored-recovery-data"
+        restored_recovery_data.mkdir()
+        checkpoint_path = recovery_receiver / "application.json"
+        checkpoint = json.loads(checkpoint_path.read_text())
+        checkpoint["core_data"] = str(restored_recovery_data.resolve())
+        checkpoint_path.write_text(json.dumps(checkpoint))
+        before_reconcile = (recovery_target / "original.md").read_bytes()
+        reconciled = json.loads(run([client, "reconcile-application", str(recovery_receiver)]).splitlines()[0])
+        assert reconciled == {"reconciled_receipts": 1, "source_written": False}
+        assert (recovery_target / "original.md").read_bytes() == before_reconcile
+        recovery_data = restored_recovery_data
         for deleted in (False, True):
             if deleted:
                 head = json.loads((recovery_sender / "client.json").read_text())["received"][-1]["revision"]

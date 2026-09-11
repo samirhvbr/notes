@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.24 - verify restored identities across two devices
+
+Extend the native TCP and Compose HTTPS acceptance smoke with a restored
+receiver application-data directory. The real receive client explicitly
+reconciles its unchanged source identity, then completes guarded move and
+delete effects using the restored registry. Refresh the queue and roadmap so
+only receiver edge cases and owner acceptance remain in sync 0.6.
+
 ## 0.20.23 - reconcile restored application identities
 
 Add an explicit local receive-queue operation for application data restored
