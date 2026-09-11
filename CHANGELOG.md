@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.7 - preserve divergent history in explicit resolutions
+
+Accept bounded branch history atomically with an explicit two-parent resolution.
+The observed remote head remains a compare-and-set precondition, every branch
+retains its original bytes and permissions, and failed publication changes no
+head or source file. The client stages chosen bytes with both observed parents
+and durably retains its rejected revisions inside the new envelope. Existing
+linear publications retain their wire format.
+
 ## 0.20.6 - connect received queues to exclusive editor sessions
 
 Add app controls to open a prepared receive queue and apply bounded batches.

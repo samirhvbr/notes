@@ -561,6 +561,7 @@ fn publication(
     use base64::Engine;
     let expected = prior.map(|p| p.revision.id);
     notes_server::sync::Publication {
+        branches: vec![],
         workspace,
         expected,
         revision: notes_sync::Revision::new(
@@ -997,4 +998,100 @@ async fn sync_acknowledgments_refuse_invisible_history_and_revoked_credentials()
         f.request("POST", route, Some(receipt), &[]).await.0,
         StatusCode::UNAUTHORIZED
     );
+}
+
+fn resolution(
+    remote: &notes_server::sync::Publication,
+    local: &notes_server::sync::Publication,
+) -> notes_server::sync::Publication {
+    let mut p = publication(
+        remote.workspace,
+        Some(remote),
+        "allowed/test.md",
+        Some(b"chosen"),
+    );
+    p.revision.parents.insert(local.revision.id);
+    p.branches.push(notes_sync::transfer::Branch {
+        revision: local.revision.clone(),
+        content_base64: local.content_base64.clone(),
+    });
+    p
+}
+
+#[tokio::test]
+async fn sync_resolution_keeps_both_histories_atomically_and_retries_after_restart() {
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let base = publication(workspace, None, "allowed/test.md", Some(b"base"));
+    assert_eq!(post_revision(&f, &base).await, StatusCode::OK);
+    let remote = publication(workspace, Some(&base), "allowed/test.md", Some(b"remote"));
+    let local = publication(workspace, Some(&base), "allowed/test.md", Some(b"local"));
+    assert_eq!(post_revision(&f, &remote).await, StatusCode::OK);
+    assert_eq!(post_revision(&f, &local).await, StatusCode::CONFLICT);
+    let merge = resolution(&remote, &local);
+    let vault = f.data.join("sync/home/vault.json");
+    let before = fs::read(&vault).unwrap();
+    let mut stale = merge.clone();
+    stale.expected = Some(base.revision.id);
+    assert_eq!(post_revision(&f, &stale).await, StatusCode::CONFLICT);
+    assert_eq!(fs::read(&vault).unwrap(), before);
+    assert_eq!(post_revision(&f, &merge).await, StatusCode::OK);
+    let after = fs::read(&vault).unwrap();
+    f.app = api::router(api::Server::new(f.data.clone(), None));
+    assert_eq!(post_revision(&f, &merge).await, StatusCode::OK);
+    assert_eq!(fs::read(&vault).unwrap(), after);
+    let (_, _, fetched) = f
+        .request("GET", &format!("{SYNC}/{}", merge.revision.id), None, &[])
+        .await;
+    assert_eq!(fetched, serde_json::to_value(&merge).unwrap());
+    let (_, _, page) = f.request("GET", SYNC, None, &[]).await;
+    assert_eq!(page["next_cursor"], 3);
+    assert_eq!(
+        page["heads"][base.revision.note.to_string()],
+        merge.revision.id.to_string()
+    );
+    assert!(fs::read_dir(f.data.join("workspaces/home/allowed"))
+        .unwrap()
+        .next()
+        .is_none());
+}
+
+#[tokio::test]
+async fn sync_resolution_rejects_hidden_branches_forgery_and_unrelated_history() {
+    let f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let base = publication(workspace, None, "allowed/test.md", Some(b"base"));
+    assert_eq!(post_revision(&f, &base).await, StatusCode::OK);
+    let remote = publication(workspace, Some(&base), "allowed/test.md", Some(b"remote"));
+    let local = publication(workspace, Some(&base), "allowed/test.md", Some(b"local"));
+    assert_eq!(post_revision(&f, &remote).await, StatusCode::OK);
+    let good = resolution(&remote, &local);
+    let vault = f.data.join("sync/home/vault.json");
+    let before = fs::read(&vault).unwrap();
+    let mut hidden = good.clone();
+    hidden.branches[0].revision.path = RelPath::parse("secret.md").unwrap();
+    assert_eq!(post_revision(&f, &hidden).await, StatusCode::FORBIDDEN);
+    let mut forged = good.clone();
+    forged.branches[0].content_base64 = Some("YmFk".into());
+    assert_eq!(post_revision(&f, &forged).await, StatusCode::BAD_REQUEST);
+    let mut foreign = good.clone();
+    foreign.branches[0].revision.note = notes_model::NoteId::default();
+    assert_eq!(post_revision(&f, &foreign).await, StatusCode::BAD_REQUEST);
+    let mut unrelated = good.clone();
+    let extra = publication(
+        workspace,
+        Some(&base),
+        "allowed/test.md",
+        Some(b"unconsumed"),
+    );
+    unrelated.branches.push(notes_sync::transfer::Branch {
+        revision: extra.revision,
+        content_base64: extra.content_base64,
+    });
+    assert_eq!(post_revision(&f, &unrelated).await, StatusCode::BAD_REQUEST);
+    let mut oversized = good.clone();
+    oversized.branches = vec![good.branches[0].clone(); 21];
+    assert_ne!(post_revision(&f, &oversized).await, StatusCode::OK);
+    assert_eq!(fs::read(&vault).unwrap(), before);
+    assert_eq!(post_revision(&f, &good).await, StatusCode::OK);
 }

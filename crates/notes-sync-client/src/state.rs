@@ -62,25 +62,26 @@ impl State {
             if p.workspace != self.local.workspace {
                 return Err(Error::Invalid);
             }
-            let r = &p.revision;
-            if incoming.heads.get(&r.note).copied() != p.expected
-                || p.expected.is_some_and(|id| !r.parents.contains(&id))
-                || (p.expected.is_none() && !r.parents.is_empty())
-                || r.parents
-                    .iter()
-                    .any(|id| !incoming.revisions.contains_key(id))
-                || incoming.revisions.insert(r.id, r.clone()).is_some()
+            notes_sync::transfer::append(&mut incoming, p).map_err(|_| Error::Invalid)?;
+        }
+        incoming.validate().map_err(|_| Error::Invalid)?;
+        if incoming.revisions.len() + self.local.revisions.len() > 20_000 {
+            return Err(Error::Limit);
+        }
+        for p in &self.pending {
+            if p.branches
+                .iter()
+                .any(|b| self.local.revisions.get(&b.revision.id) != Some(&b.revision))
             {
                 return Err(Error::Invalid);
             }
-            incoming.heads.insert(r.note, r.id);
         }
-        incoming.validate().map_err(|_| Error::Invalid)?;
         if self.cursor != self.received.len() {
             return Err(Error::Invalid);
         }
         for p in self.pending.iter().chain(&self.received) {
-            bytes = bytes.saturating_add(content(p).map_err(|_| Error::Invalid)?.len());
+            bytes = bytes
+                .saturating_add(notes_sync::transfer::payload_size(p).map_err(|_| Error::Invalid)?);
             if bytes > MAX_BYTES {
                 return Err(Error::Limit);
             }
@@ -291,6 +292,7 @@ impl Store {
                 .commit(revision.clone(), expected)
                 .map_err(|_| Error::Conflict)?;
             state.pending.push(Publication {
+                branches: vec![],
                 workspace: state.local.workspace,
                 expected,
                 revision,
@@ -317,6 +319,15 @@ impl Store {
             state.pending.remove(0);
             self.save(&state, false)?;
         }
+        self.fetch_into(&mut state, transport)
+    }
+    /// Receive without publishing, so a rejected outbox cannot hide its peer.
+    pub fn fetch(&self, transport: &mut impl Transport) -> Result<()> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        self.fetch_into(&mut self.load()?, transport)
+    }
+    fn fetch_into(&self, state: &mut State, transport: &mut impl Transport) -> Result<()> {
         let page = transport.page(state.cursor)?;
         if page.workspace != state.local.workspace
             || page.revisions.len() > 20
@@ -330,29 +341,164 @@ impl Store {
             if p.workspace != state.local.workspace || p.revision != *revision {
                 return Err(Error::Protocol);
             }
-            content(&p).map_err(|_| Error::Protocol)?;
+            notes_sync::transfer::payload_size(&p).map_err(|_| Error::Protocol)?;
             state.received.push(p);
         }
         state.cursor = page.next_cursor;
-        // Heads can reference later pages. They are hints, never applied heads.
-        self.save(&state, false)?;
-        Ok(())
+        self.save(state, false)
     }
-    /// Export a received publication into a new file in private operational
+    fn incoming(state: &State) -> Result<Journal> {
+        let mut journal = Journal::new(state.local.workspace);
+        for p in &state.received {
+            notes_sync::transfer::append(&mut journal, p).map_err(|_| Error::Invalid)?;
+        }
+        journal.validate().map_err(|_| Error::Invalid)?;
+        Ok(journal)
+    }
+    pub fn conflicts(&self) -> Result<Vec<notes_sync::Action>> {
+        let lock = self.lock()?;
+        let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        Ok(notes_sync::plan(&state.local, &Self::incoming(&state)?)
+            .map_err(|_| Error::Conflict)?
+            .into_iter()
+            .filter(|a| {
+                matches!(
+                    a,
+                    notes_sync::Action::Conflict { .. }
+                        | notes_sync::Action::MergeEqual { .. }
+                        | notes_sync::Action::PathCollision { .. }
+                )
+            })
+            .collect())
+    }
+    /// Explicit operator choice of result bytes. This only stages a publication;
+    /// it never edits the source, sends traffic, or elects a winner by timestamp.
+    pub fn resolve(&self, local: Uuid, remote: Uuid, result: &Path) -> Result<Uuid> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        if state.mode != Mode::Upload {
+            return Err(Error::Invalid);
+        }
+        let incoming = Self::incoming(&state)?;
+        let a = state
+            .local
+            .revisions
+            .get(&local)
+            .ok_or(Error::Invalid)?
+            .clone();
+        let b = incoming.revisions.get(&remote).ok_or(Error::Invalid)?;
+        if a.note != b.note
+            || a.path != b.path
+            || a.content.is_none()
+            || b.content.is_none()
+            || state.local.heads.get(&a.note) != Some(&local)
+            || incoming.heads.get(&a.note) != Some(&remote)
+        {
+            return Err(Error::Conflict);
+        }
+        let mut graph = state.local.clone();
+        graph
+            .import(incoming.revisions.values().cloned())
+            .map_err(|_| Error::Conflict)?;
+        if graph.is_ancestor(local, remote) || graph.is_ancestor(remote, local) {
+            return Err(Error::Conflict);
+        }
+        let mut bytes = vec![];
+        let file = File::open(result).map_err(|_| Error::Storage)?;
+        if !file.metadata().map_err(|_| Error::Storage)?.is_file() {
+            return Err(Error::Invalid);
+        }
+        file.take(notes_sync::transfer::MAX_CONTENT as u64 + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|_| Error::Storage)?;
+        if bytes.len() > notes_sync::transfer::MAX_CONTENT {
+            return Err(Error::Limit);
+        }
+        let revision = notes_sync::resolve(
+            &graph,
+            local,
+            remote,
+            state.device,
+            a.path,
+            Some(notes_model::ContentHash::from_bytes(
+                *blake3::hash(&bytes).as_bytes(),
+            )),
+        )
+        .map_err(|_| Error::Conflict)?;
+        let mut branches = vec![];
+        let mut seen = BTreeSet::new();
+        for p in state.pending.iter().filter(|p| p.revision.note == a.note) {
+            for b in
+                p.branches
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(notes_sync::transfer::Branch {
+                        revision: p.revision.clone(),
+                        content_base64: p.content_base64.clone(),
+                    }))
+            {
+                if !incoming.revisions.contains_key(&b.revision.id) && seen.insert(b.revision.id) {
+                    branches.push(b);
+                }
+            }
+        }
+        let publication = Publication {
+            workspace: state.local.workspace,
+            expected: Some(remote),
+            revision: revision.clone(),
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches,
+        };
+        // Prove the peer can reconstruct the exact chosen parents from this
+        // envelope. No pending bytes are removed until the whole state is saved.
+        notes_sync::transfer::payload_size(&publication).map_err(|e| match e {
+            notes_sync::Error::Limit => Error::Limit,
+            _ => Error::Invalid,
+        })?;
+        let mut replay = incoming;
+        notes_sync::transfer::append(&mut replay, &publication).map_err(|_| Error::Conflict)?;
+        replay.validate().map_err(|_| Error::Conflict)?;
+        graph
+            .commit(revision.clone(), Some(local))
+            .map_err(|_| Error::Conflict)?;
+        state.local = graph;
+        state.pending.retain(|p| p.revision.note != a.note);
+        state.pending.push(publication);
+        self.save(&state, false)?;
+        Ok(revision.id)
+    }
+    /// Export pending, received or retained branch bytes into private operational
     /// storage. It is not a source write and cannot overwrite an existing file.
     pub fn export(&self, id: Uuid) -> Result<PathBuf> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let state = self.load()?;
         let p = state
-            .received
+            .pending
             .iter()
-            .find(|p| p.revision.id == id)
+            .chain(&state.received)
+            .find_map(|p| {
+                if p.revision.id == id {
+                    return Some(p.clone());
+                }
+                p.branches
+                    .iter()
+                    .find(|b| b.revision.id == id)
+                    .map(|b| Publication {
+                        workspace: p.workspace,
+                        expected: None,
+                        revision: b.revision.clone(),
+                        content_base64: b.content_base64.clone(),
+                        branches: vec![],
+                    })
+            })
             .ok_or(Error::Invalid)?;
         if p.revision.content.is_none() {
             return Err(Error::Invalid);
         }
-        let bytes = content(p).map_err(|_| Error::Invalid)?;
+        let bytes = content(&p).map_err(|_| Error::Invalid)?;
         let mut temp = tempfile::NamedTempFile::new_in(&self.dir).map_err(|_| Error::Storage)?;
         temp.write_all(&bytes).map_err(|_| Error::Storage)?;
         temp.as_file().sync_all().map_err(|_| Error::Storage)?;

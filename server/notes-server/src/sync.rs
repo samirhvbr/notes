@@ -50,7 +50,10 @@ impl Vault {
         }
     }
     fn validate(&self) -> Result<()> {
-        if self.schema != 1 || self.publications.len() > MAX_REVISIONS {
+        if self.schema != 1
+            || self.publications.len() > MAX_REVISIONS
+            || self.journal.revisions.len() > MAX_REVISIONS
+        {
             return Err(Error::Storage);
         }
         let mut rebuilt = Journal::new(self.journal.workspace);
@@ -59,22 +62,13 @@ impl Vault {
             if p.workspace != rebuilt.workspace {
                 return Err(Error::Storage);
             }
-            total = total.checked_add(content(p)?.len()).ok_or(Error::Limit)?;
+            total = total
+                .checked_add(notes_sync::transfer::payload_size(p).map_err(|_| Error::Invalid)?)
+                .ok_or(Error::Limit)?;
             if total > MAX_TOTAL {
                 return Err(Error::Limit);
             }
-            let r = &p.revision;
-            if rebuilt.heads.get(&r.note).copied() != p.expected
-                || p.expected.is_some_and(|id| !r.parents.contains(&id))
-                || (p.expected.is_none() && !r.parents.is_empty())
-                || r.parents
-                    .iter()
-                    .any(|id| !rebuilt.revisions.contains_key(id))
-                || rebuilt.revisions.insert(r.id, r.clone()).is_some()
-            {
-                return Err(Error::Storage);
-            }
-            rebuilt.heads.insert(r.note, r.id);
+            notes_sync::transfer::append(&mut rebuilt, p).map_err(|_| Error::Storage)?;
         }
         if self
             .device_owners
@@ -98,11 +92,12 @@ impl Vault {
             .all(|r| allowed_path(&r.path, credential, false))
     }
 }
-fn content(p: &Publication) -> Result<Vec<u8>> {
-    notes_sync::transfer::content(p).map_err(|e| match e {
+fn sync_error(e: notes_sync::Error) -> Error {
+    match e {
+        notes_sync::Error::Stale | notes_sync::Error::Collision => Error::Stale,
         notes_sync::Error::Limit => Error::Limit,
         _ => Error::Invalid,
-    })
+    }
 }
 fn within(path: &RelPath, scope: &RelPath) -> bool {
     scope.is_root() || path == scope || path.as_str().starts_with(&format!("{scope}/"))
@@ -274,18 +269,18 @@ pub fn fetch(root: &Path, c: &Credential, id: Uuid) -> Result<Publication> {
 }
 pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
     require(c, Permission::Read)?;
-    let size = content(&p)?.len();
+    let size = notes_sync::transfer::payload_size(&p).map_err(sync_error)?;
     transaction(root, c, |v| {
         if p.workspace != v.journal.workspace {
             return Err(Error::Stale);
         }
-        authorize(v, c, &p)?;
         if let Some(old) = v
             .publications
             .iter()
             .find(|old| old.revision.id == p.revision.id)
         {
             return if *old == p {
+                authorize(v, c, &p)?;
                 Ok((p.revision.id, false))
             } else {
                 Err(Error::Stale)
@@ -295,18 +290,37 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
             .publications
             .iter()
             .try_fold(size, |sum, old| -> Result<usize> {
-                Ok(sum + content(old)?.len())
+                Ok(sum + notes_sync::transfer::payload_size(old).map_err(|_| Error::Invalid)?)
             })?;
         if total > MAX_TOTAL || v.publications.len() >= MAX_REVISIONS {
             return Err(Error::Limit);
         }
-        v.journal
-            .commit(p.revision.clone(), p.expected)
-            .map_err(|e| match e {
-                notes_sync::Error::Stale | notes_sync::Error::Collision => Error::Stale,
-                notes_sync::Error::Limit => Error::Limit,
-                _ => Error::Invalid,
-            })?;
+        // Work only on the transaction's disposable state. Validate and authorize
+        // each imported edge before authorizing the merge against both parents.
+        let mut next = v.journal.clone();
+        notes_sync::transfer::append(&mut next, &p).map_err(sync_error)?;
+        if next.revisions.len() > MAX_REVISIONS {
+            return Err(Error::Limit);
+        }
+        next.validate().map_err(sync_error)?;
+        for branch in &p.branches {
+            authorize(
+                v,
+                c,
+                &Publication {
+                    workspace: p.workspace,
+                    expected: None,
+                    revision: branch.revision.clone(),
+                    content_base64: branch.content_base64.clone(),
+                    branches: vec![],
+                },
+            )?;
+            v.journal
+                .revisions
+                .insert(branch.revision.id, branch.revision.clone());
+        }
+        authorize(v, c, &p)?;
+        v.journal = next;
         let id = p.revision.id;
         v.publications.push(p);
         Ok((id, true))
