@@ -8,6 +8,12 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.13 - guard sync filesystem effects in core
+
+Correlate closed rename permutations using unique native identities plus unchanged
+bytes. Capture referenced binary files through the workspace jail and restore
+attachments under exclusive workspace ownership with BaseRev preconditions.
+
 ## 0.20.13 - validate referenced attachment publications
 
 Extend immutable publications and retained branches with bounded attachment

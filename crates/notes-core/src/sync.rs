@@ -91,6 +91,7 @@ pub fn inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
         }
     }
     paths.sort();
+    correlate_inventory_cycles(&mut service, &paths)?;
     // Drain the core's bounded correlation queue before opening renamed notes.
     // Otherwise a rename beyond the first hash budget could receive a new ID.
     let mut settled = false;
@@ -114,6 +115,72 @@ pub fn inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
             })
         })
         .collect()
+}
+
+// Only a complete permutation with unique native identities AND unchanged bytes
+// can override path identity. Atomic saves and ambiguous hard links do not qualify.
+fn correlate_inventory_cycles(service: &mut WorkspaceService, paths: &[RelPath]) -> Result<()> {
+    use std::collections::{BTreeMap, BTreeSet, HashMap};
+    let records = service.open()?.registry.notes.clone();
+    let mut identities = HashMap::new();
+    for (id, record) in &records {
+        if let Some(native) = &record.native_id {
+            identities
+                .entry(native.clone())
+                .or_insert_with(Vec::new)
+                .push(*id);
+        }
+    }
+    let mut destinations = BTreeMap::new();
+    let mut seen = HashMap::new();
+    for path in paths {
+        let stat = service.open()?.fs.stat(path)?;
+        if let Some(native) = stat.native_id {
+            *seen.entry(native.clone()).or_insert(0usize) += 1;
+            if let Some(ids) = identities.get(&native) {
+                if ids.len() == 1 && records[&ids[0]].path != *path {
+                    let bytes = service.open()?.fs.read(path)?;
+                    if notes_fs::hash(&bytes) == records[&ids[0]].hash {
+                        destinations.insert(ids[0], path.clone());
+                    }
+                }
+            }
+        }
+    }
+    destinations.retain(|id, _| {
+        records[id]
+            .native_id
+            .as_ref()
+            .is_some_and(|n| seen.get(n) == Some(&1))
+    });
+    let mut accepted = BTreeSet::new();
+    for start in destinations.keys() {
+        let mut cycle = BTreeSet::new();
+        let mut current = *start;
+        while cycle.insert(current) {
+            let Some(target) = destinations.get(&current) else {
+                break;
+            };
+            let Some((next, _)) = records.iter().find(|(_, r)| r.path == *target) else {
+                break;
+            };
+            current = *next;
+            if current == *start {
+                accepted.extend(cycle);
+                break;
+            }
+        }
+    }
+    for id in accepted {
+        service
+            .open_mut()?
+            .registry
+            .notes
+            .get_mut(&id)
+            .unwrap()
+            .path = destinations[&id].clone();
+    }
+    Ok(())
 }
 
 /// Original bytes captured against the inventory hash. A concurrent edit aborts
@@ -621,5 +688,176 @@ pub fn apply_resolution_effect(
         )?;
         service.invalidate_paths();
         Ok(result)
+    })?
+}
+
+/// Capture only locally referenced non-note files, through the workspace jail.
+pub fn capture_attachments(
+    root: &Path,
+    data: &Path,
+    path: &RelPath,
+    bytes: &[u8],
+) -> Result<Vec<notes_sync::transfer::Attachment>> {
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_workspace(root)?;
+    let paths = notes_sync::transfer::attachment_paths(path, bytes);
+    let blocked = || CoreError::Unsupported {
+        cap: "attachment capture is missing, changed or exceeds limits".into(),
+    };
+    if paths.len() > 32 {
+        return Err(blocked());
+    }
+    let mut total = bytes.len();
+    let mut result = vec![];
+    for path in paths {
+        let stat = service.open()?.fs.stat(&path)?;
+        if stat.kind != EntryKind::File || stat.size > 8 * 1024 * 1024 {
+            return Err(blocked());
+        }
+        let raw = service.open()?.fs.read(&path)?;
+        let after = service.open()?.fs.stat(&path)?;
+        total += raw.len();
+        if total > 8 * 1024 * 1024 || stat.size != after.size || stat.mtime_ns != after.mtime_ns {
+            return Err(blocked());
+        }
+        result.push(notes_sync::transfer::Attachment::new(path, &raw));
+    }
+    Ok(result)
+}
+
+/// Restore one referenced binary. Identical existing bytes may be shared;
+/// differing bytes require the last durable attachment revision.
+pub fn apply_attachment(
+    root: &Path,
+    data: &Path,
+    asset: &notes_sync::transfer::Attachment,
+    expected: Option<&notes_model::BaseRev>,
+    retry: bool,
+    prepare: impl FnOnce() -> Result<()>,
+) -> Result<notes_model::BaseRev> {
+    restore_attachment(root, data, asset, expected, retry, true, prepare)
+}
+pub fn confirm_attachment(
+    root: &Path,
+    data: &Path,
+    asset: &notes_sync::transfer::Attachment,
+) -> Result<notes_model::BaseRev> {
+    restore_attachment(root, data, asset, None, false, false, || Ok(()))
+}
+fn restore_attachment(
+    root: &Path,
+    data: &Path,
+    asset: &notes_sync::transfer::Attachment,
+    expected: Option<&notes_model::BaseRev>,
+    retry: bool,
+    write: bool,
+    prepare: impl FnOnce() -> Result<()>,
+) -> Result<notes_model::BaseRev> {
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_sync_workspace(root)?;
+    let path = &asset.path;
+    let blocked = || CoreError::Unsupported {
+        cap: "attachment application precondition failed".into(),
+    };
+    let bytes = asset.bytes().map_err(|_| blocked())?;
+    if path.is_root()
+        || path.is_note()
+        || path.as_str().split('/').any(crate::ignore::is_hidden_name)
+    {
+        return Err(blocked());
+    }
+    for name in path.as_str().split('/') {
+        notes_model::portable_name(name).map_err(|_| blocked())?;
+    }
+    let dir = service.open()?.dir.clone();
+    let mut lock = crate::lock::acquire(&crate::paths::lock_file(&dir))?;
+    lock.with(|| {
+        if service.open()?.read_only || !service.open()?.fs.caps().atomic_replace {
+            return Err(blocked());
+        }
+        match std::fs::read_dir(crate::paths::drafts_dir(&dir)) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    return Err(blocked());
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(CoreError::io("sync_drafts", "state", &e)),
+        }
+        let current = match service.open()?.fs.stat(path) {
+            Ok(stat) => {
+                if stat.kind != EntryKind::File || stat.size > 8 * 1024 * 1024 {
+                    return Err(blocked());
+                }
+                Some(notes_model::BaseRev {
+                    size: stat.size,
+                    mtime_ns: stat.mtime_ns,
+                    hash: notes_fs::hash(&service.open()?.fs.read(path)?),
+                })
+            }
+            Err(CoreError::NotFound { .. })
+            | Err(CoreError::Io {
+                kind: notes_model::IoKind::NotFound,
+                ..
+            }) => None,
+            Err(e) => return Err(e),
+        };
+        let identical = current.as_ref().is_some_and(|r| r.hash == asset.hash);
+        if !identical && (!write || current.as_ref() != expected) {
+            return Err(blocked());
+        }
+        // Retry is proof of an interrupted write; identical bytes do not need
+        // replacement regardless of whether another note already stored them.
+        let _ = retry;
+        prepare()?;
+        if !identical {
+            if let Some(before) = expected {
+                if !matches!(
+                    service
+                        .open()?
+                        .fs
+                        .write_atomic(path, &bytes, Some(before))?,
+                    notes_fs::WriteOutcome::Written(_)
+                ) {
+                    return Err(blocked());
+                }
+            } else {
+                let mut parent = RelPath::root();
+                let names: Vec<_> = path.as_str().split('/').collect();
+                for name in &names[..names.len() - 1] {
+                    let next = parent.join(name)?;
+                    match service.open()?.fs.stat(&next) {
+                        Ok(s) if s.kind == EntryKind::Dir => {}
+                        Ok(_) => return Err(blocked()),
+                        Err(CoreError::NotFound { .. })
+                        | Err(CoreError::Io {
+                            kind: notes_model::IoKind::NotFound,
+                            ..
+                        }) => {
+                            service.check_name(name, &next)?;
+                            service.open()?.fs.create_dir(&next)?;
+                        }
+                        Err(e) => return Err(e),
+                    }
+                    parent = next;
+                }
+                service.check_name(path.file_name(), path)?;
+                service.open()?.fs.create_new(path, &bytes)?;
+            }
+        }
+        let stat = service.open()?.fs.stat(path)?;
+        let hash = notes_fs::hash(&service.open()?.fs.read(path)?);
+        if hash != asset.hash {
+            return Err(blocked());
+        }
+        Ok(notes_model::BaseRev {
+            size: stat.size,
+            mtime_ns: stat.mtime_ns,
+            hash,
+        })
     })?
 }
