@@ -32,16 +32,29 @@ release, remains pending in [0.1d acceptance](docs/ACCEPTANCE-0.1d.md) and
 [0.2 acceptance](docs/ACCEPTANCE-0.2.md) and
 [0.3 acceptance](docs/ACCEPTANCE-0.3.md). Automated tests are recorded separately.
 
-macOS and Windows build and are tested in CI on every push. **No artefact is
-published for either**, because an unsigned one teaches its user to click past
-the warning that exists to protect them
-([ADR-024](docs/decisions.md)) — the missing pieces are an Apple Developer
-membership and a code-signing certificate, and they are named in
+**macOS is published**, signed with a Developer ID and notarised by Apple, from
+[samirhv.com.br/p/tura-notes](https://samirhv.com.br/p/tura-notes). It is built
+by `./build-local.sh` on the machine whose keychain holds the certificate rather
+than by CI, because that is where a signing key should live
+([ADR-070](docs/decisions.md)); the `build.yml` job stays disabled and the
+GitHub Release carries the Linux artefacts only.
+
+**Windows is not published.** An unsigned build teaches its user to click past
+the warning that exists to protect them ([ADR-024](docs/decisions.md)); the
+missing piece is an OV code-signing certificate, and it is named in
 `.github/workflows/build.yml`.
 
 Stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite/FTS5.
 
 ## Install
+
+macOS, from [samirhv.com.br/p/tura-notes](https://samirhv.com.br/p/tura-notes):
+a signed, notarised `.dmg` for Apple silicon. Check it before you open it — the
+page shows the same hash:
+
+```bash
+shasum -a 256 ~/Downloads/Tura\ Notes_*.dmg
+```
 
 Linux, from the
 [latest release that carries packages](https://github.com/samirhvbr/tura-notes/releases):

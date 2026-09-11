@@ -8,6 +8,32 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.1 - sign and notarise the macOS build from the local pipeline
+
+`build-local.sh` is now the macOS release pipeline rather than a local
+verification build. It reads the Developer ID certificate and the notarisation
+credential from the keychain of the machine that builds — which is where a
+signing key belongs, and the reason the `build.yml` macOS job has never run —
+signs and notarises the app, staples the ticket into the DMG and records a
+sha256 beside it. `--publish` uploads the result to samirhv.com.br through one
+scp and one `php artisan files:add`, then reads the hash back from the server,
+because a truncated upload leaves a file that exists and fails only in the
+user's browser. Publishing refuses an unsigned or unstapled image, so ADR-024 is
+enforced by the tool instead of remembered.
+
+The sha256 is written after stapling. Stapling rewrites the image, so the hash
+taken before it described a file that no longer existed — the symptom was a
+build that could never be reused, and the consequence would have been a
+published number that no download ever matched.
+
+Carried over from the rest of the fleet: a per-step clock, a toolchain preflight
+that fails in under a second with an actionable message, `git pull --ff-only`
+before packaging, ejection of DMG images a killed build left mounted, and reuse
+of an on-disk build whose sha256 still matches and whose sources are no newer.
+INT and TERM restore the stamped configuration placeholder as EXIT already did,
+so an interrupted notarisation no longer breaks the next commit. Recorded as
+ADR-070.
+
 ## 1.0.0 - introduce the Tura Notes identity
 
 Adopt Tura Notes with an editable ribbon-T logo, platform icons and a branded

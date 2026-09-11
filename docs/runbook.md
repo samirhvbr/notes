@@ -46,25 +46,51 @@ What ships today, and what does not:
 
 | | |
 |---|---|
-| Linux | `.deb`, AppImage, a tarball, and the AUR `notes-bin` package — all built and attached |
-| macOS, Windows | **not published.** The jobs are written in `build.yml` behind `if: false`; each carries the list of what is missing, and in both cases it is an account or a certificate rather than code (ADR-024) |
+| Linux | `.deb`, AppImage, a tarball, and the AUR `notes-bin` package — all built in CI and attached to the Release |
+| macOS | **published, from this repository's own `build-local.sh` rather than from CI**, and served by [samirhv.com.br](https://samirhv.com.br/p/tura-notes) rather than attached to the Release. The certificate that signs it lives in a keychain, not in a repository secret, so the machine that holds it is the machine that packages (ADR-070). The `build.yml` job stays behind `if: false` |
+| Windows | **not published.** The job is written in `build.yml` behind `if: false` and carries the list of what is missing; it is an OV certificate rather than code (ADR-024) |
 
-### Building the packages locally
-
-On macOS, build a local verification DMG from the repository root:
+### The macOS release, from the repository root
 
 ```bash
-./build-local.sh
+./build-local.sh              # build, sign, notarise, staple
+./build-local.sh --publish    # and upload it to samirhv.com.br
 ```
 
-It runs `git pull --ff-only`, installs the app dependencies, temporarily stamps
-the version from `version.md`, and writes the DMG under
-`target/release/bundle/dmg/`. The script restores the
-committed `0.0.0` configuration placeholder when it exits. Use
-`--skip-npm-ci` for an already installed dependency tree or `--skip-git-pull`
-when deliberately building the current local checkout. This is a local
-verification artifact only: it is neither signed nor notarized and must not be
-distributed under ADR-024.
+It runs `git pull --ff-only`, installs the app dependencies, stamps the version
+from `version.md`, builds the DMG under `target/release/bundle/dmg/`, signs it
+with the `Developer ID Application` certificate in the keychain, notarises it,
+staples the ticket and writes a `.sha256` beside it. The committed `0.0.0`
+configuration placeholder is restored when it exits, including on failure and on
+Ctrl-C.
+
+**The `.sha256` is written after stapling, not before.** Stapling rewrites the
+image, so a hash taken earlier describes a file that no longer exists — and that
+is the number a user checks their download against.
+
+`./build-local.sh --help` prints the whole contract. The flags worth knowing:
+
+| | |
+|---|---|
+| `--publish` | upload to samirhv.com.br: `scp` to the server, then one `php artisan files:add`, then read the hash back. **Refuses an unsigned or unstapled image** — ADR-024, enforced rather than remembered |
+| `--no-sign` | a test build. Not signed, not publishable |
+| `--force` | rebuild even when a verified DMG of this version is already on disk |
+| `--skip-npm-ci`, `--skip-git-pull` | an installed dependency tree; this checkout as it is |
+
+**Credentials are read, never typed.** The signing identity comes from
+`security find-identity`; the notarisation password from the keychain entry
+`tura-notarize` (or `shvia-notarize`, the same Apple team). Store it once:
+
+```bash
+security add-generic-password -U -s tura-notarize -a YOUR_APPLE_ID -w
+```
+
+Per-machine overrides go in `~/.config/tura-notes/build.env` — outside the
+tree, so it survives a fresh clone — or `./signing.env`, which is gitignored.
+Nothing about signing goes in the repository.
+
+Without a certificate the build still runs and says, in as many words, that its
+output is unsigned and must not be distributed (ADR-024).
 
 The same three steps CI runs, in the same order:
 

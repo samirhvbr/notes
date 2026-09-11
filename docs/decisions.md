@@ -1959,3 +1959,38 @@ the `notes` binary, internal package names and existing data paths to preserve
 installed users' settings and workspace access. The major version does not
 waive outstanding acceptance or security requirements. Editable SVG sources
 and regeneration instructions live in [brand.md](brand.md).
+
+## ADR-070 — macOS releases are signed, notarised and published by the local pipeline
+
+**Status:** ACCEPTED · 11/09/2026
+
+**Context.** [ADR-024](#adr-024--no-unsigned-macos-or-windows-artefact-is-published)
+withheld every macOS artefact until one could be signed and notarised, and named
+the missing pieces: an Apple Developer membership and a code-signing
+certificate. Both now exist. What does not exist is a way to put that
+certificate in CI without also putting it, and the app-specific password that
+notarises with it, into repository secrets — and the macOS job in `build.yml`
+has sat behind `if: false` since it was written, so nothing has ever shipped for
+macOS at all. Meanwhile the rest of the fleet had already answered the same
+question: `shvia-desktop` and `sshvterm-desktop` package, sign and publish from
+the maintainer's Mac, because that is where the certificate lives.
+
+**Decision.** `build-local.sh` is the macOS release pipeline. It reads the
+`Developer ID Application` certificate and the notarisation credential from the
+**keychain** of the machine that builds, signs and notarises the `.app`, staples
+the ticket into the `.dmg`, records a `.sha256` beside it, and — with
+`--publish` — uploads it to samirhv.com.br through `php artisan files:add`,
+reading the hash back from the server afterwards. **It refuses to publish an
+unsigned or unstapled image**, which is ADR-024 enforced by the tool rather than
+by remembering it. Linux continues to be built and published by `build.yml`;
+the macOS and Windows jobs there stay disabled.
+
+**Consequences.** macOS releases depend on one machine being available, and that
+is the trade: the alternative is a Developer ID private key in a CI secret,
+which is a worse thing to own than a manual step. The certificate belongs to the
+Blue3 team, so Gatekeeper shows that organisation as the signing authority of a
+personally-authored application — accurate, and the only Developer ID there is.
+The published macOS artefact is the Apple-silicon `.dmg`; an Intel build needs
+a second run on, or a cross-compile for, `x86_64`. The download is served by
+samirhv.com.br rather than attached to the GitHub Release, so the Release and
+the downloads page carry different platform sets until CI can sign.

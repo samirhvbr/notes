@@ -44,3 +44,10 @@ Thumbs.db
 packaging/aur/notes-bin/PKGBUILD
 packaging/aur/notes-bin/*.tar.gz
 dist-release/
+
+# Per-machine signing credentials — a secret, which is the one thing this file
+# is allowed to exclude. The keychain is the preferred home for both the
+# Developer ID and the notarisation password (ADR-070); this is the escape hatch
+# for a machine that needs an override, and `~/.config/tura-notes/build.env` is
+# the same file kept outside the tree entirely.
+signing.env
