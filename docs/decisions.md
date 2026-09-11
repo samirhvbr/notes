@@ -1831,3 +1831,17 @@ source effects; a nonempty cache still requires explicit application. Missing
 tracked notes block creation guesses, and occupied destinations never authorize
 overwriting. Retention, deletion capture, ambiguous moves and open editor buffers
 remain outside these choices.
+
+
+## ADR-062 — Restored client recovery audits history without applying files
+
+**Status:** ACTIVE · Implemented in 0.20.18.
+
+**Decision.** Provide explicit unscoped client recovery complementary to ADR-059.
+Verify the complete retained prefix and recover one additional page per atomic
+checkpoint. Only an identical full server publication clears a pending entry.
+Preserve unpublished branches, captures and application receipts; never synthesize
+application progress from downloaded bytes. Refuse mixed receipt/cache backups,
+scoped cursors and pending pairing. Pause publishers during the audit because it
+is not a server-wide snapshot. This does not authorize history pruning, identity
+repair or replacement of local files after an application-data rollback.

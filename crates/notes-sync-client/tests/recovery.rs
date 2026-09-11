@@ -2179,3 +2179,209 @@ fn a_new_root_can_resolve_divergence_before_its_first_local_confirmation() {
     receiver.acknowledge(&mut peer).unwrap();
     assert_eq!(receiver.status().unwrap().applied_revisions, 1);
 }
+
+#[test]
+fn restored_client_recovers_audited_pages_without_publishing_or_touching_source() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial\r\n").unwrap();
+    sender.stage().unwrap();
+    let checkpoint = fs::read(dir.path().join("state/client.json")).unwrap();
+    sender.transfer(&mut peer).unwrap();
+    for i in 0..22 {
+        fs::write(root.join("test.md"), format!("version {i}\r\n")).unwrap();
+        sender.stage().unwrap();
+        sender.transfer(&mut peer).unwrap();
+    }
+    fs::write(dir.path().join("state/client.json"), checkpoint).unwrap();
+    fs::write(root.join("test.md"), b"unpublished local work").unwrap();
+    let original_log = peer.log.clone();
+    assert_eq!(sender.recover_client(&mut peer).unwrap(), 20);
+    assert_eq!(sender.status().unwrap().pending, 0);
+    let restarted = Store::open(&dir.path().join("state")).unwrap();
+    assert_eq!(restarted.recover_client(&mut peer).unwrap(), 3);
+    assert_eq!(restarted.recover_client(&mut peer).unwrap(), 0);
+    assert_eq!(peer.log, original_log);
+    assert_eq!(
+        fs::read(root.join("test.md")).unwrap(),
+        b"unpublished local work"
+    );
+    assert!(peer.acknowledged.is_empty());
+    assert!(!dir.path().join("state/application.json").exists());
+    // Recovery does not guess how offline bytes relate to remote successors.
+    restarted.stage().unwrap();
+    assert!(!restarted.conflicts().unwrap().is_empty());
+}
+
+#[test]
+fn restored_client_preserves_unpublished_divergence_and_application_receipts() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+    receiver.acknowledge(&mut peer).unwrap();
+    fs::write(target.join("test.md"), b"saved offline receiver edit").unwrap();
+    receiver.stage_receiver_edits().unwrap();
+    let before: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.path().join("receiver/client.json")).unwrap())
+            .unwrap();
+    let receipts = fs::read(dir.path().join("receiver/application.json")).unwrap();
+    fs::write(root.join("test.md"), b"new remote").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let acks = peer.acknowledged.clone();
+    assert_eq!(receiver.recover_client(&mut peer).unwrap(), 1);
+    assert_eq!(receiver.status().unwrap().pending, 1);
+    let after: serde_json::Value =
+        serde_json::from_slice(&fs::read(dir.path().join("receiver/client.json")).unwrap())
+            .unwrap();
+    assert_eq!(before["pending"], after["pending"]);
+    assert_eq!(before["capture"], after["capture"]);
+    assert_eq!(before["local"], after["local"]);
+    assert_eq!(
+        fs::read(dir.path().join("receiver/application.json")).unwrap(),
+        receipts
+    );
+    assert_eq!(peer.acknowledged, acks);
+    assert_eq!(
+        fs::read(target.join("test.md")).unwrap(),
+        b"saved offline receiver edit"
+    );
+    assert!(!receiver.conflicts().unwrap().is_empty());
+}
+
+#[test]
+fn restored_client_rejects_short_foreign_corrupt_and_divergent_prefixes_atomically() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let before = fs::read(dir.path().join("state/client.json")).unwrap();
+    assert!(sender.recover_client(&mut Peer::new()).is_err());
+    peer.bad_fetch = true;
+    assert!(sender.recover_client(&mut peer).is_err());
+    peer.bad_fetch = false;
+    let retained = peer.log.clone();
+    peer.log[0].revision.device = Uuid::new_v4();
+    assert!(sender.recover_client(&mut peer).is_err());
+    peer.log = retained;
+    rollback(&mut peer, 0);
+    assert!(sender.recover_client(&mut peer).is_err());
+    assert_eq!(
+        fs::read(dir.path().join("state/client.json")).unwrap(),
+        before
+    );
+    assert_eq!(fs::read(root.join("test.md")).unwrap(), b"initial");
+}
+
+#[test]
+fn restored_client_refuses_scopes_and_mixed_application_backups() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (_, receiver) = receiver(dir.path(), &mut peer);
+    receiver.apply(&dir.path().join("app-data")).unwrap();
+    let path = dir.path().join("receiver/client.json");
+    let original = fs::read(&path).unwrap();
+    let mut state: serde_json::Value = serde_json::from_slice(&original).unwrap();
+    state["endpoint"]["scope"] = serde_json::json!("shared");
+    fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
+    assert!(matches!(
+        receiver.recover_client(&mut peer),
+        Err(Error::Invalid)
+    ));
+    state = serde_json::from_slice(&original).unwrap();
+    state["received"] = serde_json::json!([]);
+    state["cursor"] = serde_json::json!(0);
+    let mixed = serde_json::to_vec(&state).unwrap();
+    fs::write(&path, &mixed).unwrap();
+    assert!(matches!(
+        receiver.recover_client(&mut peer),
+        Err(Error::Invalid)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), mixed);
+}
+
+#[test]
+fn restored_client_rejects_corrupt_tail_and_uuid_reuse_without_dropping_outbox() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"pending exact bytes").unwrap();
+    sender.stage().unwrap();
+    let path = dir.path().join("state/client.json");
+    let backup = fs::read(&path).unwrap();
+    sender.transfer(&mut peer).unwrap();
+    fs::write(&path, &backup).unwrap();
+    peer.bad_fetch = true;
+    assert!(sender.recover_client(&mut peer).is_err());
+    assert_eq!(fs::read(&path).unwrap(), backup);
+    peer.bad_fetch = false;
+    peer.log[0].revision.device = Uuid::new_v4();
+    assert!(matches!(
+        sender.recover_client(&mut peer),
+        Err(Error::Conflict)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), backup);
+    assert_eq!(sender.status().unwrap().pending, 1);
+}
+
+#[test]
+fn restored_client_checkpoints_nothing_when_transport_fails_mid_audit() {
+    struct Interrupted<'a> {
+        peer: &'a mut Peer,
+        remaining: usize,
+    }
+    impl Transport for Interrupted<'_> {
+        fn page(&mut self, cursor: usize) -> Result<Page> {
+            self.peer.page(cursor)
+        }
+        fn fetch(&mut self, id: Uuid) -> Result<Publication> {
+            if self.remaining == 0 {
+                return Err(Error::Offline);
+            }
+            self.remaining -= 1;
+            self.peer.fetch(id)
+        }
+        fn publish(&mut self, _: &Publication) -> Result<()> {
+            panic!("recovery must only read the server")
+        }
+        fn acknowledge(
+            &mut self,
+            _: &notes_sync::transfer::ApplicationAcknowledgment,
+        ) -> Result<()> {
+            panic!("recovery must not invent acknowledgments")
+        }
+    }
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let path = dir.path().join("state/client.json");
+    let backup = fs::read(&path).unwrap();
+    for text in [b"second", b"third!"] {
+        fs::write(root.join("test.md"), text).unwrap();
+        sender.stage().unwrap();
+        sender.transfer(&mut peer).unwrap();
+    }
+    fs::write(&path, &backup).unwrap();
+    assert!(matches!(
+        sender.recover_client(&mut Interrupted {
+            peer: &mut peer,
+            remaining: 2
+        }),
+        Err(Error::Offline)
+    ));
+    assert_eq!(fs::read(&path).unwrap(), backup);
+    let restarted = Store::open(&dir.path().join("state")).unwrap();
+    assert_eq!(
+        restarted
+            .recover_client(&mut Interrupted {
+                peer: &mut peer,
+                remaining: 3
+            })
+            .unwrap(),
+        2
+    );
+}

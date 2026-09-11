@@ -8,6 +8,18 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.18 - recover restored client transfer queues
+
+Audit an older unscoped client cache against the complete server prefix before
+recovering another page. Clear only identical published outbox entries, preserve
+unpublished branches and application receipts, and checkpoint successful batches
+atomically. Refuse corrupt, divergent, scoped and mixed backup states without
+source writes. Cover bounded recovery, transport interruption and retained local
+conflicts with integration tests. All 55 client integration tests and 17 library
+tests passed, as did native/Windows clippy, generated bindings, frontend checks
+and the remaining workspace suite. The full local gate retains the existing
+watcher startup timing failure.
+
 ## 0.20.17 - expose receiver file capture options
 
 Expose independent default-off desktop options and CLI commands for capturing

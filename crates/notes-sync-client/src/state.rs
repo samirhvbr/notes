@@ -576,6 +576,74 @@ impl Store {
         Ok(end - cursor)
     }
 
+    /// Recover a restored queue against an exact retained server prefix. Only
+    /// cache bytes and already-published outbox entries change; source files,
+    /// local branches and application receipts remain untouched.
+    pub fn recover_client(&self, transport: &mut impl Transport) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        if state.endpoint.scope.is_some() || state.pairing.is_some() {
+            return Err(Error::Invalid);
+        }
+        // Refuse a mixed backup whose receipts do not belong to its cache.
+        self.application(&state)?;
+        let retained = state.received.len();
+        let mut cursor = 0;
+        loop {
+            let page = transport.page(cursor)?;
+            if page.workspace != state.local.workspace
+                || page.revisions.len() > 20
+                || page.next_cursor != cursor + page.revisions.len()
+                || (page.has_more && page.next_cursor == cursor)
+            {
+                return Err(Error::Protocol);
+            }
+            for revision in page.revisions {
+                let publication = transport.fetch(revision.id)?;
+                if publication.workspace != state.local.workspace
+                    || publication.revision != revision
+                {
+                    return Err(Error::Protocol);
+                }
+                if cursor < retained {
+                    if publication != state.received[cursor] {
+                        return Err(Error::Conflict);
+                    }
+                } else {
+                    state.received.push(publication);
+                }
+                cursor += 1;
+            }
+            // Each pass verifies the old prefix and adds at most one page.
+            if cursor > retained || !page.has_more {
+                break;
+            }
+        }
+        if cursor < retained {
+            return Err(Error::Conflict);
+        }
+        let mut confirmed = BTreeSet::new();
+        for pending in &state.pending {
+            if let Some(published) = state
+                .received
+                .iter()
+                .find(|p| p.revision.id == pending.revision.id)
+            {
+                if published != pending {
+                    return Err(Error::Conflict);
+                }
+                confirmed.insert(pending.revision.id);
+            }
+        }
+        state
+            .pending
+            .retain(|p| !confirmed.contains(&p.revision.id));
+        state.cursor = cursor;
+        self.save(&state, false)?;
+        Ok(cursor - retained)
+    }
+
     fn recovery_prefix(state: &State, transport: &mut impl Transport) -> Result<usize> {
         let mut cursor = 0;
         loop {

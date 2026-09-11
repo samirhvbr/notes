@@ -1073,3 +1073,36 @@ new-note edits during transfer, identity-preserving renames, a second move befor
 confirmation, independent desktop options, draft/open-workspace refusal and
 retained path collisions. Native and HTTPS smoke tests publish new scoped notes
 and renames from one receiver and explicitly apply both on another device.
+
+
+### Restored client queue recovery (0.20.18)
+
+`recover-client` explicitly audits an unscoped queue restored from an older
+backup against the current server. Pause publishers and the desktop scheduler
+while recovering, and keep the original backup. Restore the queue and its bound
+application data consistently; mixed snapshots whose receipts refer beyond the
+cached history are refused. Pending pairing and scoped queues are refused because
+a filtered cursor cannot prove the complete server prefix.
+
+```sh
+notes-sync-client recover-client /absolute/queue /absolute/credential.secret
+```
+
+Each call compares every retained publication, including original bytes,
+attachments and imported branches, with the same ordered server prefix. It then
+recovers at most 20 further publications. Repeat until `recovered_publications`
+is zero. A matching pending publication is removed only when the complete
+publication is identical to the server copy. Unpublished changes and local
+branches remain intact, including conflicts. The command makes only read requests;
+it never republishes, resets cursors, edits source files, changes application
+receipts, or acknowledges remote revisions. The existing transport permissions,
+rate limits and retry policy apply.
+
+Shorter, foreign, divergent or corrupt server history is refused without saving
+partial progress. Each successful batch is saved atomically under the queue lock.
+An interrupted audit can be repeated after restart. Recovery is cache/outbox
+reconciliation, not a repair of lost file identities or stale application receipts.
+If application data was rolled back while source files advanced, ordinary guarded
+application can still refuse; preserve those files and resolve that mismatch
+separately. No timestamp chooses a winner. Retention/pruning and scoped backup
+reconciliation remain unimplemented.
