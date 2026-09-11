@@ -51,6 +51,21 @@ What ships today, and what does not:
 
 ### Building the packages locally
 
+On macOS, build a local verification DMG from the repository root:
+
+```bash
+./build-local.sh
+```
+
+It runs `git pull --ff-only`, installs the app dependencies, temporarily stamps
+the version from `version.md`, and writes the DMG under
+`target/release/bundle/dmg/`. The script restores the
+committed `0.0.0` configuration placeholder when it exits. Use
+`--skip-npm-ci` for an already installed dependency tree or `--skip-git-pull`
+when deliberately building the current local checkout. This is a local
+verification artifact only: it is neither signed nor notarized and must not be
+distributed under ADR-024.
+
 The same three steps CI runs, in the same order:
 
 ```bash

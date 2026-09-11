@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.26 - add the local macOS installer build
+
+Add a root `build-local.sh` that produces a local macOS DMG for installed-build
+verification. It checks the host toolchain, synchronizes the checkout by
+default, stamps the package version temporarily, restores the committed
+configuration placeholder, and never publishes an unsigned artifact. Document
+the output path and local-only boundary in the runbook.
+
 ## 0.20.25 - cover receiver capture under an open application
 
 Exercise receiver capture through the desktop controller while the same
