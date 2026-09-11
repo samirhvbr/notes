@@ -1711,3 +1711,11 @@ chosen live receiver resolution at its applied path. Require `resolve-to` for
 this restoration; the implicit same-path command still refuses these parents.
 Superseding those ancestors executes no filesystem effects and creates no
 receipts for them. Local move/delete choices remain outside this operation.
+
+**0.20.11 extension.** Explicit recapture appends a saved-edit revision to the
+previous captured branch, not to a resolution that was never applied locally.
+Keep the original application anchor and replace only the observed capture
+precondition. Retain all pending capture bytes; require publication of a prepared
+choice first. Refuse unfinished application intents and unchanged bytes. New
+resolution remains mandatory, with existing branch/byte limits and no false
+application receipt for the earlier published choice.

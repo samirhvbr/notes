@@ -165,8 +165,9 @@ Source rename/deletion application and editor conflict controls remain open.
 Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 The 0.20.10 sync increment restores remote rename/delete conflicts explicitly
-at the receiver's applied path. Applying local move/delete choices and recapturing
-further edits remain pending under milestone 0.6.
+at the receiver's applied path. Version 0.20.11 adds explicit recapture
+of further saved edits, retaining prior branches. Applying local move/delete
+choices remains pending under milestone 0.6.
 
 ## 0.7 — AI
 

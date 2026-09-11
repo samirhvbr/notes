@@ -1113,3 +1113,9 @@ In 0.20.10 a receiver may explicitly restore a remote move/delete conflict at
 its applied path. Intermediate ancestor effects are superseded, not executed.
 The core capture/write identity guards and server history authorization stay
 unchanged; choosing local move/delete effects remains separate work.
+
+Version 0.20.11 recapture extends the captured branch while preserving the
+original application anchor. Pending raw captures retain their predecessors;
+prepared resolutions must be published before recapture so their history stays
+recoverable. Recapture writes no source or receipt, and application still requires
+a newly published explicit resolution guarded by the latest captured BaseRev.

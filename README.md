@@ -173,3 +173,6 @@ intermediate revisions are not written over the local edit. See [receiver confli
 
 Version 0.20.10 allows explicit restoration at the receiver's applied path after
 a remote rename/deletion; see [receiver restoration](docs/SYNC-0.6.md#restore-after-a-remote-rename-or-deletion-02010).
+
+Version 0.20.11 adds `recapture-conflict` for newer saved receiver edits, retaining
+prior branches and requiring a new explicit choice; see [recapture](docs/SYNC-0.6.md#recapture-newer-saved-receiver-edits-02011).

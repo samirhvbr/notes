@@ -295,13 +295,15 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "fetch", str(rr_receiver), str(receiver_secret)])
         (rr_target / "test.md").write_bytes(b"local receiver edit")
         run([client, "capture-conflict", str(rr_receiver), str(rr_data), note_id])
+        (rr_target / "test.md").write_bytes(b"recaptured receiver edit")
+        run([client, "recapture-conflict", str(rr_receiver), str(rr_data)])
         conflict = json.loads(run([client, "conflicts", str(rr_receiver)]))[0]
         rr_result = temp / "rr-result.md"
         rr_result.write_bytes(b"combined receiver result\r\n")
         output = run([client, "resolve", str(rr_receiver), conflict["local"], conflict["remote"], str(rr_result)])
         resolution_id = json.loads(output.splitlines()[0])["staged_resolution"]
         run([client, "transfer", str(rr_receiver), str(receiver_secret)])
-        assert (rr_target / "test.md").read_bytes() == b"local receiver edit"
+        assert (rr_target / "test.md").read_bytes() == b"recaptured receiver edit"
         run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
         run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
         assert (rr_target / "test.md").read_bytes() == rr_result.read_bytes()

@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.11 - expose explicit receiver recapture in the CLI
+
+Add recapture-conflict with the pinned application data directory. Document
+publication-before-recapture for a prepared choice, retained ancestry, source
+preconditions and capacity limits. Real TCP smoke exercises recapture before
+resolution; recovery tests cover repeated capture, published choices, lost
+responses, refusal boundaries and branch capacity. The full local gate passed,
+including native/Windows clippy, workspace tests and frontend checks.
+
 ## 0.20.11 - recapture receiver edits without losing retained branches
 
 Extend an unresolved receiver capture with newly saved bytes while preserving

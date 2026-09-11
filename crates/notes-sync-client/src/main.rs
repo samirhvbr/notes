@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.as_slice() == ["--help"] {
-        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Whole-workspace credentials only.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
+        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Whole-workspace credentials only.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
         return Ok(());
     }
     let ca = std::env::var_os("NOTES_SYNC_CA_FILE").map(PathBuf::from);
@@ -114,6 +114,13 @@ fn run() -> Result<()> {
             println!(
                 "{}",
                 serde_json::json!({"captured_branch":id, "source_written":false})
+            );
+        }
+        "recapture-conflict" if args.len() == 3 => {
+            let id = store.recapture_receiver_conflict(&PathBuf::from(&args[2]))?;
+            println!(
+                "{}",
+                serde_json::json!({"captured_branch": id, "source_written": false})
             );
         }
         "apply-resolution" if args.len() == 4 => {

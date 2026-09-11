@@ -619,9 +619,8 @@ is handled at a time; after its application, another saved conflict can be captu
 It checks the original captured BaseRev, acquires the exclusive session again,
 and persists a separate resolution intent before the atomic source write.
 Later local edits refuse application and remain untouched. Keep the source stable
-until this workflow finishes; refreshing an unresolved capture after additional
-external edits is not automatic. Preserve the newer file and exported branches
-rather than discarding either to bypass a refusal.
+until this workflow finishes. In 0.20.11, `recapture-conflict` explicitly preserves
+newer saved bytes and requires a new choice; it never selects a winner automatically.
 
 Intermediate received revisions of this note must be ancestors of the chosen
 result; they may include remote renames and tombstones. They are recorded as **superseded**, never written to the
@@ -680,5 +679,42 @@ Move/Create/Delete permissions required by the retained edges.
 
 The source must still match its captured identity and BaseRev. This supports
 restoring the edited receiver copy, not accepting a remote move/deletion as a
-local filesystem operation. Local rename/delete effects and recapture after
-further edits remain queued.
+local filesystem operation. Local rename/delete effects remain queued; explicit recapture is described below.
+
+
+### Recapture newer saved receiver edits (0.20.11)
+
+If the source changes again after capture, preserve the newer saved bytes with:
+
+```sh
+notes-sync-client recapture-conflict /private/receiver /actual/notes-app-data
+notes-sync-client conflicts /private/receiver
+notes-sync-client resolve /private/receiver NEW_LOCAL_UUID REMOTE_UUID /private/new-choice.md
+notes-sync-client transfer /private/receiver /private/write-token.secret
+notes-sync-client apply-resolution /private/receiver /actual/notes-app-data NEW_RESOLUTION_UUID
+notes-sync-client apply /private/receiver /actual/notes-app-data
+notes-sync-client acknowledge /private/receiver /private/write-token.secret
+```
+
+For remote moves/deletions use `resolve-to` at the applied path as above. Recapture
+works before preparing a resolution, or after a prepared resolution has been
+published and fetched back. If a resolution is still pending in the outbox,
+finish `transfer` first (including retry after a lost response). This preserves
+the earlier choice in remote history without writing it to the source. A stale
+remote head may require fetching and resolving that pending choice first.
+
+The command appends a child of the previous captured branch, retaining its bytes
+and earlier captures. Even when a prior resolution was published, the newly
+captured source is not implicitly treated as having applied that resolution.
+Application receipts remain unchanged until the new explicit choice is applied.
+Old results cannot bypass the new capture. Export retained revision UUIDs to
+inspect earlier versions; exports still refuse to overwrite existing files.
+
+Keep the workspace closed and use the same actual app data directory. Unchanged
+bytes, drafts, a different local identity/data directory, an already applied
+capture or an unfinished application intent are refused. Recover the pending
+application intent before any recapture. The normal aggregate byte and branch
+limits remain enforced; recapture reserves a branch slot for resolution. At the
+limit, queue state and source bytes are preserved. Resolve/publish before adding
+more captures rather than discarding history. Older clients reject the extended
+capture ancestry; back up operational state before changing client versions.
