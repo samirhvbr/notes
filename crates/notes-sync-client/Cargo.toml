@@ -8,6 +8,7 @@ license.workspace = true
 notes-core.workspace = true
 notes-model.workspace = true
 notes-sync.workspace = true
+ts-rs.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true

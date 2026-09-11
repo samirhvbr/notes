@@ -8,6 +8,11 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.14 - schedule bounded background device transfers
+
+Add an opt-in desktop worker with persisted connection settings, network/power
+pauses, bounded batches and retry backoff. Keep source application explicit.
+
 ## 0.20.13 - apply recoverable device bundles
 
 Capture explicit current-head tombstones and order rename cycles without source

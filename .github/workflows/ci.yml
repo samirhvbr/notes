@@ -45,7 +45,7 @@ jobs:
           # The output is NOT discarded: this step failed once with `>/dev/null`
           # and the log said only "test failed", which is the one moment the
           # output is worth having.
-          cargo test -p notes-model -p notes-core -p notes-markdown --lib
+          cargo test -p notes-model -p notes-core -p notes-markdown -p notes-sync-client --lib
           # Two questions, because one command answers only half of it: a diff
           # sees a changed file, and a type introduced by a new crate arrives
           # *untracked*, which a diff cannot see at all.

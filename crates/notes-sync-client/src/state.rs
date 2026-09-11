@@ -276,6 +276,77 @@ impl Store {
             true,
         )
     }
+    /// A receive queue must not advertise current while saved local bytes differ
+    /// from its receipts. This observes files; it never adopts edits as applied.
+    pub fn receiver_changes(&self) -> Result<bool> {
+        let lock = self.lock()?;
+        let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Ok(false);
+        }
+        let Some(app) = self.application(&state)? else {
+            return Ok(false);
+        };
+        let files = notes_core::sync::capture(&state.source, &self.dir.join("inspection"))
+            .map_err(|_| Error::ApplicationBlocked)?;
+        let live: Vec<_> = app.notes.values().filter(|r| !r.deleted).collect();
+        if files.len() != live.len() {
+            return Ok(true);
+        }
+        for (file, bytes) in files {
+            let Some(receipt) = live.iter().find(|r| r.path == file.path) else {
+                return Ok(true);
+            };
+            if receipt.local.base_rev.hash != file.content {
+                return Ok(true);
+            }
+            let assets = notes_core::sync::capture_attachments(
+                &state.source,
+                &self.dir.join("inspection"),
+                &file.path,
+                &bytes,
+            )
+            .map_err(|_| Error::ApplicationBlocked)?;
+            if assets != state.attachments_at(receipt.revision) {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+    pub fn source_mode(&self) -> Result<(PathBuf, Mode)> {
+        let lock = self.lock()?;
+        let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        Ok((state.source, state.mode))
+    }
+    pub fn history(&self) -> Result<Vec<crate::control::HistoryRow>> {
+        let lock = self.lock()?;
+        let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        let mut rows = vec![];
+        for (pending, pubs) in [(false, &state.received), (true, &state.pending)] {
+            for p in pubs {
+                for b in &p.branches {
+                    rows.push(crate::control::HistoryRow::new(
+                        &b.revision,
+                        pending,
+                        true,
+                        b.attachments.iter().map(|a| a.path.to_string()).collect(),
+                    ));
+                }
+                rows.push(crate::control::HistoryRow::new(
+                    &p.revision,
+                    pending,
+                    false,
+                    p.attachments.iter().map(|a| a.path.to_string()).collect(),
+                ));
+            }
+        }
+        rows.reverse();
+        rows.truncate(200);
+        Ok(rows)
+    }
     pub fn endpoint(&self) -> Result<Endpoint> {
         let lock = self.lock()?;
         let _guard = lock.try_read().map_err(|_| Error::Busy)?;
