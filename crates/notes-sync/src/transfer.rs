@@ -18,6 +18,11 @@ pub struct Publication {
     /// become visible heads on their own; the enclosing resolution consumes them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub branches: Vec<Branch>,
+    /// Metadata retained after acknowledged divergent branch payloads are
+    /// pruned. These revisions preserve ancestry but are never independently
+    /// applicable because their original bytes are no longer present.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub history: Vec<Revision>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -151,7 +156,7 @@ pub struct ApplicationAcknowledgment {
 
 /// Decoded capacity includes retained branches, not just the chosen result.
 pub fn payload_size(p: &Publication) -> Result<usize> {
-    if p.branches.len() > 20 {
+    if p.branches.len() + p.history.len() > 20 {
         return Err(Error::Limit);
     }
     let mut size =
@@ -165,6 +170,19 @@ pub fn payload_size(p: &Publication) -> Result<usize> {
     }
     Ok(size)
 }
+
+/// Replace divergent branch payloads with their immutable revision metadata.
+/// The enclosing resolution bytes stay available and its causal graph is
+/// unchanged. Callers decide whether device receipts authorize this operation.
+pub fn prune_resolved_payloads(p: &mut Publication) -> Result<usize> {
+    if p.branches.is_empty() {
+        return Ok(0);
+    }
+    let before = payload_size(p)?;
+    p.history
+        .extend(p.branches.drain(..).map(|branch| branch.revision));
+    Ok(before - payload_size(p)?)
+}
 /// Replay a publication into a disposable journal. Callers validate the complete
 /// graph once after replay, and publish the journal only if that succeeds.
 pub fn append(graph: &mut crate::Journal, p: &Publication) -> Result<()> {
@@ -173,6 +191,12 @@ pub fn append(graph: &mut crate::Journal, p: &Publication) -> Result<()> {
     if p.workspace != graph.workspace || graph.heads.get(&r.note).copied() != p.expected {
         return Err(Error::Stale);
     }
+    for v in &p.history {
+        if v.note != r.note || v.parents.is_empty() {
+            return Err(Error::InvalidGraph);
+        }
+        insert(graph, v)?;
+    }
     for b in &p.branches {
         let v = &b.revision;
         if v.note != r.note || v.parents.is_empty() {
@@ -180,7 +204,7 @@ pub fn append(graph: &mut crate::Journal, p: &Publication) -> Result<()> {
         }
         insert(graph, v)?;
     }
-    if !p.branches.is_empty() {
+    if !p.branches.is_empty() || !p.history.is_empty() {
         let expected = p.expected.ok_or(Error::InvalidGraph)?;
         if r.parents.len() != 2 || !r.parents.contains(&expected) {
             return Err(Error::InvalidGraph);
@@ -194,7 +218,9 @@ pub fn append(graph: &mut crate::Journal, p: &Publication) -> Result<()> {
             || graph.is_ancestor(other, expected)
             || p.branches
                 .iter()
-                .any(|b| !graph.is_ancestor(b.revision.id, other))
+                .map(|b| &b.revision)
+                .chain(&p.history)
+                .any(|branch| !graph.is_ancestor(branch.id, other))
         {
             return Err(Error::InvalidGraph);
         }

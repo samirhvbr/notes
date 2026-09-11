@@ -463,6 +463,7 @@ impl Store {
             state.pending.push(Publication {
                 attachments,
                 branches: vec![],
+                history: vec![],
                 workspace: state.local.workspace,
                 expected,
                 revision,
@@ -501,6 +502,7 @@ impl Store {
             revision: revision.clone(),
             content_base64: None,
             branches: vec![],
+            history: vec![],
         });
         self.save(&state, false)?;
         Ok(revision.id)
@@ -863,6 +865,7 @@ impl Store {
             revision: revision.clone(),
             content_base64: bytes.map(|bytes| STANDARD.encode(bytes)),
             branches,
+            history: vec![],
         };
         // Prove the peer can reconstruct the exact chosen parents from this
         // envelope. No pending bytes are removed until the whole state is saved.
@@ -931,6 +934,7 @@ impl Store {
                         revision: b.revision.clone(),
                         content_base64: b.content_base64.clone(),
                         branches: vec![],
+                        history: vec![],
                     })
             })
             .ok_or(Error::Invalid)?;
@@ -1574,6 +1578,7 @@ impl Store {
             revision: revision.clone(),
             content_base64: Some(STANDARD.encode(bytes)),
             branches: vec![],
+            history: vec![],
         });
         state.capture = Some(ReceiverCapture {
             publishable,
@@ -1652,8 +1657,10 @@ impl Store {
             Some(local.base_rev.hash.clone()),
         );
         let mut branches = vec![];
+        let mut history = vec![];
         if let Some(previous) = state.pending.pop() {
             branches = previous.branches;
+            history = previous.history;
             branches.push(notes_sync::transfer::Branch {
                 attachments: previous.attachments,
                 revision: previous.revision,
@@ -1667,6 +1674,7 @@ impl Store {
             revision: revision.clone(),
             content_base64: Some(STANDARD.encode(bytes)),
             branches,
+            history,
         };
         // Reserve one branch slot for this capture when resolving it later.
         if publication.branches.len() >= 20 {
@@ -2003,6 +2011,7 @@ impl Store {
                         revision,
                         content_base64: Some(STANDARD.encode(bytes)),
                         branches: vec![],
+                        history: vec![],
                     });
                 }
                 notes_sync::PairingAction::Download { .. } => {}
@@ -2362,6 +2371,7 @@ impl Store {
             revision: revision.clone(),
             content_base64: Some(STANDARD.encode(bytes)),
             branches: vec![],
+            history: vec![],
             attachments,
         });
         state.capture = Some(ReceiverCapture {

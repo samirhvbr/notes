@@ -191,15 +191,15 @@ fn allowed_attachment(path: &RelPath, c: &Credential, write: bool) -> bool {
                 .join("proposals")
                 .is_ok_and(|scope| within(path, &scope)))
 }
-fn transaction<T>(
+fn transaction_workspace<T>(
     root: &Path,
-    c: &Credential,
+    workspace: &str,
     change: impl FnOnce(&mut Vault) -> Result<(T, bool)>,
 ) -> Result<T> {
-    admin::workspace(root, &c.workspace).map_err(|_| Error::Storage)?;
+    admin::workspace(root, workspace).map_err(|_| Error::Storage)?;
     let base = root.join("sync");
     admin::private_dir(&base).map_err(|_| Error::Storage)?;
-    let dir = base.join(&c.workspace);
+    let dir = base.join(workspace);
     admin::private_dir(&dir).map_err(|_| Error::Storage)?;
     let mut lock = fd_lock::RwLock::new(
         admin::private_file(&dir.join("vault.lock"), false).map_err(|_| Error::Storage)?,
@@ -243,6 +243,62 @@ fn transaction<T>(
             .map_err(|_| Error::Storage)?;
     }
     Ok(output)
+}
+fn transaction<T>(
+    root: &Path,
+    c: &Credential,
+    change: impl FnOnce(&mut Vault) -> Result<(T, bool)>,
+) -> Result<T> {
+    transaction_workspace(root, &c.workspace, change)
+}
+
+#[derive(Debug, Serialize)]
+pub struct PruneReport {
+    pub pruned_resolutions: usize,
+    pub pruned_payload_bytes: usize,
+    pub retained_revisions: usize,
+    pub known_devices: usize,
+}
+
+/// Drop only imported branch payloads whose enclosing resolution has been
+/// acknowledged by every known device. Revision metadata and tombstones stay
+/// in the graph, so ancestry and future compare-and-set checks remain intact.
+pub fn prune_resolved(root: &Path, workspace: &str) -> Result<PruneReport> {
+    transaction_workspace(root, workspace, |v| {
+        let known_devices = v.device_owners.len();
+        let mut pruned_resolutions = 0usize;
+        let mut pruned_payload_bytes = 0usize;
+        if known_devices > 0 {
+            for publication in &mut v.publications {
+                if publication.branches.is_empty()
+                    || !v.journal.acknowledgments.keys().all(|device| {
+                        v.journal
+                            .acknowledgments
+                            .get(device)
+                            .and_then(|notes| notes.get(&publication.revision.note))
+                            .is_some_and(|receipt| {
+                                v.journal.is_ancestor(publication.revision.id, *receipt)
+                            })
+                    })
+                {
+                    continue;
+                }
+                pruned_payload_bytes += notes_sync::transfer::prune_resolved_payloads(publication)
+                    .map_err(|_| Error::Storage)?;
+                pruned_resolutions += 1;
+            }
+        }
+        v.validate()?;
+        Ok((
+            PruneReport {
+                pruned_resolutions,
+                pruned_payload_bytes,
+                retained_revisions: v.journal.revisions.len(),
+                known_devices,
+            },
+            pruned_resolutions > 0,
+        ))
+    })
 }
 #[derive(Serialize)]
 pub struct Page {
@@ -311,12 +367,39 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
             .iter()
             .find(|old| old.revision.id == p.revision.id)
         {
-            return if *old == p {
+            let mut compacted_retry = p.clone();
+            let is_pre_prune_retry = p.history.is_empty()
+                && !p.branches.is_empty()
+                && notes_sync::transfer::prune_resolved_payloads(&mut compacted_retry).is_ok()
+                && *old == compacted_retry;
+            return if *old == p || is_pre_prune_retry {
+                if is_pre_prune_retry {
+                    for branch in &p.branches {
+                        authorize(
+                            v,
+                            c,
+                            &Publication {
+                                attachments: branch.attachments.clone(),
+                                workspace: p.workspace,
+                                expected: None,
+                                revision: branch.revision.clone(),
+                                content_base64: branch.content_base64.clone(),
+                                branches: vec![],
+                                history: vec![],
+                            },
+                        )?;
+                    }
+                }
                 authorize(v, c, &p)?;
                 Ok((p.revision.id, false))
             } else {
                 Err(Error::Stale)
             };
+        }
+        // Metadata-only history is produced only by the local operator prune.
+        // Remote publishers must always provide original branch payloads.
+        if !p.history.is_empty() {
+            return Err(Error::Invalid);
         }
         let total = v
             .publications
@@ -346,6 +429,7 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
                     revision: branch.revision.clone(),
                     content_base64: branch.content_base64.clone(),
                     branches: vec![],
+                    history: vec![],
                 },
             )?;
             v.journal

@@ -8,6 +8,18 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.19 - prune resolved server payloads
+
+Add an offline operator prune for divergent branch payloads whose resolution or
+descendant was acknowledged by every known device. Retain revision metadata,
+tombstones, heads and append cursors, preserve pre-prune retry idempotency, and
+refuse remotely supplied metadata-only history. Verify stopped-server locking,
+scope authorization, atomic persistence and backup restoration.
+All 27 server tests and the sync-domain suite passed, as did native/Windows
+clippy, TCP smoke, generated contracts, byte preservation and frontend checks.
+The full local gate retained its existing watcher timing failure; a separate
+index timing test failed only under concurrent load and passed isolated.
+
 ## 0.20.18 - verify interrupted two-device effects
 
 Reconstruct receipt loss after receiver moves and deletions with separate CLI

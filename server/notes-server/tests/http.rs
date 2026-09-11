@@ -563,6 +563,7 @@ fn publication(
     notes_server::sync::Publication {
         attachments: vec![],
         branches: vec![],
+        history: vec![],
         workspace,
         expected,
         revision: notes_sync::Revision::new(
@@ -1056,6 +1057,169 @@ async fn sync_resolution_keeps_both_histories_atomically_and_retries_after_resta
         .unwrap()
         .next()
         .is_none());
+}
+
+#[test]
+fn acknowledged_resolution_pruning_keeps_graph_tombstones_and_cursors() {
+    let f = Fixture::new(&all());
+    let credential = admin::authenticate(&admin::load(&f.data).unwrap(), f.token.trim()).unwrap();
+    let mut broad = credential.clone();
+    broad.scope = RelPath::root();
+    let workspace = notes_server::sync::page(&f.data, &credential, 0, 20)
+        .unwrap()
+        .workspace;
+    let base = publication(workspace, None, "allowed/test.md", Some(b"base"));
+    let remote = publication(workspace, Some(&base), "allowed/test.md", Some(b"remote"));
+    let local = publication(
+        workspace,
+        Some(&base),
+        "allowed/test.md",
+        Some(b"![asset](../secret.bin)"),
+    );
+    let mut merge = resolution(&remote, &local);
+    merge.branches[0].attachments = vec![notes_sync::transfer::Attachment::new(
+        RelPath::parse("secret.bin").unwrap(),
+        b"private branch asset",
+    )];
+    notes_server::sync::publish(&f.data, &credential, base).unwrap();
+    notes_server::sync::publish(&f.data, &credential, remote).unwrap();
+    notes_server::sync::publish(&f.data, &broad, merge.clone()).unwrap();
+    let tombstone = publication(workspace, Some(&merge), "allowed/test.md", None);
+    notes_server::sync::publish(&f.data, &broad, tombstone.clone()).unwrap();
+    assert_eq!(
+        notes_server::sync::prune_resolved(&f.data, "home")
+            .unwrap()
+            .pruned_resolutions,
+        0
+    );
+    let first_device = uuid::Uuid::new_v4();
+    let second_device = uuid::Uuid::new_v4();
+    for (device, revision) in [
+        (first_device, merge.revision.id),
+        (second_device, merge.expected.unwrap()),
+    ] {
+        notes_server::sync::acknowledge(
+            &f.data,
+            &broad,
+            &notes_sync::transfer::ApplicationAcknowledgment {
+                workspace,
+                device,
+                revision,
+            },
+        )
+        .unwrap();
+    }
+    notes_server::sync::acknowledge(
+        &f.data,
+        &broad,
+        &notes_sync::transfer::ApplicationAcknowledgment {
+            workspace,
+            device: first_device,
+            revision: tombstone.revision.id,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        notes_server::sync::prune_resolved(&f.data, "home")
+            .unwrap()
+            .pruned_resolutions,
+        0
+    );
+    notes_server::sync::acknowledge(
+        &f.data,
+        &broad,
+        &notes_sync::transfer::ApplicationAcknowledgment {
+            workspace,
+            device: second_device,
+            revision: tombstone.revision.id,
+        },
+    )
+    .unwrap();
+    let before = fs::metadata(f.data.join("sync/home/vault.json"))
+        .unwrap()
+        .len();
+    let committed = fs::read(f.data.join("sync/home/vault.json")).unwrap();
+    let mut instance = backup::instance_lock(&f.data).unwrap();
+    let guard = instance.write().unwrap();
+    let blocked = std::process::Command::new(env!("CARGO_BIN_EXE_notes-server"))
+        .env("NOTES_SERVER_DATA", &f.data)
+        .args(["sync-prune", "home"])
+        .output()
+        .unwrap();
+    assert!(!blocked.status.success());
+    drop(guard);
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        committed
+    );
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_notes-server"))
+        .env("NOTES_SERVER_DATA", &f.data)
+        .args(["sync-prune", "home"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["pruned_resolutions"], 1);
+    assert!(report["pruned_payload_bytes"].as_u64().unwrap() > 0);
+    assert_eq!(report["known_devices"], 2);
+    let compacted = notes_server::sync::fetch(&f.data, &credential, merge.revision.id).unwrap();
+    assert!(compacted.branches.is_empty());
+    assert_eq!(compacted.history, vec![local.revision.clone()]);
+    assert!(
+        fs::metadata(f.data.join("sync/home/vault.json"))
+            .unwrap()
+            .len()
+            < before
+    );
+    assert_eq!(
+        notes_server::sync::fetch(&f.data, &credential, tombstone.revision.id).unwrap(),
+        tombstone
+    );
+    let archive = f._dir.path().join("pruned-backup.tar.gz");
+    backup::backup(&f.data, &archive).unwrap();
+    let restored = f._dir.path().join("pruned-restored");
+    backup::restore(&archive, &restored).unwrap();
+    let restored_credential =
+        admin::authenticate(&admin::load(&restored).unwrap(), f.token.trim()).unwrap();
+    assert_eq!(
+        notes_server::sync::fetch(&restored, &restored_credential, merge.revision.id).unwrap(),
+        compacted
+    );
+    let page = notes_server::sync::page(&f.data, &credential, 0, 20).unwrap();
+    assert_eq!(page.next_cursor, 4);
+    assert_eq!(page.heads[&merge.revision.note], tombstone.revision.id);
+    let pruned_state = fs::read(f.data.join("sync/home/vault.json")).unwrap();
+    assert_eq!(
+        notes_server::sync::publish(&f.data, &broad, merge.clone()).unwrap(),
+        merge.revision.id
+    );
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        pruned_state
+    );
+    assert!(matches!(
+        notes_server::sync::publish(&f.data, &credential, merge.clone()),
+        Err(notes_server::sync::Error::Forbidden)
+    ));
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        pruned_state
+    );
+    assert_eq!(
+        notes_server::sync::prune_resolved(&f.data, "home")
+            .unwrap()
+            .pruned_resolutions,
+        0
+    );
+    assert!(fs::read_to_string(f.data.join("audit/events.jsonl"))
+        .unwrap()
+        .contains("sync_prune"));
+    let mut injected = compacted;
+    injected.revision.id = uuid::Uuid::new_v4();
+    assert!(matches!(
+        notes_server::sync::publish(&f.data, &credential, injected),
+        Err(notes_server::sync::Error::Invalid)
+    ));
 }
 
 #[tokio::test]

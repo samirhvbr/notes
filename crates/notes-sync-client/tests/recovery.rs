@@ -546,6 +546,7 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
         ),
         content_base64: Some(STANDARD.encode(bytes)),
         branches: vec![],
+        history: vec![],
     };
     let remote = remote_publication(&base, b"remote");
     peer.publish(&remote).unwrap();

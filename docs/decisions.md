@@ -1401,7 +1401,7 @@ those inventories as a read-only preview for two mounted folders.
 
 Schema-1 sync metadata is private operational data and uses locked, atomic,
 digest-conditional replacement. Future/corrupt state is refused unchanged.
-Limits stop growth explicitly; acknowledgments do not authorize pruning.
+Limits stop growth explicitly; acknowledgments alone do not invoke pruning.
 Missing inventory is never a deletion, and a tombstone retains ancestry.
 Upload/download require an empty destination inventory; reconciling two
 populated folders produces explicit links and conflicts before any application.
@@ -1439,7 +1439,8 @@ Device UUIDs are asserted metadata, not authentication principals.
 
 Retain all accepted revisions and tombstones within the documented byte/count
 bounds; refuse capacity without eviction. No automatic pruning or migration is
-introduced. Per-workspace OS locks serialize writes, atomic replacement binds
+introduced by this block; ADR-063 later permits explicit metadata-preserving
+branch-payload pruning. Per-workspace OS locks serialize writes, atomic replacement binds
 content to heads, and offline backup/restore includes the vault but not its lock.
 Corrupt or future-schema state is refused unchanged. Original workspace files
 remain the source of truth; the inbox contains replication copies.
@@ -1554,8 +1555,10 @@ existing client checkpoints have zero acknowledged receipts. Older binaries
 refuse the additive fields, preventing silent loss on downgrade.
 
 **Consequences.** A receipt is a historical assertion from an authenticated
-client, not independent proof of current disk bytes. No pruning, source mutation
-or new credential authority follows from it. Credential rebinding and stale
+client, not independent proof of current disk bytes. No pruning happens from a
+receipt alone, and no source mutation or new credential authority follows from
+it. ADR-063 later requires unanimous descendant receipts for an explicit offline
+operator prune. Credential rebinding and stale
 backup reconciliation remain explicit future work; retries never reset identity
 or roll server progress back. Active-editor application remains queued under
 ADR-047's existing closed-workspace guard.
@@ -1845,3 +1848,22 @@ application progress from downloaded bytes. Refuse mixed receipt/cache backups,
 scoped cursors and pending pairing. Pause publishers during the audit because it
 is not a server-wide snapshot. This does not authorize history pruning, identity
 repair or replacement of local files after an application-data rollback.
+
+
+## ADR-063 — Pruning starts with unanimously acknowledged resolved branches
+
+**Status:** ACTIVE · Implemented in 0.20.19.
+
+**Decision.** The first sync retention operation removes payload bytes only from
+divergent branches enclosed by a resolution that every known device has applied.
+Keep their immutable revision metadata in the envelope, preserving ancestry,
+tombstones, heads and append cursors. Require an offline, backed-up server and a
+local operator command; do not expose pruning as credential authority. Revoked
+devices continue to block pruning until a future explicit retirement protocol.
+
+Receive queues compact only locally acknowledged resolutions whose exact
+metadata-only server envelope they can fetch. They never infer server pruning
+from a page or mutate source/application state. Accept an authorized original
+envelope retry after server pruning without restoring payloads, preserving lost
+storage-response idempotency. General linear-history pruning requires a future
+baseline/cursor protocol and is not implied by this decision.

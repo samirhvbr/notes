@@ -1,4 +1,4 @@
-use notes_server::{admin, api, backup, Result};
+use notes_server::{admin, api, backup, sync, Result};
 use std::{
     net::{IpAddr, SocketAddr},
     path::PathBuf,
@@ -25,7 +25,7 @@ async fn run() -> Result<()> {
         );
     }
     if args.is_empty() || args[0] == "help" {
-        println!("notes-server serve\nnotes-server workspace create NAME\nnotes-server token create LABEL WORKSPACE SCOPE PERMISSIONS OUTPUT [review]\nnotes-server token list\nnotes-server token revoke UUID\nnotes-server backup ARCHIVE\nnotes-server restore ARCHIVE NEW_DIRECTORY [FINAL_DATA_ROOT]\nSet NOTES_SERVER_DATA to an absolute directory. Permissions: comma-separated read,create,update,move,delete,search. Use '-' for no permissions; scope '.' means the workspace root. Token secrets are written only to a new private OUTPUT file.");
+        println!("notes-server serve\nnotes-server workspace create NAME\nnotes-server token create LABEL WORKSPACE SCOPE PERMISSIONS OUTPUT [review]\nnotes-server token list\nnotes-server token revoke UUID\nnotes-server sync-prune WORKSPACE\nnotes-server backup ARCHIVE\nnotes-server restore ARCHIVE NEW_DIRECTORY [FINAL_DATA_ROOT]\nSet NOTES_SERVER_DATA to an absolute directory. Permissions: comma-separated read,create,update,move,delete,search. Use '-' for no permissions; scope '.' means the workspace root. Token secrets are written only to a new private OUTPUT file. Stop the server and back up its data before sync-prune.");
         return Ok(());
     }
     let data = admin::data_root(&path)?;
@@ -117,6 +117,23 @@ async fn run() -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
         ["token", "revoke", id] => admin::revoke(&data, id.parse()?)?,
+        ["sync-prune", workspace] => {
+            let mut lock = backup::instance_lock(&data)?;
+            let _guard = lock
+                .try_write()
+                .map_err(|_| "server or backup already running")?;
+            let report = sync::prune_resolved(&data, workspace)
+                .map_err(|_| "sync history could not be pruned")?;
+            admin::audit(
+                &data,
+                "operator",
+                "local",
+                "sync_prune",
+                "ok",
+                &uuid::Uuid::new_v4().to_string(),
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         ["backup", output] => backup::backup(&data, &PathBuf::from(output))?,
         _ => return Err("invalid command; run notes-server help".into()),
     }

@@ -1045,7 +1045,7 @@
       },
       "post": {
         "operationId": "publishSyncRevision",
-        "description": "Store one revision and its exact bytes atomically. Requires Read plus Create for genesis/resurrection, Update for a live successor, Move for a changed path, Delete for a tombstone. Review writes remain under proposals, including parent paths. Parents must already exist or be retained in the optional bounded branches envelope. Imported history requires authorization for each edge and is accepted only with its explicit two-parent resolution; only the resolution advances the head. Head conflicts return 409; the device retains its conflicting revision locally. Exact retries of accepted publication UUIDs succeed without rewinding heads. Response acknowledges inbox storage only, never source application. Limits per workspace: 10,000 revisions, 32 MiB cumulative decoded content and 64 MiB serialized state. No automatic pruning.",
+        "description": "Store one revision and its exact bytes atomically. Requires Read plus Create for genesis/resurrection, Update for a live successor, Move for a changed path, Delete for a tombstone. Review writes remain under proposals, including parent paths. Parents must already exist or be retained in the optional bounded branches envelope. Imported history requires authorization for each edge and is accepted only with its explicit two-parent resolution; only the resolution advances the head. Head conflicts return 409; the device retains its conflicting revision locally. Exact retries of accepted publication UUIDs succeed without rewinding heads, including a pre-prune retry after the operator has compacted acknowledged branch payloads. Response acknowledges inbox storage only, never source application. Limits per workspace: 10,000 revisions, 32 MiB cumulative decoded content and 64 MiB serialized state. Pruning is an offline operator action, never an HTTP permission.",
         "parameters": [
           {
             "name": "workspace",
@@ -1636,6 +1636,15 @@
               "$ref": "#/components/schemas/SyncBranch"
             },
             "description": "Optional divergent history in parent-before-child order. Only accepted atomically with a two-parent resolution consuming the observed expected head. Total decoded bytes including result are limited to 8 MiB. Omitted for linear publications."
+          },
+          "history": {
+            "type": "array",
+            "readOnly": true,
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/SyncRevision"
+            },
+            "description": "Metadata retained when an offline operator prune removes acknowledged divergent branch payloads. Clients preserve it to validate ancestry. Publishers cannot introduce this field. The combined branches and history count is limited to 20."
           },
           "attachments": {
             "type": "array",
