@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.25 - cover receiver capture under an open application
+
+Exercise receiver capture through the desktop controller while the same
+application data has an open workspace. The controller refuses without a
+publication, then preserves a note identity through two closed rename passes.
+A later missing file leaves the outbox unchanged rather than inferring a
+tombstone. Update the sync record and queue with this deliberate boundary.
+
 ## 0.20.24 - verify restored identities across two devices
 
 Extend the native TCP and Compose HTTPS acceptance smoke with a restored

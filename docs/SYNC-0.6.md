@@ -1018,8 +1018,10 @@ explicit conflict resolution, ignored new/missing paths and open-workspace
 refusal. Controller tests exercise the separate opt-in and repeated saved edits;
 the native/HTTPS transport smoke sends an edit back from a scoped receiver and
 applies it on another receive queue. UI tests check the default-off setting.
-Continuous capture of new notes, renames/deletions and open editor buffers, plus
-physical mobile lifecycle validation, remain queued.
+New notes and recognized renames are covered by the independent opt-ins below.
+Deletion remains deliberately outside automatic capture: a missing tracked file
+does not publish a tombstone. Physical mobile lifecycle validation remains
+queued.
 
 
 ### New notes and recognized receiver renames (0.20.17)
@@ -1050,9 +1052,10 @@ For renames, the core correlates a closed inventory with its existing identities
 Only a recognized note at a different path is captured. The publication retains
 its remote note identity and uses the last applied head as its parent. Occupied
 remote destinations are refused. Missing notes are never inferred as deletions.
-Rename cycles, ambiguous identity changes and path-collision resolution remain
-separate work. Markdown references are not rewritten; referenced attachments
-must be readable at the new path and are captured with their actual bytes.
+Recognized rename cycles preserve the same identity one move at a time;
+ambiguous identity changes and path-collision resolution remain explicit refusal
+paths. Markdown references are not rewritten; referenced attachments must be
+readable at the new path and are captured with their actual bytes.
 
 ```sh
 notes-sync-client stage-receiver-renames /absolute/queue
@@ -1074,10 +1077,14 @@ new-root captures and must not be made to load them by deleting state fields.
 Server publication format, permissions, scope and retention policy are unchanged.
 
 Tests cover empty enrollment, original-byte/attachment retention, lost receipts,
-new-note edits during transfer, identity-preserving renames, a second move before
-confirmation, independent desktop options, draft/open-workspace refusal and
-retained path collisions. Native and HTTPS smoke tests publish new scoped notes
-and renames from one receiver and explicitly apply both on another device.
+new-note edits during transfer, identity-preserving rename cycles, a second move
+before confirmation, independent desktop options, draft/open-workspace refusal,
+retained path collisions and a missing tracked file that creates no tombstone.
+The controller test uses the same application-data directory as an open desktop
+workspace, confirms capture is refused without publishing, then verifies two
+renames retain identity and an eventual deletion remains unpublished. Native and
+HTTPS smoke tests publish new scoped notes and renames from one receiver and
+explicitly apply both on another device.
 
 
 ### Restored client queue recovery (0.20.18)

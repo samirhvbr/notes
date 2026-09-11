@@ -887,15 +887,34 @@ mod tests {
         controller.run_with(true, |_, _| Ok(&peer)).unwrap();
         assert_eq!(peer.borrow().log.len(), 4);
         let created_note = peer.borrow().log[3].revision.note;
-        fs::rename(target.join("new.md"), target.join("renamed.md")).unwrap();
+        fs::rename(target.join("new.md"), target.join("middle.md")).unwrap();
         let mut expanded = controller.config().unwrap();
         expanded.capture_new = false;
         expanded.capture_renames = true;
         controller.configure(expanded).unwrap();
+        let mut open_app =
+            notes_core::WorkspaceService::with_data_dir(&temp.path().join("app")).unwrap();
+        open_app.open_workspace(&target).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap_err();
+        assert!(matches!(
+            controller.snapshot().unwrap().phase,
+            DevicePhase::Error
+        ));
+        assert_eq!(peer.borrow().log.len(), 4);
+        assert!(target.join("middle.md").exists());
+        drop(open_app);
         controller.run_with(true, |_, _| Ok(&peer)).unwrap();
         assert_eq!(peer.borrow().log.len(), 5);
         assert_eq!(peer.borrow().log[4].revision.note, created_note);
-        assert_eq!(peer.borrow().log[4].revision.path.as_str(), "renamed.md");
+        assert_eq!(peer.borrow().log[4].revision.path.as_str(), "middle.md");
+        fs::rename(target.join("middle.md"), target.join("renamed.md")).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 6);
+        assert_eq!(peer.borrow().log[5].revision.note, created_note);
+        assert_eq!(peer.borrow().log[5].revision.path.as_str(), "renamed.md");
+        fs::remove_file(target.join("renamed.md")).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 6);
         controller
             .run_with(true, |_, _| {
                 controller.pause().unwrap();

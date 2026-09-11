@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at `0.20.24`.
+> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at `0.20.25`.
 
 This folder contains only work that has not been completed. Implemented
 contracts, measurements and delivery history live in [`../docs/`](../docs/) and
@@ -14,7 +14,7 @@ are in Portuguese.
 
 | Item | What remains | Who unblocks it |
 |---|---|---|
-| [0.6 — sync](0.6-sync.md) | Receiver edge cases and owner acceptance | Implementation / Samir |
+| [0.6 — sync](0.6-sync.md) | Installed-build and physical-device owner acceptance | Samir |
 | **0.7 — remote MCP** | Expose the existing MCP capabilities through server authentication and workspace/subfolder scopes after sync is ready | Implementation |
 | **0.4 — mobile** | Turn the merged foundation into usable iOS/Android applications: entry points, generated projects, UI, folder adapters, lifecycle handling and physical-device validation | Mobile agent / Samir |
 | [0.1d — interface acceptance](0.1d-interface.md) | Installed-release owner walk and repeat on the following release | Samir |
