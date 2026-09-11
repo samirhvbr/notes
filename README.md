@@ -165,3 +165,8 @@ stale remote head. See [the resolution workflow](docs/SYNC-0.6.md#explicit-diver
 Version 0.20.8 extends uploader conflict resolution with `resolve-to` (explicit
 path and bytes) and `resolve-delete` (explicit tombstone). Source files remain
 unchanged; see [rename and deletion choices](docs/SYNC-0.6.md#rename-and-deletion-choices-0208).
+
+Version 0.20.9 adds saved receiver conflict handling: close the workspace,
+`capture-conflict` with its actual app data and remote note UUID, choose and
+publish a resolution, then `apply-resolution`. Original branches are retained;
+intermediate revisions are not written over the local edit. See [receiver conflicts](docs/SYNC-0.6.md#saved-receiver-conflicts-0209).

@@ -270,6 +270,45 @@ with tempfile.TemporaryDirectory() as temp:
         assert refused.returncode != 0
         assert (fresh_root / "original.md").read_bytes() == chosen.read_bytes()
         assert not (fresh_root / "remote-renamed.md").exists()
+        # A receiver keeps its own saved edit as a branch and applies only the
+        # chosen result, without writing or acknowledging intermediate versions.
+        cli("workspace", "create", "receiver-resolution")
+        remote_secret = "/tmp/receiver-resolution.secret" if compose else str(temp / "receiver-resolution.secret")
+        cli("token", "create", "receiver-resolution", "receiver-resolution", ".", "read,create,update,move,delete", remote_secret)
+        receiver_secret = temp / "receiver-resolution-transport.secret"
+        receiver_secret.write_text(run(cmd + ["exec", "-T", "notes-server", "cat", remote_secret]) if compose else pathlib.Path(remote_secret).read_text())
+        receiver_secret.chmod(0o600)
+        rr_source, rr_target = temp / "rr-source", temp / "rr-target"
+        rr_source.mkdir(); rr_target.mkdir()
+        rr_sender, rr_receiver, rr_data = temp / "rr-sender", temp / "rr-receiver", temp / "rr-data"
+        (rr_source / "test.md").write_bytes(b"base")
+        run([client, "init-upload", str(rr_sender), str(rr_source), base, "receiver-resolution", str(receiver_secret), "--allow-private"])
+        run([client, "stage", str(rr_sender)])
+        run([client, "transfer", str(rr_sender), str(receiver_secret)])
+        run([client, "init-receive", str(rr_receiver), str(rr_target), base, "receiver-resolution", str(receiver_secret), "--allow-private"])
+        run([client, "fetch", str(rr_receiver), str(receiver_secret)])
+        run([client, "apply", str(rr_receiver), str(rr_data)])
+        note_id = json.loads(run([client, "received", str(rr_receiver)]))[0]["note"]
+        (rr_source / "test.md").write_bytes(b"remote edit")
+        run([client, "stage", str(rr_sender)])
+        run([client, "transfer", str(rr_sender), str(receiver_secret)])
+        run([client, "fetch", str(rr_receiver), str(receiver_secret)])
+        (rr_target / "test.md").write_bytes(b"local receiver edit")
+        run([client, "capture-conflict", str(rr_receiver), str(rr_data), note_id])
+        conflict = json.loads(run([client, "conflicts", str(rr_receiver)]))[0]
+        rr_result = temp / "rr-result.md"
+        rr_result.write_bytes(b"combined receiver result\r\n")
+        output = run([client, "resolve", str(rr_receiver), conflict["local"], conflict["remote"], str(rr_result)])
+        resolution_id = json.loads(output.splitlines()[0])["staged_resolution"]
+        run([client, "transfer", str(rr_receiver), str(receiver_secret)])
+        assert (rr_target / "test.md").read_bytes() == b"local receiver edit"
+        run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
+        run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
+        assert (rr_target / "test.md").read_bytes() == rr_result.read_bytes()
+        run([client, "acknowledge", str(rr_receiver), str(receiver_secret)])
+        rr_status = json.loads(run([client, "status", str(rr_receiver)]))
+        assert rr_status["applied_revisions"] == 2 and rr_status["superseded_revisions"] == 1
+        assert rr_status["acknowledged_revisions"] == 2
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

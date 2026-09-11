@@ -1100,3 +1100,11 @@ chosen bytes and both observed parents without touching source files (ADR-051).
 In 0.20.8 the client exposes explicit result-path and tombstone choices through
 `resolve-to` and `resolve-delete` (ADR-052). They reuse the same publication
 contract and do not add filesystem move/delete operations to core application.
+
+The 0.20.9 receiver conflict workflow uses core's exclusive capture API to map a
+remote note through its durable local application identity. Client state retains
+the captured branch/BaseRev; application state separately owns resolution intent,
+superseded positions and deferred entries. The chosen result is one guarded source
+write. Ordinary application drains deferred entries before advancing new work;
+acknowledgment never treats superseded/deferred positions as source receipts.
+See ADR-053 and the explicit CLI workflow in SYNC-0.6.md.

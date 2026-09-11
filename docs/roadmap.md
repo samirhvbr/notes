@@ -159,8 +159,9 @@ durable application receipts to the server. The 0.20.5 core API supports
 exclusive open sessions with observed buffer checks. In 0.20.6 the app applies prepared receive queues behind an editing barrier.
 In 0.20.7 upload queues resolve same-path divergence explicitly while preserving
 both histories. In 0.20.8 upload conflicts involving renames/deletions have
-explicit result choices; source rename/deletion application and receive-folder
-conflicts remain open.
+explicit result choices. In 0.20.9 saved same-path receiver edits can be
+captured, resolved and applied with separate superseded/deferred progress.
+Source rename/deletion application and editor conflict controls remain open.
 Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 ## 0.7 — AI

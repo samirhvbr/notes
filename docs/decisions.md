@@ -1675,3 +1675,33 @@ tombstones, including the permissions of imported branches.
 resolution commands. Missing files and empty bytes never infer deletion. Source
 rename/deletion application, local receiver conflict capture and editor controls
 remain queued. Existing source guards and wire/schema versions are unchanged.
+
+
+## ADR-053 — Receiver conflicts retain capture and application progress separately
+
+**Status:** ACTIVE · Implemented in 0.20.9 for closed-workspace same-path live notes.
+
+**Context.** A local receiver edit differs from its last source-application receipt.
+Replacing that receipt with a captured edit would falsely claim remote progress;
+applying intervening remote revisions would overwrite the edit before resolution.
+
+**Decision.** Capture an explicit remote note UUID through its applied local
+identity and the actual pinned app data directory, under an exclusive core
+session with no drafts. Persist the original bytes as a local branch plus its
+observed source revision in client state. Resolve with two parents before upload;
+receive mode gains no credential permissions. Capture and choice write no source.
+
+Apply the fetched chosen result under a durable resolution intent and the captured
+source precondition. Record same-note ancestor revisions as superseded without
+source writes or application acknowledgments. Record unrelated interleaved entries
+as deferred and let ordinary guarded application drain them first. Application
+state validates these position sets against the immutable history. Acknowledgment
+stops at deferred entries and skips superseded ones; counts represent receipts.
+Both resolution writes and deferred ordinary writes recover through durable intents.
+
+**Consequences.** Saved same-path receiver conflicts have a complete explicit CLI
+workflow without sacrificing either branch or falsifying receipts. Keep the source
+closed and stable during the workflow; newer external edits refuse application.
+Receiver rename/delete application, editor controls and refreshing unresolved
+captures remain separate work. Additive private state fields fail closed in older
+readers. Source files remain the user's Markdown, never the queue or SQLite.

@@ -534,8 +534,8 @@ client state has been persisted atomically.
 Linear publication JSON is unchanged. Upgrade server and clients before sending
 resolutions: older readers reject the nonempty `branches` field rather than
 silently dropping history. Keep a backup of operational state before downgrading.
-Local edits in receive folders, conflict UI and broader pairing remain queued.
-Explicit rename/delete choices are described below. HTTP and client tests
+Version 0.20.9 adds closed-workspace receiver conflict handling below. Conflict
+UI and broader pairing remain queued. Explicit rename/delete choices follow. HTTP and client tests
 cover stale races, lost receipts, restart, branch scope/hash rejection and source
 application; TCP/HTTPS smoke exercises the actual CLI commands end to end.
 
@@ -570,8 +570,8 @@ apply received filesystem operations. Before `stage` again, bring the saved
 source into agreement with the chosen result: an existing file is captured as a
 new edit or resurrection, and a missing file remains reported rather than
 implicitly deleted. Receiving clients still stop before applying a rename or
-tombstone and retain their content/checkpoint. Safe filesystem rename/deletion
-application and local receiver conflicts remain queued.
+tombstone and retain their content/checkpoint. Safe filesystem rename/deletion application remains queued. Same-path local
+receiver conflicts are handled by the 0.20.9 workflow below.
 
 Regression tests cover live/deleted remote heads with both live/tombstone
 choices, colliding and hidden destinations, legacy refusal, lost receipts,
@@ -579,3 +579,76 @@ restart and unchanged source bytes. HTTP tests prove Create/Move/Delete cannot
 be bypassed through a resolution. The TCP/HTTPS smoke runs both new CLI commands
 and verifies receiving application still refuses unsupported filesystem changes.
 The expanded smoke respects the existing per-credential request window.
+
+## Saved receiver conflicts (0.20.9)
+
+A receive queue can preserve a saved local edit when a later remote revision
+blocks normal application. Close the workspace in every cooperating app using
+the same app data directory; preserve any drafts first. Fetch the remote history,
+then capture the conflicting note by its **remote note UUID**, shown by `received`.
+The core checks the previously applied local identity, reads the exact saved
+bytes under an exclusive session, and refuses missing/changed identities, drafts,
+open workspaces and a different app data directory. It never infers identity from
+path alone. Only a live note at the same path is supported in this workflow.
+
+```sh
+notes-sync-client fetch /private/receiver /private/write-token.secret
+notes-sync-client received /private/receiver
+notes-sync-client capture-conflict /private/receiver /actual/notes-app-data NOTE_UUID
+notes-sync-client conflicts /private/receiver
+notes-sync-client export /private/receiver LOCAL_UUID
+notes-sync-client export /private/receiver REMOTE_UUID
+notes-sync-client resolve /private/receiver LOCAL_UUID REMOTE_UUID /private/chosen.md
+notes-sync-client transfer /private/receiver /private/write-token.secret
+notes-sync-client apply-resolution /private/receiver /actual/notes-app-data RESOLUTION_UUID
+notes-sync-client apply /private/receiver /actual/notes-app-data
+notes-sync-client acknowledge /private/receiver /private/write-token.secret
+```
+
+Capture stores one durable local branch and its observed source revision in
+`client.json`; it does not change the application receipt. An unresolved capture
+cannot be uploaded as a winning linear revision. `resolve` retains both parents
+and all original bytes, using the same server compare-and-set as an uploader.
+A write-capable credential is required to publish; an existing read-only receive
+credential gains no permissions. `resolve-to` may choose bytes at the same path;
+receiver tombstones and path changes are still refused. One captured conflict
+is handled at a time; after its application, another saved conflict can be captured.
+
+`apply-resolution` applies only a resolution already fetched back from the server.
+It checks the original captured BaseRev, acquires the exclusive session again,
+and persists a separate resolution intent before the atomic source write.
+Later local edits refuse application and remain untouched. Keep the source stable
+until this workflow finishes; refreshing an unresolved capture after additional
+external edits is not automatic. Preserve the newer file and exported branches
+rather than discarding either to bypass a refusal.
+
+Intermediate received revisions of this note must be same-path live ancestors
+of the chosen result. They are recorded as **superseded**, never written to the
+source and never acknowledged as applied. Interleaved publications for other
+notes are recorded as **deferred**; ordinary `apply` processes them before newer
+queue entries, using its original 20-item batches and revision guards. They may
+also be applied through the prepared-queue app session after the conflict has
+been resolved. A further conflict in a previously applied deferred note can be
+captured and resolved independently. No unrelated publication is discarded.
+
+Application metadata records the resolution intent, superseded positions and
+deferred positions atomically with the receipt. A crash after source persistence
+retries the same result without rewriting matching bytes; normal application and
+new capture refuse an unfinished resolution intent. Deferred ordinary writes use
+the original durable intent protocol. `acknowledge` stops at deferred work,
+skips superseded positions and inspects at most 20 positions per call.
+
+`applied_revisions` and `acknowledged_revisions` count actual historical receipts,
+not consumed queue positions. `superseded_revisions` counts replaced intermediate
+versions; `deferred_revisions` counts unprocessed interleaved versions. `applied`
+is false while deferred work exists and is still not a live scan of disk content.
+These additive fields require updated clients; older readers reject new state
+rather than silently discard capture/recovery metadata. Back up operational state
+before upgrades or downgrades.
+
+Tests cover source preservation, identity mapping, open-session/draft refusal,
+later edits, lost publication replies, resolution and deferred-write recovery,
+interleaved notes, repeated captures and the absence of false acknowledgments.
+TCP/HTTPS smoke exercises capture, resolution, transfer, application and receipts
+through real CLI processes. Editor conflict controls, receiver rename/delete
+conflicts and unattended recapture remain queued; owner acceptance is separate.

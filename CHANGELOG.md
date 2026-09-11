@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.9 - expose the receiver conflict recovery workflow
+
+Add capture-conflict and apply-resolution commands for saved same-path receiver
+edits. Document explicit resolution, durable application progress, compatibility
+and the remaining source rename/delete and recapture boundaries. Real CLI smoke
+verifies publication, repeat application and accurate acknowledgments. The full
+local gate passed, including native/Windows clippy, workspace tests, TCP smoke,
+byte preservation, fixtures and frontend checks.
+
 ## 0.20.9 - resolve saved receiver edits without false application receipts
 
 Capture a receiver's saved local edit against its application identity under an
