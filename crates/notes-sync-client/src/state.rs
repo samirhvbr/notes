@@ -44,6 +44,8 @@ struct State {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ReceiverCapture {
+    #[serde(default)]
+    publishable: bool,
     core_data: PathBuf,
     note: notes_model::NoteId,
     applied: Uuid,
@@ -518,7 +520,7 @@ impl Store {
                 && state
                     .capture
                     .as_ref()
-                    .is_some_and(|c| p.revision.id == c.branch)
+                    .is_some_and(|c| !c.publishable && p.revision.id == c.branch)
             {
                 return Err(Error::Conflict);
             }
@@ -804,6 +806,9 @@ impl Store {
             .commit(revision.clone(), Some(local))
             .map_err(|_| Error::Conflict)?;
         state.local = graph;
+        if let Some(capture) = &mut state.capture {
+            capture.publishable = false;
+        }
         state.pending.retain(|p| p.revision.note != a.note);
         state.pending.push(publication);
         self.save(&state, false)?;
@@ -1408,6 +1413,21 @@ impl Store {
         core_data: &Path,
         note: notes_model::NoteId,
     ) -> Result<Uuid> {
+        self.capture_receiver_change(core_data, note, false)
+    }
+    pub fn capture_receiver_edit(
+        &self,
+        core_data: &Path,
+        note: notes_model::NoteId,
+    ) -> Result<Uuid> {
+        self.capture_receiver_change(core_data, note, true)
+    }
+    fn capture_receiver_change(
+        &self,
+        core_data: &Path,
+        note: notes_model::NoteId,
+        publishable: bool,
+    ) -> Result<Uuid> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let mut state = self.load()?;
@@ -1435,7 +1455,15 @@ impl Store {
         }
         let previous = app.notes.get(&note).ok_or(Error::Invalid)?;
         let remote = incoming.head(note).ok_or(Error::Invalid)?;
-        if remote.id == previous.revision || !incoming.is_ancestor(previous.revision, remote.id) {
+        if previous.deleted
+            || (publishable
+                && (remote.id != previous.revision
+                    || app.next != state.received.len()
+                    || !app.deferred.is_empty()))
+            || (!publishable
+                && (remote.id == previous.revision
+                    || !incoming.is_ancestor(previous.revision, remote.id)))
+        {
             return Err(Error::Conflict);
         }
         let (local, bytes) = notes_core::sync::capture_conflict(
@@ -1475,6 +1503,7 @@ impl Store {
             branches: vec![],
         });
         state.capture = Some(ReceiverCapture {
+            publishable,
             core_data: data,
             note,
             applied: previous.revision,
@@ -1496,6 +1525,9 @@ impl Store {
             return Err(Error::Invalid);
         }
         let capture = state.capture.clone().ok_or(Error::Invalid)?;
+        if capture.publishable && !state.pending.is_empty() {
+            return Err(Error::Busy);
+        }
         let app = self.application(&state)?.ok_or(Error::Invalid)?;
         let data = fs::canonicalize(core_data).map_err(|_| Error::Invalid)?;
         if data != app.core_data
@@ -1914,5 +1946,181 @@ impl Store {
             created,
         });
         self.save(&state, false)
+    }
+}
+
+impl Store {
+    /// Capture at most one already applied, same-path saved edit. Captures are
+    /// opt-in; new paths and missing files never imply creation or deletion.
+    pub fn stage_receiver_edits(&self) -> Result<usize> {
+        let (state, app) = {
+            let lock = self.lock()?;
+            let _guard = lock.try_read().map_err(|_| Error::Busy)?;
+            let state = self.load()?;
+            if state.mode != Mode::Receive {
+                return Err(Error::Invalid);
+            }
+            let app = self.application(&state)?;
+            (state, app)
+        };
+        let Some(app) = app else { return Ok(0) };
+        if !state.pending.is_empty() {
+            return Ok(0);
+        }
+        let incoming = Self::incoming(&state)?;
+        if let Some(c) = &state.capture {
+            let completed = app
+                .notes
+                .get(&c.note)
+                .is_some_and(|n| incoming.is_ancestor(c.branch, n.revision));
+            if !completed {
+                if !c.publishable {
+                    return Err(Error::Conflict);
+                }
+                if !incoming.revisions.contains_key(&c.branch) {
+                    // Publication was accepted beyond this bounded cache page.
+                    // Keep fetching before attempting another capture.
+                    return Ok(0);
+                }
+                let (local, bytes) = notes_core::sync::capture_conflict(
+                    &state.source,
+                    &app.core_data,
+                    &c.path,
+                    &c.local,
+                )
+                .map_err(|_| Error::ApplicationBlocked)?;
+                let assets = notes_core::sync::capture_attachments(
+                    &state.source,
+                    &app.core_data,
+                    &c.path,
+                    &bytes,
+                )
+                .map_err(|_| Error::ApplicationBlocked)?;
+                if local.base_rev.hash == c.local.base_rev.hash
+                    && assets == state.attachments_at(c.branch)
+                {
+                    self.confirm_receiver_edit()?;
+                    return Ok(0);
+                }
+                self.recapture_receiver_conflict(&app.core_data)?;
+                return Ok(1);
+            }
+        }
+        if app.next != state.received.len() || !app.deferred.is_empty() {
+            return Ok(0);
+        }
+        let inspection = self.dir.join("inspection");
+        let files = notes_core::sync::capture(&state.source, &inspection)
+            .map_err(|_| Error::ApplicationBlocked)?;
+        for (note, previous) in &app.notes {
+            if previous.deleted {
+                continue;
+            }
+            let Some((file, bytes)) = files.iter().find(|(f, _)| f.path == previous.path) else {
+                continue;
+            };
+            let assets = notes_core::sync::capture_attachments(
+                &state.source,
+                &inspection,
+                &file.path,
+                bytes,
+            )
+            .map_err(|_| Error::ApplicationBlocked)?;
+            if file.content != previous.local.base_rev.hash
+                || assets != state.attachments_at(previous.revision)
+            {
+                self.capture_receiver_edit(&app.core_data, *note)?;
+                return Ok(1);
+            }
+        }
+        Ok(0)
+    }
+
+    /// Record a published capture already present in the source. This performs
+    /// guarded reads only; a later saved edit is never replaced by older bytes.
+    pub fn confirm_receiver_edit(&self) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Err(Error::Invalid);
+        }
+        let Some(c) = state.capture.as_ref().filter(|c| c.publishable) else {
+            return Ok(0);
+        };
+        let mut app = self.application(&state)?.ok_or(Error::Invalid)?;
+        let incoming = Self::incoming(&state)?;
+        let previous = app.notes.get(&c.note).ok_or(Error::Invalid)?;
+        if incoming.is_ancestor(c.branch, previous.revision) {
+            return Ok(0);
+        }
+        if !state.pending.is_empty() {
+            return Ok(0);
+        }
+        let Some(index) = state
+            .received
+            .iter()
+            .position(|p| p.revision.id == c.branch)
+        else {
+            return Ok(0);
+        };
+        if previous.revision != c.applied
+            || index < app.next
+            || app.intent.is_some()
+            || app.asset_intent.is_some()
+            || app.resolution_intent.is_some()
+            || app.core_data != c.core_data
+        {
+            return Err(Error::Conflict);
+        }
+        let publication = &state.received[index];
+        if state.local.revisions.get(&c.branch) != Some(&publication.revision) {
+            return Err(Error::Protocol);
+        }
+
+        let (local, bytes) =
+            notes_core::sync::capture_conflict(&state.source, &app.core_data, &c.path, &c.local)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        if local.base_rev.hash != c.local.base_rev.hash
+            || bytes != content(publication).map_err(|_| Error::Invalid)?
+        {
+            return Err(Error::ApplicationBlocked);
+        }
+        for asset in &publication.attachments {
+            let base = notes_core::sync::confirm_attachment(&state.source, &app.core_data, asset)
+                .map_err(|_| Error::ApplicationBlocked)?;
+            app.assets.insert(asset.path.clone(), base);
+        }
+        let pending: Vec<_> = app
+            .deferred
+            .iter()
+            .copied()
+            .chain(app.next..index)
+            .collect();
+        for i in pending {
+            let revision = &state.received[i].revision;
+            if revision.note == c.note {
+                if !incoming.is_ancestor(revision.id, c.branch) {
+                    return Err(Error::Conflict);
+                }
+                app.deferred.remove(&i);
+                app.superseded.insert(i);
+            } else {
+                app.deferred.insert(i);
+            }
+        }
+        app.next = index + 1;
+        app.notes.insert(
+            c.note,
+            ApplicationReceipt {
+                deleted: false,
+                revision: c.branch,
+                path: c.path.clone(),
+                local,
+            },
+        );
+        Self::validate_application(&state, app.clone())?;
+        self.save_application(&app)?;
+        Ok(1)
     }
 }

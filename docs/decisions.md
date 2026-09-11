@@ -1800,3 +1800,18 @@ normal permissions, device ownership and request limits. Operators pause other
 publishers because the audit is not a server-wide transaction. Divergent,
 foreign, scoped or locally incomplete history requires separate reconciliation;
 this operation does not authorize pruning or older-client recovery.
+
+
+## ADR-060 — Saved receiver edits are publications, not implicit file application
+
+**Status:** ACTIVE · Implemented in 0.20.16.
+
+**Decision.** Capture already applied same-path receiver edits under existing
+identity and closed-workspace guards. Use the applied revision as the causal
+parent and retain one pending ordinary capture until publication. Confirm only
+published bytes observed on disk, without rewriting source files. Preserve later
+saved edits as subsequent publications and retain divergent branches for explicit
+resolution. Desktop capture is a separate default-off setting and remains bounded
+by the transfer scheduler. This extends transport while preserving ADR-058's
+separation from source application. New paths, missing paths and open buffers do
+not authorize automatic creation, movement or deletion.

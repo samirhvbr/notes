@@ -8,6 +8,12 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.16 - queue saved receiver edits without a remote conflict
+
+Retain ordinary saved receiver edits as immutable causal publications. Confirm
+published captures from guarded source observations without rewriting files,
+while preserving subsequent edits and explicit divergent resolution.
+
 ## 0.20.15 - verify device recovery after server rollback
 
 Exercise two-device recovery, interrupted replay, retained local edits and

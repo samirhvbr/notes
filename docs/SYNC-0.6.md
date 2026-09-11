@@ -961,3 +961,57 @@ The native TCP smoke restores an actual offline backup, recovers from two
 original CLI queues including retained conflict branches, and checks exact
 server publications and unchanged local application receipts. These are desktop
 process tests, not physical mobile lifecycle or owner acceptance.
+
+
+### Saved receiver publications (0.20.16)
+
+A receive queue can capture a saved edit to an already applied live note without
+inventing a remote conflict. The source path and local identity must match its
+receipt, all received work must already be applied, and the cooperating workspace
+must be closed and draft-free. Capture retains original bytes and referenced
+attachments in the durable outbox, parenting the publication to the applied head.
+Missing paths and new notes are not automatically published.
+
+```sh
+notes-sync-client stage-receiver /absolute/queue
+notes-sync-client transfer /absolute/queue /absolute/credential.secret
+notes-sync-client confirm-receiver /absolute/queue
+notes-sync-client acknowledge /absolute/queue /absolute/credential.secret
+```
+
+Staging captures at most one note per call. Publishing uses the existing CAS,
+permissions, scope and retry rules. Confirmation performs guarded reads of the
+note and attachments and saves a receipt for bytes already present; it never
+rewrites user files. If a later edit exists, confirmation refuses and preserves
+it. After the earlier publication has been fetched, another staging call captures
+that newer edit as its successor. Intermediate captures not confirmed on disk
+receive no application acknowledgment. A pending ordinary capture must first be
+published; explicit recapture refuses to replace that outbox entry.
+
+Remote divergence still requires the existing explicit two-parent resolution.
+Choosing a resolution disables automatic confirmation for that capture; applying
+the result remains an explicit action. History retains both branches and assets.
+A received successor from another device still requires explicit application.
+
+Desktop transfer settings have a separate **Publish saved edits** option,
+disabled by default, including for settings saved before 0.20.16. When enabled,
+each admitted transfer pass stages at most one saved receiver edit, transfers its
+outbox and confirms the published capture before sending actual acknowledgments.
+Network/power admission, request budgets and pause behavior remain unchanged.
+The worker captures only when a pass runs; it does not journal every keystroke or
+promise background execution on mobile. Open editor sessions block capture until
+closed. Turning capture off prevents new automatic captures/confirmations;
+publications already queued retain their ordinary transfer semantics.
+
+The optional capture marker is backward compatible when reading older queues.
+Older binaries may refuse queues written with the new marker; preserve state and
+use the current version instead of deleting the field. No pruning is introduced.
+
+Validation covers lost storage responses, restart, edits during transfer,
+attachments changed before confirmation, source modification-time preservation,
+explicit conflict resolution, ignored new/missing paths and open-workspace
+refusal. Controller tests exercise the separate opt-in and repeated saved edits;
+the native/HTTPS transport smoke sends an edit back from a scoped receiver and
+applies it on another receive queue. UI tests check the default-off setting.
+Continuous capture of new notes, renames/deletions and open editor buffers, plus
+physical mobile lifecycle validation, remain queued.

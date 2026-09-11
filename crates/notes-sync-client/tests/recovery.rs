@@ -1718,3 +1718,194 @@ fn rollback_recovery_does_not_skip_pending_application_acknowledgments() {
     );
     assert_eq!(fs::read(local.join("note.md")).unwrap(), b"third");
 }
+
+fn editable_receiver() -> ReceiverConflictFixture {
+    let mut f = receiver_conflict_fixture();
+    // The original fixture diverges after applying the first publication.
+    // Keep its first publication and reset only this disposable remote/cache.
+    rollback(&mut f.peer, 1);
+    let file = f.dir.path().join("receiver/client.json");
+    let mut state: serde_json::Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    state["received"].as_array_mut().unwrap().truncate(1);
+    state["cursor"] = 1.into();
+    fs::write(file, serde_json::to_vec(&state).unwrap()).unwrap();
+    f
+}
+
+#[test]
+fn saved_receiver_edits_publish_without_a_remote_conflict_or_source_rewrite() {
+    let mut f = editable_receiver();
+    let bytes = fs::read(f.target.join("test.md")).unwrap();
+    assert_eq!(f.receiver.stage_receiver_edits().unwrap(), 1);
+    let first = f
+        .receiver
+        .history()
+        .unwrap()
+        .iter()
+        .find(|r| r.pending)
+        .unwrap()
+        .id
+        .clone();
+    f.peer.lose_receipt = true;
+    assert!(matches!(
+        f.receiver.transfer(&mut f.peer),
+        Err(Error::Offline)
+    ));
+    let receiver = Store::open(&f.dir.path().join("receiver")).unwrap();
+    receiver.transfer(&mut f.peer).unwrap();
+    let metadata = fs::metadata(f.target.join("test.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(receiver.confirm_receiver_edit().unwrap(), 1);
+    assert_eq!(receiver.confirm_receiver_edit().unwrap(), 0);
+    assert_eq!(
+        fs::metadata(f.target.join("test.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        metadata
+    );
+    assert_eq!(fs::read(f.target.join("test.md")).unwrap(), bytes);
+    assert_eq!(f.peer.log[1].revision.id.to_string(), first);
+    receiver.acknowledge(&mut f.peer).unwrap();
+    fs::write(f.target.join("test.md"), b"second saved edit\r\n").unwrap();
+    assert_eq!(receiver.stage_receiver_edits().unwrap(), 1);
+    receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(receiver.confirm_receiver_edit().unwrap(), 1);
+    assert_eq!(receiver.stage_receiver_edits().unwrap(), 0);
+    assert_eq!(f.peer.log.len(), 3);
+    assert_eq!(f.peer.log[2].expected, Some(f.peer.log[1].revision.id));
+    assert!(!receiver.receiver_changes().unwrap());
+}
+
+#[test]
+fn edits_during_transfer_are_recaptured_without_applying_the_older_publication() {
+    let mut f = editable_receiver();
+    f.receiver.stage_receiver_edits().unwrap();
+    fs::write(f.target.join("test.md"), b"newer while offline").unwrap();
+    assert_eq!(f.receiver.stage_receiver_edits().unwrap(), 0);
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert!(matches!(
+        f.receiver.confirm_receiver_edit(),
+        Err(Error::ApplicationBlocked)
+    ));
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"newer while offline"
+    );
+    let receiver = Store::open(&f.dir.path().join("receiver")).unwrap();
+    assert_eq!(receiver.stage_receiver_edits().unwrap(), 1);
+    receiver.transfer(&mut f.peer).unwrap();
+    receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(receiver.status().unwrap().superseded_revisions, 1);
+    receiver.acknowledge(&mut f.peer).unwrap();
+    assert_eq!(f.peer.acknowledged.last(), Some(&f.peer.log[2].revision.id));
+    assert!(!f.peer.acknowledged.contains(&f.peer.log[1].revision.id));
+}
+
+#[test]
+fn ordinary_receiver_capture_preserves_remote_races_for_explicit_resolution() {
+    let mut f = editable_receiver();
+    f.receiver.stage_receiver_edits().unwrap();
+    let mut remote = f.peer.log[0].clone();
+    remote.expected = Some(remote.revision.id);
+    remote.revision.parents = [remote.revision.id].into();
+    remote.revision.id = Uuid::new_v4();
+    f.peer.publish(&remote).unwrap();
+    assert!(matches!(
+        f.receiver.transfer(&mut f.peer),
+        Err(Error::Conflict)
+    ));
+    f.receiver.fetch(&mut f.peer).unwrap();
+    let conflict = f.receiver.conflicts().unwrap();
+    let (local, remote) = match conflict[0] {
+        notes_sync::Action::Conflict { local, remote, .. } => (local, remote),
+        _ => panic!("expected retained divergence"),
+    };
+    let chosen = f.dir.path().join("chosen.md");
+    fs::write(&chosen, b"explicit result").unwrap();
+    let id = f.receiver.resolve(local, remote, &chosen).unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(f.receiver.confirm_receiver_edit().unwrap(), 0);
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"local receiver edit"
+    );
+    f.receiver.apply_resolution(&f.data, id).unwrap();
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"explicit result"
+    );
+}
+
+#[test]
+fn receiver_capture_never_infers_new_paths_or_deletions_and_respects_open_workspace() {
+    let f = editable_receiver();
+    let mut core = notes_core::WorkspaceService::with_data_dir(&f.data).unwrap();
+    core.open_workspace(&f.target).unwrap();
+    assert!(f.receiver.stage_receiver_edits().is_err());
+    drop(core);
+    assert_eq!(f.receiver.status().unwrap().pending, 0);
+    fs::rename(f.target.join("test.md"), f.target.join("moved.md")).unwrap();
+    fs::write(f.target.join("new.md"), b"local only").unwrap();
+    assert_eq!(f.receiver.stage_receiver_edits().unwrap(), 0);
+    assert_eq!(f.receiver.status().unwrap().pending, 0);
+}
+
+#[test]
+fn receiver_binary_edits_keep_their_bytes_when_confirmation_is_interrupted() {
+    let mut f = editable_receiver();
+    fs::write(f.target.join("test.md"), b"![asset](asset.bin)\r\n").unwrap();
+    fs::write(f.target.join("asset.bin"), [0, 255, 1]).unwrap();
+    f.receiver.stage_receiver_edits().unwrap();
+    // A pending ordinary capture must be published before it can be extended.
+    assert!(matches!(
+        f.receiver.recapture_receiver_conflict(&f.data),
+        Err(Error::Busy)
+    ));
+    f.receiver.transfer(&mut f.peer).unwrap();
+    fs::write(f.target.join("asset.bin"), [128, 0, 2]).unwrap();
+    assert!(matches!(
+        f.receiver.confirm_receiver_edit(),
+        Err(Error::ApplicationBlocked)
+    ));
+    assert_eq!(fs::read(f.target.join("asset.bin")).unwrap(), [128, 0, 2]);
+    f.receiver.stage_receiver_edits().unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    let receiver = Store::open(&f.dir.path().join("receiver")).unwrap();
+    receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(f.peer.log[1].attachments[0].bytes().unwrap(), [0, 255, 1]);
+    assert_eq!(f.peer.log[2].attachments[0].bytes().unwrap(), [128, 0, 2]);
+    assert_eq!(receiver.stage_receiver_edits().unwrap(), 0);
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"![asset](asset.bin)\r\n"
+    );
+}
+
+#[test]
+fn receiver_capture_keeps_fetching_until_its_publication_arrives() {
+    let mut f = editable_receiver();
+    f.receiver.stage_receiver_edits().unwrap();
+    for i in 0..21 {
+        let mut p = f.peer.log[0].clone();
+        p.revision.id = Uuid::new_v4();
+        p.revision.note = notes_model::NoteId::default();
+        p.revision.path = notes_model::RelPath::parse(&format!("other-{i}.md")).unwrap();
+        f.peer.publish(&p).unwrap();
+    }
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(f.receiver.status().unwrap().pending, 0);
+    assert_eq!(f.receiver.confirm_receiver_edit().unwrap(), 0);
+    assert_eq!(f.receiver.stage_receiver_edits().unwrap(), 0);
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(f.receiver.confirm_receiver_edit().unwrap(), 1);
+    assert_eq!(f.receiver.status().unwrap().deferred_revisions, 21);
+    assert_eq!(f.receiver.apply_effects(&f.data).unwrap(), 20);
+    assert_eq!(f.receiver.apply_effects(&f.data).unwrap(), 1);
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"local receiver edit"
+    );
+}
