@@ -48,7 +48,7 @@ struct ReceiverCapture {
     publishable: bool,
     core_data: PathBuf,
     note: notes_model::NoteId,
-    applied: Uuid,
+    applied: Option<Uuid>,
     branch: Uuid,
     path: notes_model::RelPath,
     local: notes_core::sync::Applied,
@@ -110,10 +110,13 @@ impl State {
                     r.note != c.note
                         || r.path != c.path
                         || r.content.as_ref() != Some(&c.local.base_rev.hash)
-                        || r.parents.len() != 1
-                        || !self.local.is_ancestor(c.applied, c.branch)
+                        || r.parents.len() > 1
+                        || c.applied.is_some_and(|id| {
+                            r.parents.is_empty() || !self.local.is_ancestor(id, c.branch)
+                        })
                 })
-                || !incoming.revisions.contains_key(&c.applied)
+                || c.applied
+                    .is_some_and(|id| !incoming.revisions.contains_key(&id))
             {
                 return Err(Error::Invalid);
             }
@@ -1259,6 +1262,9 @@ impl Store {
             self.save_application(&app)?;
             count += 1;
         }
+        if state.received.is_empty() {
+            self.save_application(&app)?;
+        }
         Ok(count)
     }
 }
@@ -1413,20 +1419,21 @@ impl Store {
         core_data: &Path,
         note: notes_model::NoteId,
     ) -> Result<Uuid> {
-        self.capture_receiver_change(core_data, note, false)
+        self.capture_receiver_change(core_data, note, false, None)
     }
     pub fn capture_receiver_edit(
         &self,
         core_data: &Path,
         note: notes_model::NoteId,
     ) -> Result<Uuid> {
-        self.capture_receiver_change(core_data, note, true)
+        self.capture_receiver_change(core_data, note, true, None)
     }
     fn capture_receiver_change(
         &self,
         core_data: &Path,
         note: notes_model::NoteId,
         publishable: bool,
+        path: Option<notes_model::RelPath>,
     ) -> Result<Uuid> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
@@ -1455,6 +1462,7 @@ impl Store {
         }
         let previous = app.notes.get(&note).ok_or(Error::Invalid)?;
         let remote = incoming.head(note).ok_or(Error::Invalid)?;
+        let path = path.unwrap_or_else(|| previous.path.clone());
         if previous.deleted
             || (publishable
                 && (remote.id != previous.revision
@@ -1466,17 +1474,14 @@ impl Store {
         {
             return Err(Error::Conflict);
         }
-        let (local, bytes) = notes_core::sync::capture_conflict(
-            &state.source,
-            &data,
-            &previous.path,
-            &previous.local,
-        )
-        .map_err(|_| Error::ApplicationBlocked)?;
-        let attachments =
-            notes_core::sync::capture_attachments(&state.source, &data, &previous.path, &bytes)
+        let (local, bytes) =
+            notes_core::sync::capture_conflict(&state.source, &data, &path, &previous.local)
                 .map_err(|_| Error::ApplicationBlocked)?;
-        if local.base_rev.hash == previous.local.base_rev.hash
+        let attachments =
+            notes_core::sync::capture_attachments(&state.source, &data, &path, &bytes)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        if path == previous.path
+            && local.base_rev.hash == previous.local.base_rev.hash
             && attachments == state.attachments_at(previous.revision)
         {
             return Err(Error::Conflict);
@@ -1485,7 +1490,7 @@ impl Store {
             note,
             [previous.revision].into(),
             state.device,
-            previous.path.clone(),
+            path.clone(),
             Some(local.base_rev.hash.clone()),
         );
         state.local = incoming;
@@ -1506,9 +1511,9 @@ impl Store {
             publishable,
             core_data: data,
             note,
-            applied: previous.revision,
+            applied: Some(previous.revision),
             branch: revision.id,
-            path: previous.path.clone(),
+            path: path.clone(),
             local,
         });
         self.save(&state, false)?;
@@ -1518,6 +1523,13 @@ impl Store {
     /// Preserve a newer saved edit as a child of the previous captured branch.
     /// Publish a prepared resolution first so its history remains recoverable.
     pub fn recapture_receiver_conflict(&self, core_data: &Path) -> Result<Uuid> {
+        self.recapture_receiver_change(core_data, None)
+    }
+    fn recapture_receiver_change(
+        &self,
+        core_data: &Path,
+        path: Option<notes_model::RelPath>,
+    ) -> Result<Uuid> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let mut state = self.load()?;
@@ -1535,10 +1547,7 @@ impl Store {
             || app.intent.is_some()
             || app.resolution_intent.is_some()
             || app.asset_intent.is_some()
-            || app
-                .notes
-                .get(&capture.note)
-                .is_none_or(|n| n.revision != capture.applied)
+            || app.notes.get(&capture.note).map(|n| n.revision) != capture.applied
         {
             return Err(Error::Invalid);
         }
@@ -1554,13 +1563,15 @@ impl Store {
         if state.pending.is_empty() && !incoming.revisions.contains_key(&capture.branch) {
             return Err(Error::Conflict);
         }
+        let path = path.unwrap_or_else(|| capture.path.clone());
         let (local, bytes) =
-            notes_core::sync::capture_conflict(&state.source, &data, &capture.path, &capture.local)
+            notes_core::sync::capture_conflict(&state.source, &data, &path, &capture.local)
                 .map_err(|_| Error::ApplicationBlocked)?;
         let attachments =
-            notes_core::sync::capture_attachments(&state.source, &data, &capture.path, &bytes)
+            notes_core::sync::capture_attachments(&state.source, &data, &path, &bytes)
                 .map_err(|_| Error::ApplicationBlocked)?;
-        if local.base_rev.hash == capture.local.base_rev.hash
+        if path == capture.path
+            && local.base_rev.hash == capture.local.base_rev.hash
             && attachments == state.attachments_at(capture.branch)
         {
             return Err(Error::Conflict);
@@ -1569,7 +1580,7 @@ impl Store {
             capture.note,
             [capture.branch].into(),
             state.device,
-            capture.path.clone(),
+            path.clone(),
             Some(local.base_rev.hash.clone()),
         );
         let mut branches = vec![];
@@ -1602,6 +1613,7 @@ impl Store {
         state.pending.push(publication);
         state.capture = Some(ReceiverCapture {
             branch: revision.id,
+            path,
             local,
             ..capture
         });
@@ -1641,11 +1653,11 @@ impl Store {
         {
             return Err(Error::Conflict);
         }
-        let previous = app.notes.get(&capture.note).ok_or(Error::Invalid)?;
-        if index < app.next && incoming.is_ancestor(id, previous.revision) {
+        let previous = app.notes.get(&capture.note);
+        if index < app.next && previous.is_some_and(|n| incoming.is_ancestor(id, n.revision)) {
             return Ok(0);
         }
-        if previous.revision != capture.applied || index < app.next {
+        if previous.map(|n| n.revision) != capture.applied || index < app.next {
             return Err(Error::Conflict);
         }
         let pending: Vec<_> = app
@@ -1953,6 +1965,15 @@ impl Store {
     /// Capture at most one already applied, same-path saved edit. Captures are
     /// opt-in; new paths and missing files never imply creation or deletion.
     pub fn stage_receiver_edits(&self) -> Result<usize> {
+        self.stage_receiver_changes(true, false, false)
+    }
+    /// Each class of capture requires its own explicit opt-in.
+    pub fn stage_receiver_changes(
+        &self,
+        edits: bool,
+        new_notes: bool,
+        renames: bool,
+    ) -> Result<usize> {
         let (state, app) = {
             let lock = self.lock()?;
             let _guard = lock.try_read().map_err(|_| Error::Busy)?;
@@ -1982,6 +2003,18 @@ impl Store {
                     // Keep fetching before attempting another capture.
                     return Ok(0);
                 }
+                if renames {
+                    let files = notes_core::sync::closed_inventory(&state.source, &app.core_data)
+                        .map_err(|_| Error::ApplicationBlocked)?;
+                    let file = files
+                        .iter()
+                        .find(|f| f.note == c.local.note_id)
+                        .ok_or(Error::ApplicationBlocked)?;
+                    if file.path != c.path {
+                        self.recapture_receiver_change(&app.core_data, Some(file.path.clone()))?;
+                        return Ok(1);
+                    }
+                }
                 let (local, bytes) = notes_core::sync::capture_conflict(
                     &state.source,
                     &app.core_data,
@@ -2010,27 +2043,75 @@ impl Store {
             return Ok(0);
         }
         let inspection = self.dir.join("inspection");
-        let files = notes_core::sync::capture(&state.source, &inspection)
-            .map_err(|_| Error::ApplicationBlocked)?;
+        let files = if new_notes || renames {
+            notes_core::sync::closed_inventory(&state.source, &app.core_data)
+        } else {
+            notes_core::sync::inventory(&state.source, &inspection)
+        }
+        .map_err(|_| Error::ApplicationBlocked)?;
         for (note, previous) in &app.notes {
             if previous.deleted {
                 continue;
             }
-            let Some((file, bytes)) = files.iter().find(|(f, _)| f.path == previous.path) else {
-                continue;
-            };
-            let assets = notes_core::sync::capture_attachments(
-                &state.source,
-                &inspection,
-                &file.path,
-                bytes,
-            )
-            .map_err(|_| Error::ApplicationBlocked)?;
-            if file.content != previous.local.base_rev.hash
-                || assets != state.attachments_at(previous.revision)
+            if let Some(file) = files.iter().find(|f| f.path == previous.path) {
+                if edits {
+                    if file.content == previous.local.base_rev.hash
+                        && state.attachments_at(previous.revision).is_empty()
+                    {
+                        continue;
+                    }
+                    let (_, bytes) = notes_core::sync::capture_saved(
+                        &state.source,
+                        &app.core_data,
+                        &file.path,
+                        Some(previous.local.note_id),
+                    )
+                    .map_err(|_| Error::ApplicationBlocked)?;
+                    let assets = notes_core::sync::capture_attachments(
+                        &state.source,
+                        &app.core_data,
+                        &file.path,
+                        &bytes,
+                    )
+                    .map_err(|_| Error::ApplicationBlocked)?;
+                    if file.content != previous.local.base_rev.hash
+                        || assets != state.attachments_at(previous.revision)
+                    {
+                        self.capture_receiver_edit(&app.core_data, *note)?;
+                        return Ok(1);
+                    }
+                }
+            } else if renames {
+                if let Some(file) = files.iter().find(|f| f.note == previous.local.note_id) {
+                    self.capture_receiver_change(
+                        &app.core_data,
+                        *note,
+                        true,
+                        Some(file.path.clone()),
+                    )?;
+                    return Ok(1);
+                }
+            }
+        }
+        if new_notes {
+            // A missing tracked note may be an unrecognized move. Do not turn
+            // its destination into a duplicate identity by guessing creation.
+            if app
+                .notes
+                .values()
+                .any(|n| !n.deleted && !files.iter().any(|f| f.path == n.path))
             {
-                self.capture_receiver_edit(&app.core_data, *note)?;
-                return Ok(1);
+                return Err(Error::Conflict);
+            }
+            for file in &files {
+                if !app
+                    .notes
+                    .values()
+                    .any(|n| n.local.note_id == file.note || (!n.deleted && n.path == file.path))
+                {
+                    self.capture_receiver_new(&app.core_data, file)?;
+                    return Ok(1);
+                }
             }
         }
         Ok(0)
@@ -2050,8 +2131,8 @@ impl Store {
         };
         let mut app = self.application(&state)?.ok_or(Error::Invalid)?;
         let incoming = Self::incoming(&state)?;
-        let previous = app.notes.get(&c.note).ok_or(Error::Invalid)?;
-        if incoming.is_ancestor(c.branch, previous.revision) {
+        let previous = app.notes.get(&c.note);
+        if previous.is_some_and(|n| incoming.is_ancestor(c.branch, n.revision)) {
             return Ok(0);
         }
         if !state.pending.is_empty() {
@@ -2064,7 +2145,7 @@ impl Store {
         else {
             return Ok(0);
         };
-        if previous.revision != c.applied
+        if previous.map(|n| n.revision) != c.applied
             || index < app.next
             || app.intent.is_some()
             || app.asset_intent.is_some()
@@ -2122,5 +2203,109 @@ impl Store {
         Self::validate_application(&state, app.clone())?;
         self.save_application(&app)?;
         Ok(1)
+    }
+}
+
+impl Store {
+    /// Bind an empty receive queue without applying any source effects. A
+    /// nonempty cache still requires the normal explicit application workflow.
+    pub fn bind_empty_receiver(&self, data: &Path) -> Result<()> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Err(Error::Invalid);
+        }
+        if self.application(&state)?.is_some()
+            || !state.received.is_empty()
+            || !state.pending.is_empty()
+        {
+            return Ok(());
+        }
+        notes_core::sync::validate_state_location(&[&state.source], data)
+            .map_err(|_| Error::Invalid)?;
+        fs::create_dir_all(data).map_err(|_| Error::Storage)?;
+        self.save_application(&Application {
+            assets: BTreeMap::new(),
+            asset_intent: None,
+            schema: 1,
+            core_data: fs::canonicalize(data).map_err(|_| Error::Storage)?,
+            next: 0,
+            notes: BTreeMap::new(),
+            intent: None,
+            acknowledged: 0,
+            superseded: BTreeSet::new(),
+            deferred: BTreeSet::new(),
+            resolution_intent: None,
+        })
+    }
+    fn capture_receiver_new(&self, data: &Path, file: &notes_sync::File) -> Result<Uuid> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        let app = self.application(&state)?.ok_or(Error::Invalid)?;
+        if state.mode != Mode::Receive
+            || !state.pending.is_empty()
+            || app.core_data != data
+            || app.next != state.received.len()
+            || !app.deferred.is_empty()
+            || app.intent.is_some()
+            || app.asset_intent.is_some()
+            || app.resolution_intent.is_some()
+        {
+            return Err(Error::Conflict);
+        }
+        let incoming = Self::incoming(&state)?;
+        if state.capture.as_ref().is_some_and(|c| {
+            app.notes
+                .get(&c.note)
+                .is_none_or(|n| !incoming.is_ancestor(c.branch, n.revision))
+        }) || app.notes.values().any(|n| n.local.note_id == file.note)
+            || incoming.heads.keys().any(|id| {
+                incoming
+                    .head(*id)
+                    .is_some_and(|r| r.content.is_some() && r.path == file.path)
+            })
+        {
+            return Err(Error::Conflict);
+        }
+        let (local, bytes) =
+            notes_core::sync::capture_saved(&state.source, data, &file.path, Some(file.note))
+                .map_err(|_| Error::ApplicationBlocked)?;
+        let attachments =
+            notes_core::sync::capture_attachments(&state.source, data, &file.path, &bytes)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        let note = notes_model::NoteId::new();
+        let revision = Revision::new(
+            note,
+            BTreeSet::new(),
+            state.device,
+            file.path.clone(),
+            Some(local.base_rev.hash.clone()),
+        );
+        state.local = incoming;
+        state
+            .local
+            .commit(revision.clone(), None)
+            .map_err(|_| Error::Conflict)?;
+        state.pending.push(Publication {
+            workspace: state.local.workspace,
+            expected: None,
+            revision: revision.clone(),
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches: vec![],
+            attachments,
+        });
+        state.capture = Some(ReceiverCapture {
+            publishable: true,
+            core_data: data.to_path_buf(),
+            note,
+            applied: None,
+            branch: revision.id,
+            path: file.path.clone(),
+            local,
+        });
+        self.save(&state, false)?;
+        Ok(revision.id)
     }
 }

@@ -48,6 +48,13 @@ pub fn validate_state_location(roots: &[&Path], data: &Path) -> Result<()> {
 /// This operation is explicit and bounded; no source file is created or saved.
 /// The operational directory must be separate from the user workspace.
 pub fn inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
+    inventory_using(root, data, false)
+}
+/// Correlate identities while holding exclusive ownership of a draft-free folder.
+pub fn closed_inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
+    inventory_using(root, data, true)
+}
+fn inventory_using(root: &Path, data: &Path, exclusive: bool) -> Result<Vec<File>> {
     let root =
         std::fs::canonicalize(root).map_err(|e| CoreError::io("sync_root", "workspace", &e))?;
     validate_state_location(&[&root], data)?;
@@ -60,7 +67,22 @@ pub fn inventory(root: &Path, data: &Path) -> Result<Vec<File>> {
         });
     }
     service.record_visits = false;
-    service.open_workspace(&root)?;
+    if exclusive {
+        service.open_sync_workspace(&root)?;
+        match std::fs::read_dir(crate::paths::drafts_dir(&service.open()?.dir)) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    return Err(CoreError::Unsupported {
+                        cap: "workspace has pending drafts".into(),
+                    });
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(CoreError::io("sync_drafts", "state", &e)),
+        }
+    } else {
+        service.open_workspace(&root)?;
+    }
     let mut pending = vec![RelPath::root()];
     let mut paths = vec![];
     while let Some(dir) = pending.pop() {
@@ -475,6 +497,15 @@ pub fn capture_conflict(
     path: &RelPath,
     expected: &Applied,
 ) -> Result<(Applied, Vec<u8>)> {
+    capture_saved(root, data, path, Some(expected.note_id))
+}
+/// Read a saved note with exclusive ownership; new notes have no prior receipt.
+pub fn capture_saved(
+    root: &Path,
+    data: &Path,
+    path: &RelPath,
+    expected: Option<notes_model::NoteId>,
+) -> Result<(Applied, Vec<u8>)> {
     validate_state_location(&[root], data)?;
     let mut service = WorkspaceService::with_data_dir(data)?;
     service.record_visits = false;
@@ -497,7 +528,7 @@ pub fn capture_conflict(
         });
     }
     let note = service.open_note(path)?;
-    if note.note_id != expected.note_id || note.draft.is_some() {
+    if expected.is_some_and(|id| note.note_id != id) || note.draft.is_some() {
         return Err(CoreError::Unsupported {
             cap: "sync capture identity changed".into(),
         });

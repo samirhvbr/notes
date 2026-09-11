@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.17 - retain receiver file changes
+
+Retain local-only receiver notes as durable causal roots and recognized moves
+as revisions of the same remote identity. Guard captures with an exclusive,
+draft-free workspace and confirm observed bytes without rewriting source files.
+Preserve successive edits and moves across transfer interruptions and reject
+occupied destinations. All 48 client integration tests and 17 library tests
+passed, including empty binding, root divergence and pending path collisions.
+
 ## 0.20.16 - schedule saved receiver edits explicitly
 
 Add a separate opt-in for capturing already synchronized same-path receiver

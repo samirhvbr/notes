@@ -1909,3 +1909,273 @@ fn receiver_capture_keeps_fetching_until_its_publication_arrives() {
         b"local receiver edit"
     );
 }
+
+#[test]
+fn new_receiver_notes_start_a_history_and_confirm_without_rewriting_source() {
+    let (dir, root, _, mut peer) = fixture();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&root, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver
+        .bind_empty_receiver(&dir.path().join("app-data"))
+        .unwrap();
+    fs::write(root.join("new.md"), b"new note\r\n![asset](asset.bin)").unwrap();
+    fs::write(root.join("asset.bin"), [0, 255, 128]).unwrap();
+    assert_eq!(receiver.stage_receiver_edits().unwrap(), 0);
+    assert_eq!(
+        receiver.stage_receiver_changes(false, true, false).unwrap(),
+        1
+    );
+    peer.lose_receipt = true;
+    assert!(matches!(receiver.transfer(&mut peer), Err(Error::Offline)));
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    let before = fs::metadata(root.join("new.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(receiver.confirm_receiver_edit().unwrap(), 1);
+    assert_eq!(
+        fs::metadata(root.join("new.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        before
+    );
+    assert!(peer.log[0].revision.parents.is_empty());
+    assert_eq!(peer.log[0].expected, None);
+    assert_eq!(peer.log[0].attachments[0].bytes().unwrap(), [0, 255, 128]);
+    assert_eq!(
+        receiver.stage_receiver_changes(false, true, false).unwrap(),
+        0
+    );
+    fs::write(root.join("new.md"), b"saved successor").unwrap();
+    receiver.stage_receiver_edits().unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(peer.log[1].revision.note, peer.log[0].revision.note);
+    receiver.acknowledge(&mut peer).unwrap();
+}
+
+#[test]
+fn a_new_note_edited_during_transfer_keeps_both_versions() {
+    let (dir, root, _, mut peer) = fixture();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&root, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver
+        .bind_empty_receiver(&dir.path().join("app-data"))
+        .unwrap();
+    fs::write(root.join("new.md"), b"first").unwrap();
+    receiver.stage_receiver_changes(false, true, false).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    fs::write(root.join("new.md"), b"second").unwrap();
+    assert!(receiver.confirm_receiver_edit().is_err());
+    receiver.stage_receiver_changes(false, true, false).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(receiver.status().unwrap().superseded_revisions, 1);
+    assert_eq!(
+        notes_sync::transfer::content(&peer.log[0]).unwrap(),
+        b"first"
+    );
+    assert_eq!(
+        notes_sync::transfer::content(&peer.log[1]).unwrap(),
+        b"second"
+    );
+    assert_eq!(fs::read(root.join("new.md")).unwrap(), b"second");
+}
+
+#[test]
+fn receiver_renames_keep_identity_and_do_not_infer_deletion_or_new_notes() {
+    let mut f = editable_receiver();
+    // First confirm the saved edit supplied by this fixture.
+    f.receiver.stage_receiver_edits().unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    f.receiver.confirm_receiver_edit().unwrap();
+    let note = f.peer.log[0].revision.note;
+    fs::rename(f.target.join("test.md"), f.target.join("renamed.md")).unwrap();
+    assert!(matches!(
+        f.receiver.stage_receiver_changes(false, true, false),
+        Err(Error::Conflict)
+    ));
+    assert_eq!(f.receiver.status().unwrap().pending, 0);
+    assert_eq!(
+        f.receiver
+            .stage_receiver_changes(false, false, true)
+            .unwrap(),
+        1
+    );
+    f.receiver.transfer(&mut f.peer).unwrap();
+    let before = fs::metadata(f.target.join("renamed.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    f.receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(f.peer.log[2].revision.note, note);
+    assert_eq!(f.peer.log[2].revision.path.as_str(), "renamed.md");
+    assert_eq!(
+        fs::metadata(f.target.join("renamed.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        before
+    );
+    assert!(!f.target.join("test.md").exists());
+    fs::write(f.target.join("renamed.md"), b"after rename").unwrap();
+    f.receiver.stage_receiver_edits().unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    f.receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(f.peer.log[3].revision.note, note);
+    assert_eq!(f.peer.log[3].revision.path.as_str(), "renamed.md");
+    fs::remove_file(f.target.join("renamed.md")).unwrap();
+    assert_eq!(
+        f.receiver
+            .stage_receiver_changes(false, false, true)
+            .unwrap(),
+        0
+    );
+    assert_eq!(f.receiver.status().unwrap().pending, 0);
+}
+
+#[test]
+fn expanded_receiver_capture_refuses_open_workspaces_and_drafts() {
+    let (dir, root, _, mut peer) = fixture();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&root, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    let data = dir.path().join("data");
+    receiver.bind_empty_receiver(&data).unwrap();
+    fs::write(root.join("new.md"), b"keep").unwrap();
+    let mut core = notes_core::WorkspaceService::with_data_dir(&data).unwrap();
+    let workspace = core.open_workspace(&root).unwrap();
+    assert!(receiver.stage_receiver_changes(false, true, false).is_err());
+    drop(core);
+    let drafts = data
+        .join("workspaces")
+        .join(workspace.id.to_string())
+        .join("drafts");
+    fs::create_dir_all(&drafts).unwrap();
+    fs::write(drafts.join("retained"), b"draft").unwrap();
+    assert!(receiver.stage_receiver_changes(false, true, true).is_err());
+    assert_eq!(receiver.status().unwrap().pending, 0);
+    assert_eq!(fs::read(root.join("new.md")).unwrap(), b"keep");
+}
+
+#[test]
+fn a_second_receiver_move_before_confirmation_preserves_the_whole_history() {
+    let mut f = editable_receiver();
+    f.receiver.stage_receiver_edits().unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    f.receiver.confirm_receiver_edit().unwrap();
+    fs::rename(f.target.join("test.md"), f.target.join("middle.md")).unwrap();
+    f.receiver
+        .stage_receiver_changes(false, false, true)
+        .unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    fs::rename(f.target.join("middle.md"), f.target.join("final.md")).unwrap();
+    assert!(f.receiver.confirm_receiver_edit().is_err());
+    f.receiver
+        .stage_receiver_changes(false, false, true)
+        .unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    f.receiver.confirm_receiver_edit().unwrap();
+    assert_eq!(f.peer.log[2].revision.path.as_str(), "middle.md");
+    assert_eq!(f.peer.log[3].revision.path.as_str(), "final.md");
+    assert_eq!(f.peer.log[2].revision.note, f.peer.log[3].revision.note);
+    assert_eq!(f.receiver.status().unwrap().superseded_revisions, 1);
+    assert_eq!(
+        fs::read(f.target.join("final.md")).unwrap(),
+        b"local receiver edit"
+    );
+    assert!(!f.target.join("middle.md").exists());
+}
+
+#[test]
+fn new_receiver_path_collision_retains_pending_bytes_without_overwriting_either_note() {
+    let (dir, root, sender, mut peer) = fixture();
+    let target = dir.path().join("target");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver
+        .bind_empty_receiver(&dir.path().join("data"))
+        .unwrap();
+    fs::write(target.join("same.md"), b"receiver").unwrap();
+    receiver.stage_receiver_changes(false, true, false).unwrap();
+    let before = fs::read(dir.path().join("receiver/client.json")).unwrap();
+    fs::write(root.join("same.md"), b"sender").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    assert!(matches!(receiver.transfer(&mut peer), Err(Error::Conflict)));
+    assert_eq!(
+        fs::read(dir.path().join("receiver/client.json")).unwrap(),
+        before
+    );
+    receiver.fetch(&mut peer).unwrap();
+    assert!(matches!(
+        receiver.conflicts().unwrap()[0],
+        notes_sync::Action::PathCollision { .. }
+    ));
+    assert_eq!(receiver.status().unwrap().pending, 1);
+    assert_eq!(fs::read(target.join("same.md")).unwrap(), b"receiver");
+    assert_eq!(fs::read(root.join("same.md")).unwrap(), b"sender");
+}
+
+#[test]
+fn empty_binding_never_applies_a_nonempty_received_cache() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("remote.md"), b"remote").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    receiver
+        .bind_empty_receiver(&dir.path().join("data"))
+        .unwrap();
+    assert!(!dir.path().join("receiver/application.json").exists());
+    assert!(!target.join("remote.md").exists());
+    assert_eq!(
+        receiver.stage_receiver_changes(false, true, false).unwrap(),
+        0
+    );
+}
+
+#[test]
+fn a_new_root_can_resolve_divergence_before_its_first_local_confirmation() {
+    let (dir, root, _, mut peer) = fixture();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&root, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    let data = dir.path().join("data");
+    receiver.bind_empty_receiver(&data).unwrap();
+    fs::write(root.join("new.md"), b"first").unwrap();
+    receiver.stage_receiver_changes(false, true, false).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    let mut remote = peer.log[0].clone();
+    remote.expected = Some(remote.revision.id);
+    remote.revision.parents = [remote.revision.id].into();
+    remote.revision.id = Uuid::new_v4();
+    peer.publish(&remote).unwrap();
+    fs::write(root.join("new.md"), b"second local").unwrap();
+    receiver.stage_receiver_changes(false, true, false).unwrap();
+    assert!(matches!(receiver.transfer(&mut peer), Err(Error::Conflict)));
+    receiver.fetch(&mut peer).unwrap();
+    let (local, remote) = match receiver.conflicts().unwrap()[0] {
+        notes_sync::Action::Conflict { local, remote, .. } => (local, remote),
+        _ => panic!("expected divergence"),
+    };
+    let chosen = dir.path().join("chosen.md");
+    fs::write(&chosen, b"chosen").unwrap();
+    let id = receiver.resolve(local, remote, &chosen).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    receiver.apply_resolution(&data, id).unwrap();
+    assert_eq!(fs::read(root.join("new.md")).unwrap(), b"chosen");
+    receiver.acknowledge(&mut peer).unwrap();
+    assert_eq!(receiver.status().unwrap().applied_revisions, 1);
+}
