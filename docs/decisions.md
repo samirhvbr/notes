@@ -1948,3 +1948,14 @@ workspace mutation. The source PDF remains outside the workspace and images,
 layout and embedded files are not preserved. Only an explicit save creates a
 new Markdown note; cancellation writes nothing. Bound the selected input to
 32 MiB and refuse malformed or unsupported PDFs without guessing content.
+
+## ADR-069 — Tura Notes branding preserves installed identities
+
+**Status:** ACCEPTED · 11/09/2026
+
+**Decision.** Adopt Tura Notes, the ribbon-T identity and the repository name
+`tura-notes` for the owner-selected 1.0.0 release. Keep `br.com.samirhv.notes`,
+the `notes` binary, internal package names and existing data paths to preserve
+installed users' settings and workspace access. The major version does not
+waive outstanding acceptance or security requirements. Editable SVG sources
+and regeneration instructions live in [brand.md](brand.md).

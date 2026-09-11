@@ -12,7 +12,7 @@ members = ["crates/*", "apps/notes-app/src-tauri", "server/notes-server"]
 edition = "2021"
 license = "MIT"
 authors = ["Samir Hanna Verza"]
-repository = "https://github.com/samirhvbr/notes"
+repository = "https://github.com/samirhvbr/tura-notes"
 
 [workspace.dependencies]
 notes-sync = { path = "crates/notes-sync" }

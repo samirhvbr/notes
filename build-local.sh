@@ -59,11 +59,11 @@ fi
 (cd apps/notes-app && npm run tauri build -- --bundles dmg)
 
 artifact_dir="target/release/bundle/dmg"
-artifact="$(find "$artifact_dir" -maxdepth 1 -type f -name '*.dmg' -print -quit)"
+artifact="$(find "$artifact_dir" -maxdepth 1 -type f -name "*_${version}_*.dmg" -print -quit)"
 if [ -z "$artifact" ]; then
   echo "build-local.sh: Tauri completed without a DMG in $artifact_dir." >&2
   exit 1
 fi
 
-echo "Built notes $version: $artifact"
+echo "Built Tura Notes $version: $artifact"
 echo "Local verification only: do not distribute this unsigned, unnotarized DMG."

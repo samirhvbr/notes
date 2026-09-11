@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.0 - introduce the Tura Notes identity
+
+Adopt Tura Notes with an editable ribbon-T logo, platform icons and a branded
+welcome screen. Rename the repository to tura-notes and update canonical links.
+Keep the existing application identifier, executable and data paths so installed
+users retain their notes and settings. The owner-selected 1.0.0 release does not
+close the remaining device acceptance and sync work tracked in the queue.
+Local installer output now selects the artifact for the version just built.
+The macOS DMG and frontend checks pass; the full gate retains the unchanged
+sync-client Clippy and watcher timing failures documented in docs/brand.md.
+
 ## 0.20.27 - import PDF text as Markdown
 
 Add a desktop PDF import flow that extracts plain text into an editable preview.

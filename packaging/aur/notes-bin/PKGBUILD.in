@@ -8,7 +8,7 @@ pkgver=@VERSION@
 pkgrel=1
 pkgdesc="Local-first Markdown notes — the files on disk are the source of truth"
 arch=('x86_64')
-url="https://github.com/samirhvbr/notes"
+url="https://github.com/samirhvbr/tura-notes"
 license=('MIT')
 # WebKitGTK and GTK are linked, not vendored. Arch is rolling and webkit2gtk-4.1
 # moves without warning, which is exactly why CI builds against the current one

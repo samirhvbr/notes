@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at `0.20.27`.
+> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at `1.0.0`.
 
 This folder contains only work that has not been completed. Implemented
 contracts, measurements and delivery history live in [`../docs/`](../docs/) and
@@ -14,6 +14,7 @@ are in Portuguese.
 
 | Item | What remains | Who unblocks it |
 |---|---|---|
+| **Release gate repairs** | Resolve the existing Clippy needless borrow in `notes-sync-client/src/control.rs:896` and the macOS watcher startup timing failure in `notes-core/tests/deep.rs`; rerun the full gate (see [1.0.0 verification](../docs/brand.md#release-verification)) | Implementation |
 | [0.6 — sync](0.6-sync.md) | Installed-build and physical-device owner acceptance | Samir |
 | **0.7 — remote MCP** | Expose the existing MCP capabilities through server authentication and workspace/subfolder scopes after sync is ready | Implementation |
 | **0.4 — mobile** | Turn the merged foundation into usable iOS/Android applications: entry points, generated projects, UI, folder adapters, lifecycle handling and physical-device validation | Mobile agent / Samir |

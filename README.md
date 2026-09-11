@@ -1,4 +1,6 @@
-# notes
+# Tura Notes
+
+![Tura Notes](docs/assets/tura-logo.svg)
 
 > **Status:** `ACTIVE`
 
@@ -42,16 +44,17 @@ Stack: Tauri 2 · React · TypeScript · Rust · CodeMirror 6 · SQLite/FTS5.
 ## Install
 
 Linux, from the
-[latest release that carries packages](https://github.com/samirhvbr/notes/releases):
+[latest release that carries packages](https://github.com/samirhvbr/tura-notes/releases):
 every commit is a version, and **packages are built for minor bumps** (`X.Y.0`)
 and on request — a patch release says so in its own description ([ADR-036](docs/decisions.md)).
 
 ```bash
 # Debian, Ubuntu and derivatives
-sudo apt install ./notes_<version>_amd64.deb
+sudo apt install ./*_<version>_amd64.deb
 
 # Anything else: the AppImage, which needs no installation
-chmod +x notes_<version>_amd64.AppImage && ./notes_<version>_amd64.AppImage
+chmod +x ./*_<version>_amd64.AppImage
+./*_<version>_amd64.AppImage
 ```
 
 Arch, from the release tarball via the `notes-bin` `PKGBUILD` in
@@ -64,8 +67,8 @@ carries its own copy and is correspondingly larger.
 ## Building it yourself
 
 ```bash
-git clone git@github.com:samirhvbr/notes.git
-cd notes
+git clone git@github.com:samirhvbr/tura-notes.git
+cd tura-notes
 git config core.hooksPath tools/git-hooks
 
 cd apps/notes-app && npm ci
@@ -188,3 +191,9 @@ referenced attachment bundles without changing Markdown bytes. See
 Version 0.20.14 adds opt-in desktop background transfer and a Device sync panel
 for pairing, conditions, history and explicit conflict choices. See
 [desktop controls](docs/SYNC-0.6.md#desktop-background-transfer-and-controls-02014).
+
+## Identity
+
+Tura is a subtle homage to Alan Turing. The folded ribbon forms a T and evokes
+written memory. See [the brand guide](docs/brand.md) for the editable assets
+and compatibility decisions.

@@ -22,7 +22,7 @@ SRC="${2:?usage: gen-pkgbuild.sh <version> <tarball|--release>}"
 NAME="notes-$VERSION-x86_64-linux.tar.gz"
 
 if [ "$SRC" = "--release" ]; then
-  source_line="$NAME::https://github.com/samirhvbr/notes/releases/download/$VERSION/$NAME"
+  source_line="$NAME::https://github.com/samirhvbr/tura-notes/releases/download/$VERSION/$NAME"
   sha="${SHA256:-}"
   [ -n "$sha" ] || { echo "gen-pkgbuild.sh: --release needs SHA256 in the environment" >&2; exit 1; }
 else

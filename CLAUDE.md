@@ -1,4 +1,4 @@
-# notes — Instructions for Claude Code
+# Tura Notes — Instructions for Claude Code
 
 <!--
   The content below the H1 is duplicated between CLAUDE.md (read by Claude
@@ -60,7 +60,7 @@ rename it to `NOTES_NO_HOOK`.
 
 ## What this project is
 
-**notes** — a local-first Markdown note-taking app for Linux, macOS, Windows,
+**Tura Notes** — a local-first Markdown note-taking app for Linux, macOS, Windows,
 iOS and Android. The user picks a folder; that folder is the workspace; the
 `.md` files inside it are the notes.
 

@@ -6,7 +6,7 @@
 > local debug checks never tick the owner columns.
 
 The implemented contract and limits are in [KNOWLEDGE-0.3.md](KNOWLEDGE-0.3.md).
-The mobile foundation from [PR #2](https://github.com/samirhvbr/notes/pull/2)
+The mobile foundation from [PR #2](https://github.com/samirhvbr/tura-notes/pull/2)
 was reviewed and integrated in 0.17.0; full mobile acceptance remains in
 [ACCEPTANCE-0.4.md](ACCEPTANCE-0.4.md).
 

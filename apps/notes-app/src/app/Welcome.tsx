@@ -42,6 +42,7 @@ function WelcomeContent() {
 
   return (
     <div className="welcome">
+      <img src="/tura-icon.svg" width="88" height="88" alt="" />
       <h1>{t("welcome.title")}</h1>
       {error && <p role="alert">{t(`error.${error.code}`)}</p>}
       <p className="muted">{t("welcome.subtitle")}</p>

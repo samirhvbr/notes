@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "notes",
+  "productName": "Tura Notes",
   "mainBinaryName": "notes",
   "version": "0.0.0",
   "identifier": "br.com.samirhv.notes",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "notes",
+        "title": "Tura Notes",
         "width": 1100,
         "height": 720,
         "minWidth": 480,
@@ -31,11 +31,11 @@
       "appimage"
     ],
     "publisher": "Samir Hanna Verza",
-    "homepage": "https://github.com/samirhvbr/notes",
+    "homepage": "https://github.com/samirhvbr/tura-notes",
     "license": "MIT",
     "category": "Productivity",
     "shortDescription": "Local-first Markdown notes",
-    "longDescription": "notes edits Markdown files in a folder you choose. The files on disk are the source of truth: no database, no proprietary format, and every note stays readable from a terminal, an editor or a backup with the application uninstalled.",
+    "longDescription": "Tura Notes edits Markdown files in a folder you choose. The files on disk are the source of truth: no database, no proprietary format, and every note stays readable from a terminal, an editor or a backup with the application uninstalled.",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

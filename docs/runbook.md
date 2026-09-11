@@ -13,8 +13,8 @@ _Fill in: runtimes and versions, system packages, accounts and access needed._
 ## 2. From a clean machine to running
 
 ```bash
-git clone git@github.com:samirhvbr/notes.git
-cd notes
+git clone git@github.com:samirhvbr/tura-notes.git
+cd tura-notes
 git config core.hooksPath tools/git-hooks   # once per clone — see §5
 
 # install, configure, run — fill this in
@@ -110,7 +110,7 @@ docker run --rm -v "$PWD:/src:ro" archlinux:latest bash -c '
   workflow by hand with that version as the input:
 
   ```bash
-  gh workflow run build.yml --repo samirhvbr/notes -f version=0.11.12
+  gh workflow run build.yml --repo samirhvbr/tura-notes -f version=0.11.12
   ```
 - **A version was released with the wrong number in the package.** The bundle
   version is stamped from `version.md`; if they disagree, someone committed a
