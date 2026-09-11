@@ -589,7 +589,8 @@ then capture the conflicting note by its **remote note UUID**, shown by `receive
 The core checks the previously applied local identity, reads the exact saved
 bytes under an exclusive session, and refuses missing/changed identities, drafts,
 open workspaces and a different app data directory. It never infers identity from
-path alone. Only a live note at the same path is supported in this workflow.
+path alone. The local note must remain live at its previously applied path. Remote
+renames/tombstones can be resolved by explicit restoration there (0.20.10).
 
 ```sh
 notes-sync-client fetch /private/receiver /private/write-token.secret
@@ -611,7 +612,7 @@ cannot be uploaded as a winning linear revision. `resolve` retains both parents
 and all original bytes, using the same server compare-and-set as an uploader.
 A write-capable credential is required to publish; an existing read-only receive
 credential gains no permissions. `resolve-to` may choose bytes at the same path;
-receiver tombstones and path changes are still refused. One captured conflict
+a tombstone result or a new local path is still refused. One captured conflict
 is handled at a time; after its application, another saved conflict can be captured.
 
 `apply-resolution` applies only a resolution already fetched back from the server.
@@ -622,8 +623,8 @@ until this workflow finishes; refreshing an unresolved capture after additional
 external edits is not automatic. Preserve the newer file and exported branches
 rather than discarding either to bypass a refusal.
 
-Intermediate received revisions of this note must be same-path live ancestors
-of the chosen result. They are recorded as **superseded**, never written to the
+Intermediate received revisions of this note must be ancestors of the chosen
+result; they may include remote renames and tombstones. They are recorded as **superseded**, never written to the
 source and never acknowledged as applied. Interleaved publications for other
 notes are recorded as **deferred**; ordinary `apply` processes them before newer
 queue entries, using its original 20-item batches and revision guards. They may
@@ -650,5 +651,34 @@ Tests cover source preservation, identity mapping, open-session/draft refusal,
 later edits, lost publication replies, resolution and deferred-write recovery,
 interleaved notes, repeated captures and the absence of false acknowledgments.
 TCP/HTTPS smoke exercises capture, resolution, transfer, application and receipts
-through real CLI processes. Editor conflict controls, receiver rename/delete
-conflicts and unattended recapture remain queued; owner acceptance is separate.
+through real CLI processes. Editor conflict controls, applying receiver moves/
+deletions and unattended recapture remain queued; owner acceptance is separate.
+
+
+### Restore after a remote rename or deletion (0.20.10)
+
+When the remote moved or deleted a note while its receiver copy was edited,
+`capture-conflict` still anchors the saved local bytes to the last actual local
+application. Explicitly choose to keep a live note at that applied path:
+
+```sh
+notes-sync-client resolve-to /private/receiver LOCAL_UUID REMOTE_UUID original.md /private/chosen.md
+notes-sync-client transfer /private/receiver /private/write-token.secret
+notes-sync-client apply-resolution /private/receiver /actual/notes-app-data RESOLUTION_UUID
+notes-sync-client apply /private/receiver /actual/notes-app-data
+notes-sync-client acknowledge /private/receiver /private/write-token.secret
+```
+
+Use the same capture/export steps above first. `original.md` must be the actual
+previously applied relative path, not a newly selected destination. The ordinary
+`resolve` command refuses a renamed or deleted remote parent because keeping a
+path or resurrecting a note requires an explicit choice. Both histories remain
+available; superseded remote moves/deletions cause no local filesystem effects
+and receive no application acknowledgments. Other files at the remote path stay
+untouched. Server history collision and permission checks still apply, including
+Move/Create/Delete permissions required by the retained edges.
+
+The source must still match its captured identity and BaseRev. This supports
+restoring the edited receiver copy, not accepting a remote move/deletion as a
+local filesystem operation. Local rename/delete effects and recapture after
+further edits remain queued.

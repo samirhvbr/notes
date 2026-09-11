@@ -309,6 +309,35 @@ with tempfile.TemporaryDirectory() as temp:
         rr_status = json.loads(run([client, "status", str(rr_receiver)]))
         assert rr_status["applied_revisions"] == 2 and rr_status["superseded_revisions"] == 1
         assert rr_status["acknowledged_revisions"] == 2
+        # Explicitly restore remote renames/tombstones at the applied local path.
+        for remote_deleted in (False, True):
+            parent = json.loads((rr_receiver / "client.json").read_text())["received"][-1]
+            other = json.loads(json.dumps(parent))
+            other.pop("branches", None)
+            other["expected"] = parent["revision"]["id"]
+            other["revision"]["parents"] = [other["expected"]]
+            other["revision"]["id"] = str(uuid.uuid4())
+            other["revision"]["device"] = str(uuid.uuid4())
+            other["revision"]["path"] = "remote-renamed.md"
+            if remote_deleted:
+                other["revision"]["content"] = None
+                other["content_base64"] = None
+            assert request("POST", "/v1/workspaces/receiver-resolution/sync/revisions", other,
+                           {"Authorization": "Bearer " + receiver_secret.read_text().strip()})[0] == 200
+            run([client, "fetch", str(rr_receiver), str(receiver_secret)])
+            (rr_target / "test.md").write_bytes(b"local edit to retain")
+            run([client, "capture-conflict", str(rr_receiver), str(rr_data), note_id])
+            conflict = json.loads(run([client, "conflicts", str(rr_receiver)]))[0]
+            output = run([client, "resolve-to", str(rr_receiver), conflict["local"], conflict["remote"], "test.md", str(rr_result)])
+            resolution_id = json.loads(output.splitlines()[0])["staged_resolution"]
+            run([client, "transfer", str(rr_receiver), str(receiver_secret)])
+            run([client, "apply-resolution", str(rr_receiver), str(rr_data), resolution_id])
+            run([client, "acknowledge", str(rr_receiver), str(receiver_secret)])
+            assert (rr_target / "test.md").read_bytes() == rr_result.read_bytes()
+            assert not (rr_target / "remote-renamed.md").exists()
+        rr_status = json.loads(run([client, "status", str(rr_receiver)]))
+        assert rr_status["applied_revisions"] == rr_status["acknowledged_revisions"] == 4
+        assert rr_status["superseded_revisions"] == 3
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

@@ -1108,3 +1108,8 @@ superseded positions and deferred entries. The chosen result is one guarded sour
 write. Ordinary application drains deferred entries before advancing new work;
 acknowledgment never treats superseded/deferred positions as source receipts.
 See ADR-053 and the explicit CLI workflow in SYNC-0.6.md.
+
+In 0.20.10 a receiver may explicitly restore a remote move/delete conflict at
+its applied path. Intermediate ancestor effects are superseded, not executed.
+The core capture/write identity guards and server history authorization stay
+unchanged; choosing local move/delete effects remains separate work.

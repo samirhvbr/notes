@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.10 - document explicit receiver restoration after remote deletion
+
+Document the explicit resolve-to workflow for remote rename/delete conflicts,
+its applied-path constraint and the remaining local source effects. Extend real
+CLI smoke through publication, restoration and acknowledgment for both cases.
+The full local gate passed, including workspace tests, native/Windows clippy,
+TCP integration, byte preservation, fixtures and frontend checks.
+
 ## 0.20.10 - restore receiver conflicts at their applied path
 
 Allow explicit live restoration at the receiver's applied path when the remote

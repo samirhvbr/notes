@@ -1705,3 +1705,9 @@ closed and stable during the workflow; newer external edits refuse application.
 Receiver rename/delete application, editor controls and refreshing unresolved
 captures remain separate work. Additive private state fields fail closed in older
 readers. Source files remain the user's Markdown, never the queue or SQLite.
+
+**0.20.10 extension.** A remote rename/tombstone may be an ancestor of the
+chosen live receiver resolution at its applied path. Require `resolve-to` for
+this restoration; the implicit same-path command still refuses these parents.
+Superseding those ancestors executes no filesystem effects and creates no
+receipts for them. Local move/delete choices remain outside this operation.

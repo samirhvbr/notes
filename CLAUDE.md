@@ -82,7 +82,8 @@ one-line version of both:
   core API. In 0.20.6 the app applies prepared receive queues with an editing
   barrier. In 0.20.7 upload queues support explicit same-path divergent
   resolution with retained branches; 0.20.8 adds explicit path/tombstone choices.
-  Version 0.20.9 adds explicit saved same-path receiver capture/resolution.
+  Version 0.20.9 adds explicit saved same-path receiver capture/resolution;
+  0.20.10 restores remote move/delete conflicts at the applied receiver path.
   Source rename/deletion application, editor conflict controls, broader pairing
   and transport UI remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.

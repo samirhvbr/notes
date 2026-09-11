@@ -164,6 +164,10 @@ captured, resolved and applied with separate superseded/deferred progress.
 Source rename/deletion application and editor conflict controls remain open.
 Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
+The 0.20.10 sync increment restores remote rename/delete conflicts explicitly
+at the receiver's applied path. Applying local move/delete choices and recapturing
+further edits remain pending under milestone 0.6.
+
 ## 0.7 — AI
 
 - REST API (already standing from 0.5);

@@ -170,3 +170,6 @@ Version 0.20.9 adds saved receiver conflict handling: close the workspace,
 `capture-conflict` with its actual app data and remote note UUID, choose and
 publish a resolution, then `apply-resolution`. Original branches are retained;
 intermediate revisions are not written over the local edit. See [receiver conflicts](docs/SYNC-0.6.md#saved-receiver-conflicts-0209).
+
+Version 0.20.10 allows explicit restoration at the receiver's applied path after
+a remote rename/deletion; see [receiver restoration](docs/SYNC-0.6.md#restore-after-a-remote-rename-or-deletion-02010).
