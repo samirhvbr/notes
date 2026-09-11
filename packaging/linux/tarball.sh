@@ -13,7 +13,7 @@
 #
 #   notes-<version>-x86_64-linux/
 #     bin/notes
-#     share/applications/notes.desktop
+#     share/applications/<Product Name>.desktop   — the bundler names it after productName
 #     share/icons/hicolor/<size>/apps/notes.png
 #     LICENSE
 #     README.md

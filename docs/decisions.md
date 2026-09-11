@@ -1994,3 +1994,29 @@ The published macOS artefact is the Apple-silicon `.dmg`; an Intel build needs
 a second run on, or a cross-compile for, `x86_64`. The download is served by
 samirhv.com.br rather than attached to the GitHub Release, so the Release and
 the downloads page carry different platform sets until CI can sign.
+
+## ADR-071 — Packaging reads the bundler's filenames instead of asserting them
+
+**Status:** ACCEPTED · 11/09/2026
+
+**Context.** The Tauri bundler names the Linux desktop entry after
+`productName`. `packaging/aur/notes-bin/PKGBUILD.in` and the Arch job's
+post-install check both spelled `notes.desktop` out, so [ADR-069](#adr-069--tura-notes-branding-preserves-installed-identities)'s
+rename to "Tura Notes" produced `Tura Notes.desktop` and the Arch job failed on
+the one release that renamed the application. Release 1.0.0 therefore shipped
+with a `.deb`, an AppImage and the tarballs, and **no Arch package** — and
+because `.SRCINFO` is the sentinel `build.yml` uses for "already has its
+artefacts", the gap was correctly detectable but nothing detected it.
+
+**Decision.** Packaging takes the names the bundler produced rather than
+restating them. The `PKGBUILD` installs whatever `share/applications/*.desktop`
+is in the tarball under the same basename — the rule its icon loop already
+followed — and fails loudly if there is none. The Arch job asserts that *an*
+entry landed and that its `Exec=` launches the binary this package installs,
+which is the property that has to hold; the filename is not.
+
+**Consequences.** Arch and Debian install the same desktop file ID, because both
+now come from the bundler. Renaming the product again changes that ID on both
+platforms at once, which is visible and consistent rather than a build failure
+on one of them. The generated tarball layout documented in
+`packaging/linux/tarball.sh` no longer names the entry, because it cannot.

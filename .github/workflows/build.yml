@@ -290,7 +290,14 @@ jobs:
           set -euo pipefail
           pacman -U --noconfirm packaging/aur/notes-bin/*.pkg.tar.zst
           test -x /usr/bin/notes
-          test -f /usr/share/applications/notes.desktop
+          # By glob, not by name: the bundler names the desktop entry after
+          # `productName`, so asserting `notes.desktop` here would have gone red
+          # on the rename release for the same reason the PKGBUILD did. What has
+          # to be true is that an entry landed, and that it launches the binary
+          # this package installs — which is what `Exec=` is checked for.
+          entry="$(find /usr/share/applications -name '*.desktop' -print -quit)"
+          test -n "$entry"
+          grep -q '^Exec=notes' "$entry"
           test -n "$(find /usr/share/icons -name 'notes.png' -print -quit)"
           # It links against the system WebKitGTK, which is the whole reason
           # this job runs on rolling Arch: a missing soname is the failure

@@ -8,6 +8,20 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.1 - install the desktop entry the bundler produced
+
+The Arch job failed on 1.0.0 and that release shipped with no Arch package. The
+Tauri bundler names the Linux desktop entry after `productName`, so renaming the
+application to Tura Notes turned `notes.desktop` into `Tura Notes.desktop`,
+and both the PKGBUILD's `install` line and the job's post-install check had the
+old name written out by hand. The package step now takes whatever
+`share/applications/*.desktop` the tarball carries, under the same basename, and
+fails loudly when there is none; the check asserts that an entry landed and that
+its `Exec=` launches the binary the package installs, which is the property that
+has to hold. Arch and Debian now install the same desktop file ID because both
+come from the bundler, and the next rename cannot break one platform only.
+Recorded as ADR-071.
+
 ## 1.0.1 - sign and notarise the macOS build from the local pipeline
 
 `build-local.sh` is now the macOS release pipeline rather than a local

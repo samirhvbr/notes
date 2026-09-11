@@ -23,7 +23,19 @@ sha256sums=('@SHA256@')
 package() {
   cd "$srcdir/notes-$pkgver-x86_64-linux"
   install -Dm755 bin/notes "$pkgdir/usr/bin/notes"
-  install -Dm644 share/applications/notes.desktop "$pkgdir/usr/share/applications/notes.desktop"
+  # Whatever entry the bundler produced, under the name it produced it under.
+  # This line used to spell `notes.desktop` out, and the bundler names the entry
+  # after `productName` — so 1.0.0's rename to "Tura Notes" produced
+  # `Tura Notes.desktop`, and the Arch job failed on the one release that
+  # renamed the application. Reading the name instead of asserting it is the
+  # same rule the icon loop below already follows, and the `.deb` ships the
+  # bundler's name too, so Arch and Debian install the same desktop file ID.
+  local entries=(share/applications/*.desktop)
+  [ -e "${entries[0]}" ] || { echo "no .desktop entry in the tarball" >&2; return 1; }
+  local entry
+  for entry in "${entries[@]}"; do
+    install -Dm644 "$entry" "$pkgdir/usr/share/applications/$(basename "$entry")"
+  done
   # Whatever sizes the bundler produced, at the paths it produced them under.
   find share/icons -type f -name '*.png' -printf '%P\n' | while read -r icon; do
     install -Dm644 "share/icons/$icon" "$pkgdir/usr/share/icons/$icon"
