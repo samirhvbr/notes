@@ -169,7 +169,9 @@ at the receiver's applied path. Version 0.20.11 adds explicit recapture
 of further saved edits, retaining prior branches. Version 0.20.12 applies explicit receiver move/delete choices and confirms
 subfolder/reconciliation pairing. Version 0.20.13 adds explicit deletion capture, ordered rename cycles and
 referenced binary bundles with guarded recovery. Version 0.20.14 adds desktop background transfer with conservative conditions
-and pairing/history/conflict controls. Retention and device acceptance remain pending.
+and pairing/history/conflict controls. Version 0.20.16 adds saved same-path
+receiver publications and opt-in scheduled capture with the workspace closed.
+Retention and device acceptance remain pending.
 
 ## 0.7 — AI
 

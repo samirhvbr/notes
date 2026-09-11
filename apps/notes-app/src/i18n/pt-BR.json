@@ -282,5 +282,6 @@
   "device.action.conflict": "Conflito — escolha explícita necessária",
   "device.recapture": "Recapturar edições salvas mais recentes",
   "device.pause": "Pausar transporte",
-  "device.reason.saved_receiver_changes": "Alterações locais salvas diferem da versão recebida. Preserve-as; esta fila de recebimento exige o fluxo explícito de conflito antes de publicar essas alterações."
+  "device.reason.saved_receiver_changes": "Alterações locais salvas diferem da versão recebida. Ative a captura de edições para notas sincronizadas no mesmo caminho ou use a resolução explícita de conflitos.",
+  "device.captureSaved": "Publicar edições salvas de notas sincronizadas (mesmo caminho, workspace fechado)"
 }

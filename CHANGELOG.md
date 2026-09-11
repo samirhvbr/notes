@@ -8,6 +8,16 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.16 - schedule saved receiver edits explicitly
+
+Add a separate opt-in for capturing already synchronized same-path receiver
+edits during desktop transfer passes. Keep source application explicit. Validate
+the setting and repeat captures with controller and UI tests, plus scoped TCP
+round trips. All 40 client integration tests, 17 library tests, 81 frontend
+tests, native/Windows clippy and binding verification passed. The existing
+watcher startup timing gate failed locally; the remaining workspace suite passed.
+One capture guard refusal did not recur in four diagnostic runs or the final run.
+
 ## 0.20.16 - queue saved receiver edits without a remote conflict
 
 Retain ordinary saved receiver edits as immutable causal publications. Confirm

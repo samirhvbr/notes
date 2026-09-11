@@ -91,7 +91,9 @@ one-line version of both:
   referenced attachment bundles with guarded recovery.
   Version 0.20.14 adds opt-in desktop background transport and typed
   pairing/history/conflict controls. Version 0.20.15 adds explicit older-server
-  recovery from retained unscoped history. Retention, mobile lifecycle and
+  recovery from retained unscoped history. Version 0.20.16 adds saved same-path
+  receiver publications and separate opt-in scheduled capture with the workspace
+  closed. Retention, mobile lifecycle and
   broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).

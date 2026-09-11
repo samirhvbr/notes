@@ -424,6 +424,23 @@ with tempfile.TemporaryDirectory() as temp:
         assert not (ps_target / "shared").exists()
         ps_status = json.loads(run([client, "status", str(ps_receiver)]))
         assert ps_status["applied_revisions"] == ps_status["acknowledged_revisions"] == 3
+        # A scoped receiver can publish a saved same-path edit without a
+        # fabricated remote conflict. Confirmation must not rewrite its file.
+        (ps_target / "same.md").write_bytes(b"receiver edit\r\n")
+        before_mtime = (ps_target / "same.md").stat().st_mtime_ns
+        run([client, "stage-receiver", str(ps_receiver)])
+        run([client, "transfer", str(ps_receiver), str(scoped_secret)])
+        run([client, "confirm-receiver", str(ps_receiver)])
+        run([client, "acknowledge", str(ps_receiver), str(scoped_secret)])
+        assert (ps_target / "same.md").stat().st_mtime_ns == before_mtime
+        run([client, "fetch", str(ps_sender), str(full_secret)])
+        observer_root, observer_queue, observer_data = temp / "observer-root", temp / "observer-queue", temp / "observer-data"
+        observer_root.mkdir()
+        run([client, "init-subfolder", str(observer_queue), str(observer_root), base, "paired-scope", "shared", str(scoped_secret), "--allow-private"])
+        run([client, "fetch", str(observer_queue), str(scoped_secret)])
+        run([client, "apply-bundle", str(observer_queue), str(observer_data)])
+        assert (observer_root / "same.md").read_bytes() == b"receiver edit\r\n"
+        assert (observer_root / "asset.bin").read_bytes() == bytes([0, 255, 1])
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

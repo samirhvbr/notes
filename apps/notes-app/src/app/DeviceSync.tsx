@@ -22,7 +22,7 @@ export async function conditions(): Promise<ipc.SyncConditions> {
   return { online: navigator.onLine === true, metered: network?.saveData === true || network?.type === "cellular" ? true : null, charging };
 }
 const initial: ipc.SyncPairRequest = {state_dir:"",source:"",origin:"",workspace:"",scope:null,token_file:"",allow_private:false,mode:"reconcile"};
-const defaults = {enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false};
+const defaults = {enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false};
 
 export function DeviceSync() {
   const workspace = useWorkspace(s => s.info);
@@ -101,6 +101,7 @@ export function DeviceSync() {
         <label>{t("device.interval")}<input type="number" min={120} max={3600} value={settings.interval_seconds} onChange={e=>setSettings({...settings,interval_seconds:Number(e.target.value)})}/></label>
         <label><input type="checkbox" checked={settings.allow_metered} onChange={e=>setSettings({...settings,allow_metered:e.target.checked})}/>{t("device.metered")}</label>
         <label><input type="checkbox" checked={settings.allow_battery} onChange={e=>setSettings({...settings,allow_battery:e.target.checked})}/>{t("device.battery")}</label>
+        {snapshot?.receive&&<label><input type="checkbox" checked={settings.capture_saved} onChange={e=>setSettings({...settings,capture_saved:e.target.checked})}/>{t("device.captureSaved")}</label>}
         <div className="device-actions"><button onClick={()=>void task(()=>ipc.deviceConfigure(settings))}>{t("device.save")}</button><button onClick={()=>void task(async()=>{await ipc.deviceConditions(await conditions());await ipc.deviceRun();})}>{t("device.run")}</button><button disabled={blocked||!snapshot?.receive} onClick={()=>void task(async()=>setPreview(await ipc.devicePreview()))}>{t("device.preview")}</button><button disabled={blocked||!snapshot?.receive||!!preview} onClick={()=>void task(()=>ipc.deviceApply())}>{t("device.apply")}</button></div>
       </fieldset>}
       {preview&&<section><h3>{t("device.review")}</h3><ul>{preview.rows.map((row,i)=><li key={i}>{t(`device.action.${row.action}`)} — {row.path}</li>)}{preview.attachment_conflicts.map(p=><li key={p}>{t("device.action.conflict")} — {p}</li>)}</ul><button disabled={blocked||conflicts} onClick={()=>void task(async()=>{await ipc.deviceConfirm(preview.confirmation);setPreview(null);})}>{t("device.confirm")}</button></section>}

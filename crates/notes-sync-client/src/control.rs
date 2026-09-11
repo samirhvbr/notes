@@ -29,6 +29,8 @@ pub struct SyncConnection {
     pub interval_seconds: u32,
     pub allow_metered: bool,
     pub allow_battery: bool,
+    #[serde(default)]
+    pub capture_saved: bool,
 }
 #[derive(Clone, Default, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -335,6 +337,8 @@ impl Controller {
             let store = Store::open(Path::new(&c.state_dir))?;
             if store.source_mode()?.1 == Mode::Upload {
                 store.stage()?;
+            } else if c.capture_saved {
+                store.stage_receiver_edits()?;
             }
             let mut remote = Budget::new(connect(&store, &c)?);
             remote.check = Some(Box::new(|| {
@@ -365,6 +369,9 @@ impl Controller {
                 return Err(Error::Conflict);
             }
             if store.source_mode()?.1 == Mode::Receive {
+                if c.capture_saved {
+                    store.confirm_receiver_edit()?;
+                }
                 store.acknowledge(&mut remote)?;
             }
             let status = store.status()?;
@@ -685,7 +692,15 @@ mod tests {
             interval_seconds: 120,
             allow_metered: false,
             allow_battery: false,
+            capture_saved: false,
         }
+    }
+    #[test]
+    fn older_connections_do_not_enable_receiver_capture() {
+        let mut value = serde_json::to_value(config(Path::new("/private"))).unwrap();
+        value.as_object_mut().unwrap().remove("capture_saved");
+        let older: SyncConnection = serde_json::from_value(value).unwrap();
+        assert!(!older.capture_saved);
     }
     #[test]
     fn conservative_conditions_and_backoff_are_bounded() {
@@ -831,6 +846,26 @@ mod tests {
         assert!(matches!(snapshot.phase, DevicePhase::Pending));
         assert_eq!(snapshot.reason.as_deref(), Some("saved_receiver_changes"));
         assert_eq!(peer.borrow().log.len(), 1);
+        let mut enabled = controller.config().unwrap();
+        enabled.capture_saved = true;
+        controller.configure(enabled).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 2);
+        assert!(matches!(
+            controller.snapshot().unwrap().phase,
+            DevicePhase::Current
+        ));
+        assert_eq!(
+            fs::read(target.join("a.md")).unwrap(),
+            b"saved offline edit"
+        );
+        fs::write(target.join("a.md"), b"next saved edit").unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 3);
+        assert!(matches!(
+            controller.snapshot().unwrap().phase,
+            DevicePhase::Current
+        ));
         controller
             .run_with(true, |_, _| {
                 controller.pause().unwrap();
