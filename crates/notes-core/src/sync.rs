@@ -399,3 +399,65 @@ pub struct SyncApplyResult {
     pub refreshed: Vec<crate::OpenedNote>,
     pub reload_failed: bool,
 }
+
+/// Capture one already-applied note in a closed workspace. The receiver maps
+/// its remote note to this local identity; paths alone never authorize capture.
+pub fn capture_conflict(
+    root: &Path,
+    data: &Path,
+    path: &RelPath,
+    expected: &Applied,
+) -> Result<(Applied, Vec<u8>)> {
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_sync_workspace(root)?;
+    let dir = service.open()?.dir.clone();
+    match std::fs::read_dir(crate::paths::drafts_dir(&dir)) {
+        Ok(mut entries) => {
+            if entries.next().is_some() {
+                return Err(CoreError::Unsupported {
+                    cap: "workspace has pending drafts".into(),
+                });
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(CoreError::io("sync_drafts", "state", &e)),
+    }
+    if service.open()?.fs.stat(path)?.size > 8 * 1024 * 1024 {
+        return Err(CoreError::Unsupported {
+            cap: "sync capture exceeds its limit".into(),
+        });
+    }
+    let note = service.open_note(path)?;
+    if note.note_id != expected.note_id || note.draft.is_some() {
+        return Err(CoreError::Unsupported {
+            cap: "sync capture identity changed".into(),
+        });
+    }
+    let stat = service.open()?.fs.stat(path)?;
+    if stat.size > 8 * 1024 * 1024 {
+        return Err(CoreError::Unsupported {
+            cap: "sync capture exceeds its limit".into(),
+        });
+    }
+    let bytes = service.open()?.fs.read(path)?;
+    let after = service.open()?.fs.stat(path)?;
+    if stat.size != after.size
+        || stat.mtime_ns != after.mtime_ns
+        || stat.size != note.base_rev.size
+        || stat.mtime_ns != note.base_rev.mtime_ns
+        || notes_fs::hash(&bytes) != note.base_rev.hash
+    {
+        return Err(CoreError::Unsupported {
+            cap: "sync capture changed during read".into(),
+        });
+    }
+    Ok((
+        Applied {
+            note_id: note.note_id,
+            base_rev: note.base_rev,
+        },
+        bytes,
+    ))
+}

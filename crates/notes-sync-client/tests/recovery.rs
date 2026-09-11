@@ -12,6 +12,7 @@ struct Peer {
     log: Vec<Publication>,
     lose_receipt: bool,
     bad_fetch: bool,
+    acknowledged: Vec<Uuid>,
 }
 impl Peer {
     fn new() -> Self {
@@ -20,6 +21,7 @@ impl Peer {
             log: vec![],
             lose_receipt: false,
             bad_fetch: false,
+            acknowledged: vec![],
         }
     }
 }
@@ -28,6 +30,7 @@ impl Transport for Peer {
         if r.workspace != self.journal.workspace {
             return Err(Error::Protocol);
         }
+        self.acknowledged.push(r.revision);
         let note = self.journal.revisions[&r.revision].note;
         self.journal
             .acknowledge(r.device, [(note, r.revision)].into())
@@ -715,4 +718,231 @@ fn explicit_paths_and_tombstones_resolve_rename_delete_conflicts_without_source_
             assert!(!root.join("renamed.md").exists());
         }
     }
+}
+
+struct ReceiverConflictFixture {
+    dir: tempfile::TempDir,
+    receiver: Store,
+    target: std::path::PathBuf,
+    data: std::path::PathBuf,
+    peer: Peer,
+    note: notes_model::NoteId,
+    remote: Uuid,
+}
+fn receiver_conflict_fixture() -> ReceiverConflictFixture {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"base").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let note = peer.log[0].revision.note;
+    let target = dir.path().join("receiver-notes");
+    fs::create_dir(&target).unwrap();
+    let data = dir.path().join("receiver-data");
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply(&data).unwrap();
+    receiver.acknowledge(&mut peer).unwrap();
+    fs::write(root.join("test.md"), b"remote update").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let remote = peer.log.last().unwrap().revision.id;
+    receiver.fetch(&mut peer).unwrap();
+    fs::write(target.join("test.md"), b"local receiver edit").unwrap();
+    ReceiverConflictFixture {
+        dir,
+        receiver,
+        target,
+        data,
+        peer,
+        note,
+        remote,
+    }
+}
+#[test]
+fn receiver_resolution_skips_intermediate_writes_and_acknowledges_only_real_receipts() {
+    let mut f = receiver_conflict_fixture();
+    assert!(f.receiver.apply(&f.data).is_err());
+    let branch = f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .unwrap();
+    assert!(matches!(
+        f.receiver.transfer(&mut f.peer),
+        Err(Error::Conflict)
+    ));
+    assert_eq!(
+        fs::read(f.receiver.export(branch).unwrap()).unwrap(),
+        b"local receiver edit"
+    );
+    assert!(
+        matches!(f.receiver.conflicts().unwrap()[0], notes_sync::Action::Conflict { local, remote, .. } if local == branch && remote == f.remote)
+    );
+    let result = f.dir.path().join("result.md");
+    fs::write(&result, b"chosen\r\n").unwrap();
+    let id = f.receiver.resolve(branch, f.remote, &result).unwrap();
+    f.peer.lose_receipt = true;
+    assert!(matches!(
+        f.receiver.transfer(&mut f.peer),
+        Err(Error::Offline)
+    ));
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert!(f.receiver.apply(&f.data).is_err());
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"local receiver edit"
+    );
+    let app_path = f.dir.path().join("receiver/application.json");
+    let mut intent: serde_json::Value =
+        serde_json::from_slice(&fs::read(&app_path).unwrap()).unwrap();
+    intent["resolution_intent"] = serde_json::json!(id);
+    assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 1);
+    assert_eq!(fs::read(f.target.join("test.md")).unwrap(), b"chosen\r\n");
+    // Reconstruct a crash after source persistence but before the final receipt.
+    let modified = fs::metadata(f.target.join("test.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    fs::write(&app_path, serde_json::to_vec(&intent).unwrap()).unwrap();
+    let restarted = Store::open(&f.dir.path().join("receiver")).unwrap();
+    assert!(restarted
+        .capture_receiver_conflict(&f.data, f.note)
+        .is_err());
+    assert_eq!(restarted.apply_resolution(&f.data, id).unwrap(), 1);
+    assert_eq!(
+        fs::metadata(f.target.join("test.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        modified
+    );
+    assert_eq!(restarted.apply_resolution(&f.data, id).unwrap(), 0);
+    let status = restarted.status().unwrap();
+    assert_eq!(status.applied_revisions, 2);
+    assert_eq!(status.superseded_revisions, 1);
+    assert!(status.applied);
+    assert_eq!(restarted.acknowledge(&mut f.peer).unwrap(), 1);
+    assert_eq!(restarted.status().unwrap().acknowledged_revisions, 2);
+    assert_eq!(f.peer.acknowledged, vec![f.peer.log[0].revision.id, id]);
+    assert!(!f.peer.acknowledged.contains(&f.remote));
+    // Ordinary application resumes after the captured branch has been resolved.
+    let mut next = f.peer.log.last().unwrap().clone();
+    next.branches.clear();
+    next.expected = Some(id);
+    next.revision.parents = [id].into();
+    next.revision.id = Uuid::new_v4();
+    f.peer.publish(&next).unwrap();
+    restarted.fetch(&mut f.peer).unwrap();
+    assert_eq!(restarted.apply(&f.data).unwrap(), 1);
+    let mut later = f.peer.log.last().unwrap().clone();
+    later.expected = Some(later.revision.id);
+    later.revision.parents = later.expected.into_iter().collect();
+    later.revision.id = Uuid::new_v4();
+    f.peer.publish(&later).unwrap();
+    restarted.fetch(&mut f.peer).unwrap();
+    fs::write(f.target.join("test.md"), b"a later local edit").unwrap();
+    assert!(restarted.capture_receiver_conflict(&f.data, f.note).is_ok());
+}
+#[test]
+fn receiver_capture_refuses_open_workspaces_drafts_and_later_local_edits() {
+    let mut f = receiver_conflict_fixture();
+    let state_path = f.dir.path().join("receiver/client.json");
+    let original = fs::read(&state_path).unwrap();
+    let mut service = notes_core::WorkspaceService::with_data_dir(&f.data).unwrap();
+    let workspace = service.open_workspace(&f.target).unwrap();
+    assert!(f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .is_err());
+    drop(service);
+    let drafts = f
+        .data
+        .join("workspaces")
+        .join(workspace.id.to_string())
+        .join("drafts");
+    fs::create_dir_all(&drafts).unwrap();
+    fs::write(drafts.join("retained"), b"unsaved").unwrap();
+    assert!(f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .is_err());
+    assert_eq!(fs::read(&state_path).unwrap(), original);
+    assert_eq!(fs::read(drafts.join("retained")).unwrap(), b"unsaved");
+    fs::remove_file(drafts.join("retained")).unwrap();
+    let branch = f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .unwrap();
+    let result = f.dir.path().join("chosen.md");
+    fs::write(&result, b"chosen").unwrap();
+    assert!(f
+        .receiver
+        .resolve_delete(
+            branch,
+            f.remote,
+            notes_model::RelPath::parse("test.md").unwrap()
+        )
+        .is_err());
+    let id = f.receiver.resolve(branch, f.remote, &result).unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    fs::write(f.target.join("test.md"), b"newer edit after capture").unwrap();
+    let app = f.dir.path().join("receiver/application.json");
+    let before = fs::read(&app).unwrap();
+    assert!(f.receiver.apply_resolution(&f.data, id).is_err());
+    assert_eq!(fs::read(&app).unwrap(), before);
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"newer edit after capture"
+    );
+}
+
+#[test]
+fn receiver_resolution_defers_interleaved_notes_without_false_receipts() {
+    let mut f = receiver_conflict_fixture();
+    let branch = f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .unwrap();
+    let result = f.dir.path().join("chosen.md");
+    fs::write(&result, b"chosen").unwrap();
+    let mut other = f.peer.log[0].clone();
+    other.expected = None;
+    other.revision.id = Uuid::new_v4();
+    other.revision.note = notes_model::NoteId::default();
+    other.revision.parents.clear();
+    other.revision.path = notes_model::RelPath::parse("other.md").unwrap();
+    f.peer.publish(&other).unwrap();
+    f.receiver.fetch(&mut f.peer).unwrap();
+    let id = f.receiver.resolve(branch, f.remote, &result).unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 1);
+    assert_eq!(fs::read(f.target.join("test.md")).unwrap(), b"chosen");
+    assert!(!f.target.join("other.md").exists());
+    assert_eq!(f.receiver.status().unwrap().deferred_revisions, 1);
+    assert!(!f.receiver.status().unwrap().applied);
+    assert_eq!(f.receiver.acknowledge(&mut f.peer).unwrap(), 0);
+    let checkpoint = f.dir.path().join("receiver/application.json");
+    let mut recovery: serde_json::Value =
+        serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+    recovery["intent"] = serde_json::json!(other.revision.id);
+    assert_eq!(f.receiver.apply(&f.data).unwrap(), 1);
+    let modified = fs::metadata(f.target.join("other.md"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    fs::write(&checkpoint, serde_json::to_vec(&recovery).unwrap()).unwrap();
+    assert_eq!(f.receiver.apply(&f.data).unwrap(), 1);
+    assert_eq!(
+        fs::metadata(f.target.join("other.md"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        modified
+    );
+    assert_eq!(fs::read(f.target.join("other.md")).unwrap(), b"base");
+    assert_eq!(f.receiver.status().unwrap().deferred_revisions, 0);
+    assert!(f.receiver.status().unwrap().applied);
+    assert_eq!(f.receiver.acknowledge(&mut f.peer).unwrap(), 2);
 }

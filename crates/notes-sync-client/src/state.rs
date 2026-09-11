@@ -36,6 +36,18 @@ struct State {
     pending: Vec<Publication>,
     received: Vec<Publication>,
     cursor: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    capture: Option<ReceiverCapture>,
+}
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ReceiverCapture {
+    core_data: PathBuf,
+    note: notes_model::NoteId,
+    applied: Uuid,
+    branch: Uuid,
+    path: notes_model::RelPath,
+    local: notes_core::sync::Applied,
 }
 impl State {
     fn validate(&self) -> Result<()> {
@@ -76,6 +88,20 @@ impl State {
                 return Err(Error::Invalid);
             }
         }
+        if let Some(c) = &self.capture {
+            if self.mode != Mode::Receive
+                || !c.core_data.is_absolute()
+                || self.local.revisions.get(&c.branch).is_none_or(|r| {
+                    r.note != c.note
+                        || r.path != c.path
+                        || r.content.as_ref() != Some(&c.local.base_rev.hash)
+                        || r.parents != [c.applied].into()
+                })
+                || !incoming.revisions.contains_key(&c.applied)
+            {
+                return Err(Error::Invalid);
+            }
+        }
         if self.cursor != self.received.len() {
             return Err(Error::Invalid);
         }
@@ -97,6 +123,8 @@ pub struct Status {
     pub applied: bool,
     pub applied_revisions: usize,
     pub acknowledged_revisions: usize,
+    pub superseded_revisions: usize,
+    pub deferred_revisions: usize,
 }
 pub struct Store {
     dir: PathBuf,
@@ -226,6 +254,7 @@ impl Store {
                 pending: vec![],
                 received: vec![],
                 cursor: 0,
+                capture: None,
             },
             true,
         )
@@ -241,14 +270,22 @@ impl Store {
         let s = self.load()?;
         let app = self.application(&s)?;
         let applied = app.as_ref().map(|a| a.next).unwrap_or(0);
+        let superseded = app.as_ref().map(|a| a.superseded.len()).unwrap_or(0);
+        let deferred = app.as_ref().map(|a| a.deferred.len()).unwrap_or(0);
         let acknowledged = app.as_ref().map(|a| a.acknowledged).unwrap_or(0);
         Ok(Status {
             pending: s.pending.len(),
             received: s.received.len(),
             cursor: s.cursor,
-            applied: applied > 0 && applied == s.received.len(),
-            applied_revisions: applied,
-            acknowledged_revisions: acknowledged,
+            applied: applied > 0 && applied == s.received.len() && deferred == 0,
+            applied_revisions: applied - superseded - deferred,
+            acknowledged_revisions: acknowledged
+                - app
+                    .as_ref()
+                    .map(|a| a.superseded.range(..acknowledged).count())
+                    .unwrap_or(0),
+            superseded_revisions: superseded,
+            deferred_revisions: deferred,
         })
     }
     /// Capture only saved bytes. Missing inventory entries are reported, never
@@ -315,6 +352,14 @@ impl Store {
             let Some(p) = state.pending.first() else {
                 break;
             };
+            if state.mode == Mode::Receive
+                && state
+                    .capture
+                    .as_ref()
+                    .is_some_and(|c| p.revision.id == c.branch)
+            {
+                return Err(Error::Conflict);
+            }
             transport.publish(p)?;
             state.pending.remove(0);
             self.save(&state, false)?;
@@ -407,9 +452,6 @@ impl Store {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let mut state = self.load()?;
-        if state.mode != Mode::Upload {
-            return Err(Error::Invalid);
-        }
         let incoming = Self::incoming(&state)?;
         let a = state
             .local
@@ -424,6 +466,24 @@ impl Store {
             || incoming.heads.get(&a.note) != Some(&remote)
         {
             return Err(Error::Conflict);
+        }
+        if state.mode == Mode::Receive {
+            let capture = state.capture.as_ref().ok_or(Error::Invalid)?;
+            let app = self.application(&state)?.ok_or(Error::Invalid)?;
+            if app.intent.is_some() || app.resolution_intent.is_some() {
+                return Err(Error::Invalid);
+            }
+            if capture.note != a.note
+                || a.path != capture.path
+                || b.path != capture.path
+                || a.content.is_none()
+                || b.content.is_none()
+                || result.is_none()
+                || path.as_ref().is_some_and(|p| p != &capture.path)
+                || !state.local.is_ancestor(capture.branch, local)
+            {
+                return Err(Error::Conflict);
+            }
         }
         let mut graph = state.local.clone();
         graph
@@ -574,6 +634,12 @@ struct Application {
     intent: Option<Uuid>,
     #[serde(default)]
     acknowledged: usize,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    superseded: BTreeSet<usize>,
+    #[serde(default, skip_serializing_if = "BTreeSet::is_empty")]
+    deferred: BTreeSet<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    resolution_intent: Option<Uuid>,
 }
 impl Store {
     fn application(&self, state: &State) -> Result<Option<Application>> {
@@ -603,15 +669,17 @@ impl Store {
             || app.intent.is_some_and(|id| {
                 state
                     .received
-                    .get(app.next)
+                    .get(app.deferred.first().copied().unwrap_or(app.next))
                     .is_none_or(|p| p.revision.id != id)
             })
         {
             return Err(Error::Invalid);
         }
         let mut latest = std::collections::BTreeMap::new();
-        for p in &state.received[..app.next] {
-            latest.insert(p.revision.note, &p.revision);
+        for (i, p) in state.received[..app.next].iter().enumerate() {
+            if !app.deferred.contains(&i) && !app.superseded.contains(&i) {
+                latest.insert(p.revision.note, &p.revision);
+            }
         }
         if latest.len() != app.notes.len()
             || latest.iter().any(|(id, r)| {
@@ -623,6 +691,37 @@ impl Store {
             })
         {
             return Err(Error::Invalid);
+        }
+        if app.superseded.iter().any(|i| *i >= app.next)
+            || app
+                .deferred
+                .iter()
+                .any(|i| *i >= app.next || *i < app.acknowledged || app.superseded.contains(i))
+        {
+            return Err(Error::Invalid);
+        }
+        if !app.superseded.is_empty() {
+            let incoming = Self::incoming(state)?;
+            for i in &app.superseded {
+                let r = &state.received[*i].revision;
+                if app
+                    .notes
+                    .get(&r.note)
+                    .is_none_or(|n| n.revision == r.id || !incoming.is_ancestor(r.id, n.revision))
+                {
+                    return Err(Error::Invalid);
+                }
+            }
+        }
+        if let Some(id) = app.resolution_intent {
+            if app.intent.is_some()
+                || state.capture.is_none()
+                || !state.received[app.next..]
+                    .iter()
+                    .any(|p| p.revision.id == id)
+            {
+                return Err(Error::Invalid);
+            }
         }
         Ok(Some(app))
     }
@@ -681,12 +780,33 @@ impl Store {
             notes: Default::default(),
             intent: None,
             acknowledged: 0,
+            superseded: BTreeSet::new(),
+            deferred: BTreeSet::new(),
+            resolution_intent: None,
         });
-        if app.core_data != core_data {
+        if app.core_data != core_data || app.resolution_intent.is_some() {
             return Err(Error::Invalid);
         }
+        if let Some(c) = &state.capture {
+            let incoming = Self::incoming(&state)?;
+            if app
+                .notes
+                .get(&c.note)
+                .is_none_or(|n| !incoming.is_ancestor(c.branch, n.revision))
+            {
+                return Err(Error::Conflict);
+            }
+        }
         let mut count = 0;
-        for p in state.received.iter().skip(app.next).take(20) {
+        let pending: Vec<_> = app
+            .deferred
+            .iter()
+            .copied()
+            .chain(app.next..state.received.len())
+            .take(20)
+            .collect();
+        for index in pending {
+            let p = &state.received[index];
             if p.revision.content.is_none() {
                 return Err(Error::UnsupportedApplication);
             }
@@ -725,7 +845,9 @@ impl Store {
                     local: applied,
                 },
             );
-            app.next += 1;
+            if !app.deferred.remove(&index) {
+                app.next += 1;
+            }
             app.intent = None;
             self.save_application(&app)?;
             count += 1;
@@ -747,7 +869,17 @@ impl Store {
             return Ok(0);
         };
         let mut count = 0;
-        while app.acknowledged < app.next && count < 20 {
+        let mut scanned = 0;
+        while app.acknowledged < app.next && scanned < 20 {
+            scanned += 1;
+            if app.deferred.contains(&app.acknowledged) {
+                break;
+            }
+            if app.superseded.contains(&app.acknowledged) {
+                app.acknowledged += 1;
+                self.save_application(&app)?;
+                continue;
+            }
             let p = &state.received[app.acknowledged];
             transport.acknowledge(&notes_sync::transfer::ApplicationAcknowledgment {
                 workspace: state.local.workspace,
@@ -860,5 +992,181 @@ impl Store {
             }
         }
         report
+    }
+}
+
+impl Store {
+    /// Capture one saved receiver edit. Application history remains untouched.
+    pub fn capture_receiver_conflict(
+        &self,
+        core_data: &Path,
+        note: notes_model::NoteId,
+    ) -> Result<Uuid> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        if state.mode != Mode::Receive || !state.pending.is_empty() {
+            return Err(Error::Invalid);
+        }
+        let app = self.application(&state)?.ok_or(Error::Invalid)?;
+        let data = fs::canonicalize(core_data).map_err(|_| Error::Invalid)?;
+        if data != app.core_data || app.intent.is_some() || app.resolution_intent.is_some() {
+            return Err(Error::Invalid);
+        }
+        let incoming = Self::incoming(&state)?;
+        if let Some(c) = &state.capture {
+            if app
+                .notes
+                .get(&c.note)
+                .is_none_or(|n| !incoming.is_ancestor(c.branch, n.revision))
+            {
+                return Err(Error::Conflict);
+            }
+        }
+        let previous = app.notes.get(&note).ok_or(Error::Invalid)?;
+        let remote = incoming.head(note).ok_or(Error::Invalid)?;
+        if remote.id == previous.revision
+            || remote.path != previous.path
+            || remote.content.is_none()
+            || !incoming.is_ancestor(previous.revision, remote.id)
+        {
+            return Err(Error::Conflict);
+        }
+        let (local, bytes) = notes_core::sync::capture_conflict(
+            &state.source,
+            &data,
+            &previous.path,
+            &previous.local,
+        )
+        .map_err(|_| Error::ApplicationBlocked)?;
+        if local.base_rev.hash == previous.local.base_rev.hash {
+            return Err(Error::Conflict);
+        }
+        let revision = Revision::new(
+            note,
+            [previous.revision].into(),
+            state.device,
+            previous.path.clone(),
+            Some(local.base_rev.hash.clone()),
+        );
+        state.local = incoming;
+        state.local.heads.insert(note, previous.revision);
+        state
+            .local
+            .commit(revision.clone(), Some(previous.revision))
+            .map_err(|_| Error::Conflict)?;
+        state.pending.push(Publication {
+            workspace: state.local.workspace,
+            expected: Some(previous.revision),
+            revision: revision.clone(),
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches: vec![],
+        });
+        state.capture = Some(ReceiverCapture {
+            core_data: data,
+            note,
+            applied: previous.revision,
+            branch: revision.id,
+            path: previous.path.clone(),
+            local,
+        });
+        self.save(&state, false)?;
+        Ok(revision.id)
+    }
+
+    /// Apply only a published receiver resolution. Superseded intermediate
+    /// publications get no source write and no application acknowledgment.
+    pub fn apply_resolution(&self, core_data: &Path, id: Uuid) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive || !state.pending.is_empty() {
+            return Err(Error::Invalid);
+        }
+        let capture = state.capture.as_ref().ok_or(Error::Invalid)?;
+        let mut app = self.application(&state)?.ok_or(Error::Invalid)?;
+        let data = fs::canonicalize(core_data).map_err(|_| Error::Invalid)?;
+        if data != capture.core_data
+            || data != app.core_data
+            || app.intent.is_some()
+            || app.resolution_intent.is_some_and(|r| r != id)
+        {
+            return Err(Error::Invalid);
+        }
+        let incoming = Self::incoming(&state)?;
+        let index = state
+            .received
+            .iter()
+            .position(|p| p.revision.id == id)
+            .ok_or(Error::Invalid)?;
+        let p = &state.received[index];
+        if p.revision.note != capture.note
+            || p.revision.path != capture.path
+            || p.revision.content.is_none()
+            || state.local.heads.get(&capture.note) != Some(&id)
+            || !incoming.is_ancestor(capture.branch, id)
+        {
+            return Err(Error::Conflict);
+        }
+        let previous = app.notes.get(&capture.note).ok_or(Error::Invalid)?;
+        if index < app.next && incoming.is_ancestor(id, previous.revision) {
+            return Ok(0);
+        }
+        if previous.revision != capture.applied || index < app.next {
+            return Err(Error::Conflict);
+        }
+        let pending: Vec<_> = app
+            .deferred
+            .iter()
+            .copied()
+            .chain(app.next..=index)
+            .collect();
+        if pending.iter().any(|i| {
+            let q = &state.received[*i];
+            q.revision.note == capture.note
+                && (q.revision.path != capture.path
+                    || q.revision.content.is_none()
+                    || !incoming.is_ancestor(q.revision.id, id))
+        }) {
+            return Err(Error::Conflict);
+        }
+        let bytes = content(p).map_err(|_| Error::Invalid)?;
+        let retry = app.resolution_intent == Some(id);
+        let applied = notes_core::sync::apply_received(
+            &state.source,
+            &data,
+            &capture.path,
+            &bytes,
+            Some(&capture.local),
+            retry,
+            || {
+                app.resolution_intent = Some(id);
+                self.save_application(&app)
+                    .map_err(|_| notes_model::CoreError::Internal {
+                        message: "could not persist receiver resolution intent".into(),
+                    })
+            },
+        )
+        .map_err(|_| Error::ApplicationBlocked)?;
+        for i in pending.into_iter().filter(|i| *i != index) {
+            if state.received[i].revision.note == capture.note {
+                app.deferred.remove(&i);
+                app.superseded.insert(i);
+            } else {
+                app.deferred.insert(i);
+            }
+        }
+        app.next = index + 1;
+        app.notes.insert(
+            capture.note,
+            ApplicationReceipt {
+                revision: id,
+                path: capture.path.clone(),
+                local: applied,
+            },
+        );
+        app.resolution_intent = None;
+        self.save_application(&app)?;
+        Ok(1)
     }
 }

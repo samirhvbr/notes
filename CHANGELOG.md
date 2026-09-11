@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.9 - resolve saved receiver edits without false application receipts
+
+Capture a receiver's saved local edit against its application identity under an
+exclusive closed-workspace session. Retain exact bytes and their observed source
+revision as a conflict branch, without overwriting the note or advancing an
+application receipt. Reuse explicit two-parent resolution for the captured edit. Apply only its
+published result under the captured source revision guard; defer unrelated notes
+and skip superseded revisions without sending false application receipts.
+Regression tests cover lost responses, crash recovery, interleaved notes, drafts,
+open workspaces and additional local edits.
+
 ## 0.20.8 - document explicit path and tombstone resolutions
 
 Document resolve-to and resolve-delete, their source-file boundary and the
