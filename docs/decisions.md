@@ -1845,7 +1845,8 @@ Verify the complete retained prefix and recover one additional page per atomic
 checkpoint. Only an identical full server publication clears a pending entry.
 Preserve unpublished branches, captures and application receipts; never synthesize
 application progress from downloaded bytes. Refuse mixed receipt/cache backups,
-scoped cursors and pending pairing. Pause publishers during the audit because it
+pending pairing and, in this block, scoped cursors. ADR-065 later extends the
+same audit to the credential-visible sequence. Pause publishers because it
 is not a server-wide snapshot. This does not authorize history pruning, identity
 repair or replacement of local files after an application-data rollback.
 
@@ -1867,3 +1868,33 @@ from a page or mutate source/application state. Accept an authorized original
 envelope retry after server pruning without restoring payloads, preserving lost
 storage-response idempotency. General linear-history pruning requires a future
 baseline/cursor protocol and is not implied by this decision.
+
+
+## ADR-064 — Device retirement requires prior credential revocation
+
+**Status:** ACTIVE · Implemented in 0.20.20.
+
+**Decision.** Let an offline operator list registered sync devices and retire a
+specific device only after revoking the credential that owns it. Hold the server
+instance lock, remove only that device's owner binding and per-note application
+receipts, validate and atomically replace the vault, and audit success. Keep all
+revisions, payloads, tombstones, heads, cursors and other device receipts.
+Expose no retirement endpoint to remote credentials. An unknown device, active
+owner credential or concurrent server/backup refuses the operation. Returning
+hardware enrolls as a new device; restoring the prior backup restores the old
+registration. Zero remaining devices still authorize no pruning under ADR-063.
+
+
+## ADR-065 — Scoped client recovery follows the visible sequence and absolute cursor
+
+**Status:** ACTIVE · Implemented in 0.20.20.
+
+**Decision.** Extend ADR-062 client recovery to a queue with a pinned subfolder
+scope. Compare every retained publication against the ordered sequence visible
+to that credential, skip unfetched out-of-scope cursor positions, and checkpoint
+the absolute server cursor. Require exact visible publications and the existing
+queue scope on transport; preserve pending branches, application receipts and
+source files. Pending pairing and mixed application backups remain invalid.
+This visibility proof cannot establish the complete server prefix, so
+`recover-server` remains restricted to unscoped retained queues. The operation
+does not repair restored application identities or infer missing publications.

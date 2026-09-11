@@ -177,7 +177,10 @@ move/delete receipt-loss tests. Restored application identities and scoped
 backup reconciliation remain open.
 Version 0.20.19 adds offline server pruning and matching receiver compaction for
 unanimously acknowledged divergent branch payloads. Linear history, current
-resolution payloads, cursor baselines and device retirement remain open.
+resolution payloads and cursor baselines remain open. Version 0.20.20 adds
+explicit retirement of devices whose owning credential was revoked and restores
+scoped receiver queues across filtered cursor gaps. Restored application
+identity reconciliation remains open.
 Device acceptance remains pending.
 
 ## 0.7 — AI

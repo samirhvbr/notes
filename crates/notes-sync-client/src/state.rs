@@ -629,18 +629,22 @@ impl Store {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let mut state = self.load()?;
-        if state.endpoint.scope.is_some() || state.pairing.is_some() {
+        if state.pairing.is_some() {
             return Err(Error::Invalid);
         }
         // Refuse a mixed backup whose receipts do not belong to its cache.
         self.application(&state)?;
         let retained = state.received.len();
         let mut cursor = 0;
+        let mut visible = 0;
         loop {
             let page = transport.page(cursor)?;
             if page.workspace != state.local.workspace
                 || page.revisions.len() > 20
-                || page.next_cursor != cursor + page.revisions.len()
+                || page.next_cursor < cursor + page.revisions.len()
+                || page.next_cursor > cursor.saturating_add(20)
+                || (state.endpoint.scope.is_none()
+                    && page.next_cursor != cursor + page.revisions.len())
                 || (page.has_more && page.next_cursor == cursor)
             {
                 return Err(Error::Protocol);
@@ -652,21 +656,22 @@ impl Store {
                 {
                     return Err(Error::Protocol);
                 }
-                if cursor < retained {
-                    if publication != state.received[cursor] {
+                if visible < retained {
+                    if publication != state.received[visible] {
                         return Err(Error::Conflict);
                     }
                 } else {
                     state.received.push(publication);
                 }
-                cursor += 1;
+                visible += 1;
             }
+            cursor = page.next_cursor;
             // Each pass verifies the old prefix and adds at most one page.
-            if cursor > retained || !page.has_more {
+            if visible > retained || !page.has_more {
                 break;
             }
         }
-        if cursor < retained {
+        if visible < retained {
             return Err(Error::Conflict);
         }
         let mut confirmed = BTreeSet::new();
@@ -687,7 +692,7 @@ impl Store {
             .retain(|p| !confirmed.contains(&p.revision.id));
         state.cursor = cursor;
         self.save(&state, false)?;
-        Ok(cursor - retained)
+        Ok(visible - retained)
     }
 
     fn recovery_prefix(state: &State, transport: &mut impl Transport) -> Result<usize> {

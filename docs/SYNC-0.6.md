@@ -1079,35 +1079,40 @@ and renames from one receiver and explicitly apply both on another device.
 
 ### Restored client queue recovery (0.20.18)
 
-`recover-client` explicitly audits an unscoped queue restored from an older
-backup against the current server. Pause publishers and the desktop scheduler
+`recover-client` explicitly audits a queue restored from an older backup
+against the current server. Pause publishers and the desktop scheduler
 while recovering, and keep the original backup. Restore the queue and its bound
 application data consistently; mixed snapshots whose receipts refer beyond the
-cached history are refused. Pending pairing and scoped queues are refused because
-a filtered cursor cannot prove the complete server prefix.
+cached history are refused. Pending pairing is refused.
 
 ```sh
 notes-sync-client recover-client /absolute/queue /absolute/credential.secret
 ```
 
 Each call compares every retained publication, including original bytes,
-attachments and imported branches, with the same ordered server prefix. It then
-recovers at most 20 further publications. Repeat until `recovered_publications`
-is zero. A matching pending publication is removed only when the complete
+attachments and imported branches, with the same ordered server sequence. For
+an unscoped queue that sequence is the complete prefix. For a scoped queue it is
+the credential-visible sequence; invisible positions are skipped while the
+absolute server cursor is retained. The credential scope must still match the
+queue's pinned scope on the connection. The command then recovers at most one
+20-position server page of further visible publications. Repeat until
+`recovered_publications` is zero. A matching pending publication is removed only when the complete
 publication is identical to the server copy. Unpublished changes and local
 branches remain intact, including conflicts. The command makes only read requests;
 it never republishes, resets cursors, edits source files, changes application
 receipts, or acknowledges remote revisions. The existing transport permissions,
 rate limits and retry policy apply.
 
-Shorter, foreign, divergent or corrupt server history is refused without saving
-partial progress. Each successful batch is saved atomically under the queue lock.
+Shorter visible, foreign, divergent or corrupt server history is refused without
+saving partial progress. Out-of-scope publications are neither fetched nor
+treated as divergence. Each successful batch is saved atomically under the queue lock.
 An interrupted audit can be repeated after restart. Recovery is cache/outbox
 reconciliation, not a repair of lost file identities or stale application receipts.
 If application data was rolled back while source files advanced, ordinary guarded
 application can still refuse; preserve those files and resolve that mismatch
-separately. No timestamp chooses a winner. Broader retention/pruning and scoped
-backup reconciliation remain unimplemented.
+separately. No timestamp chooses a winner. Restored application identity repair
+and broader retention remain unimplemented. A scoped queue still cannot prove a
+complete server prefix for `recover-server`, so server recovery remains unscoped.
 
 ### Interrupted two-device effects (0.20.18)
 
@@ -1178,5 +1183,36 @@ Tests cover multiple devices at different causal positions, a tombstone after a
 resolution, an original-envelope retry after pruning, stopped-server enforcement,
 vault backup/restore, client/server mismatch, branch export removal and continued
 receive application. Linear publication content, current resolution bytes,
-device retirement, whole-log cursor compaction and automatic scheduling remain
-queued.
+whole-log cursor compaction and automatic scheduling remain queued.
+
+### Explicit device retirement (0.20.20)
+
+An abandoned device no longer has to block retention forever. With the server
+stopped, first list the workspace registrations:
+
+```sh
+notes-server sync-device-list WORKSPACE
+```
+
+The JSON rows identify the device UUID, owning credential UUID, whether that
+credential is revoked, and how many per-note receipts it retains. Confirm the
+device is no longer in service, take an offline backup, revoke its owning
+credential, and then run:
+
+```sh
+notes-server sync-retire-device WORKSPACE DEVICE_UUID
+```
+
+Retirement is refused while the server or backup process holds the instance
+lock, when the device is unknown, or while its owning credential remains active.
+It atomically removes only that device's owner binding and application receipts;
+all revisions, payloads, tombstones, heads, cursors and other devices remain.
+The success is audited as `sync_device_retire` and reports the removed receipt
+count and remaining device count. It is not exposed over HTTP.
+
+Retirement is permanent operational intent. Restoring the pre-retirement backup
+restores the registration; otherwise a returning device must be paired as a new
+device under a new credential and reconcile normally. If retirement leaves no
+known devices, `sync-prune` still removes nothing. Tests cover active-owner
+refusal, stopped-server locking, revoked ownership, preservation of another
+device, repeat refusal and the pruning device count.

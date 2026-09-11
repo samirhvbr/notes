@@ -90,6 +90,64 @@ impl Transport for Peer {
         }
     }
 }
+
+struct ScopedPeer<'a> {
+    peer: &'a mut Peer,
+}
+impl ScopedPeer<'_> {
+    fn localize(mut publication: Publication) -> Publication {
+        fn path(revision: &mut notes_sync::Revision) {
+            revision.path = notes_model::RelPath::parse(
+                revision.path.as_str().strip_prefix("shared/").unwrap(),
+            )
+            .unwrap();
+        }
+        path(&mut publication.revision);
+        for branch in &mut publication.branches {
+            path(&mut branch.revision);
+        }
+        for revision in &mut publication.history {
+            path(revision);
+        }
+        publication
+    }
+}
+impl Transport for ScopedPeer<'_> {
+    fn acknowledge(&mut self, _: &notes_sync::transfer::ApplicationAcknowledgment) -> Result<()> {
+        panic!("scoped recovery must not acknowledge")
+    }
+    fn page(&mut self, cursor: usize) -> Result<Page> {
+        if cursor > self.peer.log.len() {
+            return Err(Error::Protocol);
+        }
+        let end = (cursor + 20).min(self.peer.log.len());
+        Ok(Page {
+            workspace: self.peer.journal.workspace,
+            revisions: self.peer.log[cursor..end]
+                .iter()
+                .filter(|publication| publication.revision.path.as_str().starts_with("shared/"))
+                .cloned()
+                .map(Self::localize)
+                .map(|publication| publication.revision)
+                .collect(),
+            heads: Default::default(),
+            next_cursor: end,
+            has_more: end < self.peer.log.len(),
+        })
+    }
+    fn fetch(&mut self, id: Uuid) -> Result<Publication> {
+        self.peer
+            .log
+            .iter()
+            .find(|publication| publication.revision.id == id)
+            .cloned()
+            .map(Self::localize)
+            .ok_or(Error::Protocol)
+    }
+    fn publish(&mut self, _: &Publication) -> Result<()> {
+        panic!("scoped recovery must not publish")
+    }
+}
 fn endpoint() -> Endpoint {
     Endpoint {
         scope: None,
@@ -2350,6 +2408,62 @@ fn restored_client_preserves_unpublished_divergence_and_application_receipts() {
 }
 
 #[test]
+fn restored_scoped_client_recovers_visible_history_across_cursor_gaps() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::create_dir(root.join("shared")).unwrap();
+    fs::write(root.join("outside.md"), b"outside one").unwrap();
+    fs::write(root.join("shared/test.md"), b"inside one").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    assert_eq!(peer.log.len(), 2);
+
+    let target = dir.path().join("scoped-root");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("scoped-state")).unwrap();
+    let scoped_endpoint = Endpoint {
+        scope: Some(notes_model::RelPath::parse("shared").unwrap()),
+        ..endpoint()
+    };
+    receiver
+        .initialize(
+            &target,
+            scoped_endpoint,
+            Mode::Receive,
+            &mut ScopedPeer { peer: &mut peer },
+        )
+        .unwrap();
+    receiver.fetch(&mut ScopedPeer { peer: &mut peer }).unwrap();
+    assert_eq!(receiver.status().unwrap().received, 1);
+    assert_eq!(receiver.status().unwrap().cursor, 2);
+    let checkpoint = fs::read(dir.path().join("scoped-state/client.json")).unwrap();
+
+    for index in 0..21 {
+        fs::write(
+            root.join(format!("gap-{index:02}.md")),
+            format!("out of scope {index}"),
+        )
+        .unwrap();
+    }
+    fs::write(root.join("outside.md"), b"outside two").unwrap();
+    fs::write(root.join("shared/test.md"), b"inside two").unwrap();
+    for _ in 0..2 {
+        sender.stage().unwrap();
+        sender.transfer(&mut peer).unwrap();
+    }
+    assert_eq!(peer.log.len(), 25);
+    fs::write(dir.path().join("scoped-state/client.json"), &checkpoint).unwrap();
+    let recovered = receiver
+        .recover_client(&mut ScopedPeer { peer: &mut peer })
+        .unwrap();
+    assert_eq!(recovered, 1);
+    let status = receiver.status().unwrap();
+    assert_eq!(status.received, 2);
+    assert_eq!(status.cursor, 25);
+    assert!(!target.join("test.md").exists());
+    assert!(peer.acknowledged.is_empty());
+}
+
+#[test]
 fn restored_client_rejects_short_foreign_corrupt_and_divergent_prefixes_atomically() {
     let (dir, root, sender, mut peer) = fixture();
     fs::write(root.join("test.md"), b"initial").unwrap();
@@ -2374,7 +2488,7 @@ fn restored_client_rejects_short_foreign_corrupt_and_divergent_prefixes_atomical
 }
 
 #[test]
-fn restored_client_refuses_scopes_and_mixed_application_backups() {
+fn restored_client_refuses_pairing_and_mixed_application_backups() {
     let (dir, root, sender, mut peer) = fixture();
     fs::write(root.join("test.md"), b"initial").unwrap();
     sender.stage().unwrap();
@@ -2384,7 +2498,11 @@ fn restored_client_refuses_scopes_and_mixed_application_backups() {
     let path = dir.path().join("receiver/client.json");
     let original = fs::read(&path).unwrap();
     let mut state: serde_json::Value = serde_json::from_slice(&original).unwrap();
-    state["endpoint"]["scope"] = serde_json::json!("shared");
+    state["pairing"] = serde_json::json!({
+        "schema": 1,
+        "kind": "subfolder",
+        "confirmation": "not-a-real-confirmation"
+    });
     fs::write(&path, serde_json::to_vec(&state).unwrap()).unwrap();
     assert!(matches!(
         receiver.recover_client(&mut peer),

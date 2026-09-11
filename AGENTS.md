@@ -97,7 +97,8 @@ one-line version of both:
   Version 0.20.18 adds audited restored-client cache/outbox recovery and
   two-device move/delete receipt-loss tests.
   Version 0.20.19 adds unanimous resolved-branch payload pruning on the server
-  and matching receiver compaction. Broader retention, mobile lifecycle and
+  and matching receiver compaction. Version 0.20.20 adds explicit revoked-device
+  retirement and scoped receiver recovery. Broader retention, mobile lifecycle and
   broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).

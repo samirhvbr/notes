@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.20 - recover scoped receiver queues
+
+Allow `recover-client` to audit and extend a restored scoped queue across
+invisible server cursor positions. Compare only the credential-visible ordered
+publications while preserving the absolute cursor, pending local branches,
+application receipts and source files. Continue to refuse pending pairing and
+mixed application backups. All 57 client integration tests and 17 library tests
+passed, including recovery across interleaved out-of-scope publications.
+The full local gate retained its existing watcher startup timing failure; every
+remaining gate stage passed.
+
 ## 0.20.20 - retire revoked sync devices explicitly
 
 Add offline operator commands to list sync devices and permanently retire one
