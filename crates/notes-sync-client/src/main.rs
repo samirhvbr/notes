@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.as_slice() == ["--help"] {
-        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Whole-workspace credentials only.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
+        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Whole-workspace credentials only.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
         return Ok(());
     }
     let ca = std::env::var_os("NOTES_SYNC_CA_FILE").map(PathBuf::from);
@@ -69,6 +69,23 @@ fn run() -> Result<()> {
                 args[3].parse().map_err(|_| Error::Invalid)?,
                 Path::new(&args[4]),
             )?;
+            println!(
+                "{}",
+                serde_json::json!({"staged_resolution":id, "source_written":false})
+            );
+        }
+        "resolve-to" | "resolve-delete"
+            if (command == "resolve-to" && args.len() == 6)
+                || (command == "resolve-delete" && args.len() == 5) =>
+        {
+            let local = args[2].parse().map_err(|_| Error::Invalid)?;
+            let remote = args[3].parse().map_err(|_| Error::Invalid)?;
+            let path = notes_model::RelPath::parse(&args[4]).map_err(|_| Error::Invalid)?;
+            let id = if command == "resolve-to" {
+                store.resolve_to(local, remote, path, Path::new(&args[5]))?
+            } else {
+                store.resolve_delete(local, remote, path)?
+            };
             println!(
                 "{}",
                 serde_json::json!({"staged_resolution":id, "source_written":false})

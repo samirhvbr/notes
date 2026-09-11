@@ -230,6 +230,46 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "fetch", str(fresh_state), str(client_secret)])
         run([client, "apply", str(fresh_state), str(temp / "resolved-app-data")])
         assert (fresh_root / "original.md").read_bytes() == chosen.read_bytes()
+        # The expanded suite exceeds the real 60-request credential budget.
+        # Wait for its window rather than weakening production rate limits.
+        time.sleep(61)
+        # Exercise explicit path and tombstone choices using actual CLI processes.
+        for remote_deleted in (False, True):
+            parent = json.loads((sender / "client.json").read_text())["received"][-1]
+            other = json.loads(json.dumps(parent))
+            other.pop("branches", None)
+            other["expected"] = parent["revision"]["id"]
+            other["revision"]["parents"] = [other["expected"]]
+            other["revision"]["id"] = str(uuid.uuid4())
+            other["revision"]["device"] = str(uuid.uuid4())
+            if remote_deleted:
+                other["revision"]["content"] = None
+                other["content_base64"] = None
+            else:
+                other["revision"]["path"] = "remote-renamed.md"
+            local_bytes = b"local versus deletion" if remote_deleted else b"local versus rename"
+            (source / "original.md").write_bytes(local_bytes)
+            run([client, "stage", str(sender)])
+            assert request("POST", client_sync, other, {"Authorization": "Bearer " + client_token})[0] == 200
+            run([client, "fetch", str(sender), str(client_secret)])
+            conflict = json.loads(run([client, "conflicts", str(sender)]))[0]
+            command = "resolve-delete" if remote_deleted else "resolve-to"
+            choice = [client, command, str(sender), conflict["local"], conflict["remote"], "original.md"]
+            if not remote_deleted:
+                choice.append(str(chosen))
+            run(choice)
+            run([client, "transfer", str(sender), str(client_secret)])
+            run([client, "transfer", str(sender), str(client_secret)])
+            merged = json.loads((sender / "client.json").read_text())["received"][-1]
+            assert set(merged["revision"]["parents"]) == {conflict["local"], conflict["remote"]}
+            assert (merged["revision"]["content"] is None) == remote_deleted
+            assert (source / "original.md").read_bytes() == local_bytes
+            assert not (source / "remote-renamed.md").exists()
+        run([client, "fetch", str(fresh_state), str(client_secret)])
+        refused = subprocess.run([client, "apply", str(fresh_state), str(temp / "resolved-app-data")], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert refused.returncode != 0
+        assert (fresh_root / "original.md").read_bytes() == chosen.read_bytes()
+        assert not (fresh_root / "remote-renamed.md").exists()
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

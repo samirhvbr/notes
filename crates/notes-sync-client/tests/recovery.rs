@@ -615,3 +615,104 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
     assert_eq!(fs::read(target.join("test.md")).unwrap(), chosen);
     assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 4);
 }
+
+#[test]
+fn explicit_paths_and_tombstones_resolve_rename_delete_conflicts_without_source_mutations() {
+    for remote_deleted in [false, true] {
+        for choose_delete in [false, true] {
+            let (dir, root, store, mut peer) = fixture();
+            fs::write(root.join("test.md"), b"base").unwrap();
+            fs::write(root.join("occupied.md"), b"another note").unwrap();
+            store.stage().unwrap();
+            store.transfer(&mut peer).unwrap();
+            let base = peer
+                .log
+                .iter()
+                .find(|p| p.revision.path.as_str() == "test.md")
+                .unwrap()
+                .clone();
+            fs::write(root.join("test.md"), b"local edit").unwrap();
+            store.stage().unwrap();
+            let mut remote = base.clone();
+            remote.revision.id = Uuid::new_v4();
+            remote.revision.device = Uuid::new_v4();
+            remote.expected = Some(base.revision.id);
+            remote.revision.parents = [base.revision.id].into();
+            if remote_deleted {
+                remote.revision.content = None;
+                remote.content_base64 = None;
+            } else {
+                remote.revision.path = notes_model::RelPath::parse("renamed.md").unwrap();
+            }
+            peer.publish(&remote).unwrap();
+            store.fetch(&mut peer).unwrap();
+            let notes_sync::Action::Conflict {
+                local,
+                remote: remote_id,
+                ..
+            } = store.conflicts().unwrap()[0]
+            else {
+                panic!("missing conflict")
+            };
+            let result = dir.path().join("chosen.md");
+            fs::write(&result, b"chosen\r\n").unwrap();
+            let before = fs::read(dir.path().join("state/client.json")).unwrap();
+            assert!(store.resolve(local, remote_id, &result).is_err());
+            assert!(store
+                .resolve_to(
+                    local,
+                    remote_id,
+                    notes_model::RelPath::parse("occupied.md").unwrap(),
+                    &result
+                )
+                .is_err());
+            assert!(store
+                .resolve_to(
+                    local,
+                    remote_id,
+                    notes_model::RelPath::parse(".private/result.md").unwrap(),
+                    &result
+                )
+                .is_err());
+            assert_eq!(
+                fs::read(dir.path().join("state/client.json")).unwrap(),
+                before
+            );
+            let path = notes_model::RelPath::parse("chosen-path.md").unwrap();
+            let id = if choose_delete {
+                store
+                    .resolve_delete(local, remote_id, path.clone())
+                    .unwrap()
+            } else {
+                store
+                    .resolve_to(local, remote_id, path.clone(), &result)
+                    .unwrap()
+            };
+            let queued = fs::read(dir.path().join("state/client.json")).unwrap();
+            peer.lose_receipt = true;
+            assert!(matches!(store.transfer(&mut peer), Err(Error::Offline)));
+            assert_eq!(
+                fs::read(dir.path().join("state/client.json")).unwrap(),
+                queued
+            );
+            Store::open(&dir.path().join("state"))
+                .unwrap()
+                .transfer(&mut peer)
+                .unwrap();
+            let merge = peer.log.last().unwrap();
+            assert_eq!(merge.revision.id, id);
+            assert_eq!(merge.revision.path, path);
+            assert_eq!(merge.revision.parents, [local, remote_id].into());
+            assert_eq!(merge.revision.content.is_none(), choose_delete);
+            assert_eq!(merge.content_base64.is_none(), choose_delete);
+            assert_eq!(
+                fs::read(store.export(local).unwrap()).unwrap(),
+                b"local edit"
+            );
+            assert_eq!(fs::read(root.join("test.md")).unwrap(), b"local edit");
+            assert_eq!(fs::read(root.join("occupied.md")).unwrap(), b"another note");
+            assert!(!root.join("chosen-path.md").exists());
+            assert!(!root.join("renamed.md").exists());
+        }
+    }
+}

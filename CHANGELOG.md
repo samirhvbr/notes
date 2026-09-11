@@ -8,6 +8,13 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.8 - resolve renamed and deleted upload branches explicitly
+
+Allow an explicit result path and either chosen file bytes or a tombstone when
+resolving divergent upload heads. Preserve the legacy same-path command's
+refusals and the existing two-parent, capacity and expected-head guards. These
+choices stage history without moving or deleting source files.
+
 ## 0.20.7 - expose explicit conflict resolution in the device CLI
 
 Add independent fetch, conflict inspection, branch export and file-based resolve

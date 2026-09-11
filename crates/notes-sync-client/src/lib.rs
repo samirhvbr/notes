@@ -11,7 +11,7 @@ pub enum Error {
     Invalid,
     #[error("client state cannot be read or saved; preserve it for recovery")]
     Storage,
-    #[error("client is locked by another process")]
+    #[error("client or server is busy; retained revisions can be retried")]
     Busy,
     #[error("offline or TLS connection failed; pending revisions were retained")]
     Offline,

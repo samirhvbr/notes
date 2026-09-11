@@ -1095,3 +1095,49 @@ async fn sync_resolution_rejects_hidden_branches_forgery_and_unrelated_history()
     assert_eq!(fs::read(&vault).unwrap(), before);
     assert_eq!(post_revision(&f, &good).await, StatusCode::OK);
 }
+
+#[tokio::test]
+async fn sync_resolution_preserves_create_move_and_delete_permissions() {
+    for missing in [Permission::Create, Permission::Move, Permission::Delete] {
+        let mut f = Fixture::new(&all());
+        let workspace = sync_workspace(&f).await;
+        let base = publication(workspace, None, "allowed/test.md", Some(b"base"));
+        assert_eq!(post_revision(&f, &base).await, StatusCode::OK);
+        let remote = publication(
+            workspace,
+            Some(&base),
+            "allowed/remote.md",
+            if missing == Permission::Create {
+                None
+            } else {
+                Some(b"remote")
+            },
+        );
+        let local = publication(workspace, Some(&base), "allowed/test.md", Some(b"local"));
+        assert_eq!(post_revision(&f, &remote).await, StatusCode::OK);
+        let mut merge = resolution(&remote, &local);
+        if missing == Permission::Delete {
+            merge.revision.content = None;
+            merge.content_base64 = None;
+        }
+        let vault = f.data.join("sync/home/vault.json");
+        let before = fs::read(&vault).unwrap();
+        let original = f.token.clone();
+        let secret = f._dir.path().join("restricted.secret");
+        admin::create_token(
+            &f.data,
+            "restricted".into(),
+            "home".into(),
+            RelPath::parse("allowed").unwrap(),
+            all().into_iter().filter(|p| *p != missing).collect(),
+            false,
+            &secret,
+        )
+        .unwrap();
+        f.token = fs::read_to_string(secret).unwrap();
+        assert_eq!(post_revision(&f, &merge).await, StatusCode::FORBIDDEN);
+        assert_eq!(fs::read(&vault).unwrap(), before);
+        f.token = original;
+        assert_eq!(post_revision(&f, &merge).await, StatusCode::OK);
+    }
+}

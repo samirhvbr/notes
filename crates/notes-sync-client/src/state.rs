@@ -375,6 +375,35 @@ impl Store {
     /// Explicit operator choice of result bytes. This only stages a publication;
     /// it never edits the source, sends traffic, or elects a winner by timestamp.
     pub fn resolve(&self, local: Uuid, remote: Uuid, result: &Path) -> Result<Uuid> {
+        self.resolve_choice(local, remote, None, Some(result))
+    }
+    /// Choose the resulting path and exact bytes, including resurrection after
+    /// a remote tombstone. This never renames or writes the source folder.
+    pub fn resolve_to(
+        &self,
+        local: Uuid,
+        remote: Uuid,
+        path: notes_model::RelPath,
+        result: &Path,
+    ) -> Result<Uuid> {
+        self.resolve_choice(local, remote, Some(path), Some(result))
+    }
+    /// Choose a tombstone explicitly. Source deletion is a separate operation.
+    pub fn resolve_delete(
+        &self,
+        local: Uuid,
+        remote: Uuid,
+        path: notes_model::RelPath,
+    ) -> Result<Uuid> {
+        self.resolve_choice(local, remote, Some(path), None)
+    }
+    fn resolve_choice(
+        &self,
+        local: Uuid,
+        remote: Uuid,
+        path: Option<notes_model::RelPath>,
+        result: Option<&Path>,
+    ) -> Result<Uuid> {
         let mut lock = self.lock()?;
         let _guard = lock.try_write().map_err(|_| Error::Busy)?;
         let mut state = self.load()?;
@@ -390,9 +419,7 @@ impl Store {
             .clone();
         let b = incoming.revisions.get(&remote).ok_or(Error::Invalid)?;
         if a.note != b.note
-            || a.path != b.path
-            || a.content.is_none()
-            || b.content.is_none()
+            || (path.is_none() && (a.path != b.path || a.content.is_none() || b.content.is_none()))
             || state.local.heads.get(&a.note) != Some(&local)
             || incoming.heads.get(&a.note) != Some(&remote)
         {
@@ -405,26 +432,38 @@ impl Store {
         if graph.is_ancestor(local, remote) || graph.is_ancestor(remote, local) {
             return Err(Error::Conflict);
         }
-        let mut bytes = vec![];
-        let file = File::open(result).map_err(|_| Error::Storage)?;
-        if !file.metadata().map_err(|_| Error::Storage)?.is_file() {
+        let path = path.unwrap_or(a.path);
+        if !path.is_note()
+            || path.as_str().len() > 4096
+            || path.as_str().split('/').any(|s| s.starts_with('.'))
+        {
             return Err(Error::Invalid);
         }
-        file.take(notes_sync::transfer::MAX_CONTENT as u64 + 1)
-            .read_to_end(&mut bytes)
-            .map_err(|_| Error::Storage)?;
-        if bytes.len() > notes_sync::transfer::MAX_CONTENT {
-            return Err(Error::Limit);
-        }
+        let bytes = result
+            .map(|result| -> Result<Vec<u8>> {
+                let mut bytes = vec![];
+                let file = File::open(result).map_err(|_| Error::Storage)?;
+                if !file.metadata().map_err(|_| Error::Storage)?.is_file() {
+                    return Err(Error::Invalid);
+                }
+                file.take(notes_sync::transfer::MAX_CONTENT as u64 + 1)
+                    .read_to_end(&mut bytes)
+                    .map_err(|_| Error::Storage)?;
+                if bytes.len() > notes_sync::transfer::MAX_CONTENT {
+                    return Err(Error::Limit);
+                }
+                Ok(bytes)
+            })
+            .transpose()?;
         let revision = notes_sync::resolve(
             &graph,
             local,
             remote,
             state.device,
-            a.path,
-            Some(notes_model::ContentHash::from_bytes(
-                *blake3::hash(&bytes).as_bytes(),
-            )),
+            path,
+            bytes
+                .as_ref()
+                .map(|bytes| notes_model::ContentHash::from_bytes(*blake3::hash(bytes).as_bytes())),
         )
         .map_err(|_| Error::Conflict)?;
         let mut branches = vec![];
@@ -448,7 +487,7 @@ impl Store {
             workspace: state.local.workspace,
             expected: Some(remote),
             revision: revision.clone(),
-            content_base64: Some(STANDARD.encode(bytes)),
+            content_base64: bytes.map(|bytes| STANDARD.encode(bytes)),
             branches,
         };
         // Prove the peer can reconstruct the exact chosen parents from this
