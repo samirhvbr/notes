@@ -107,6 +107,8 @@ pub fn run() {
             commands::conflict_list,
             commands::shell_open,
             commands::note_create,
+            commands::pdf_extract,
+            commands::pdf_save,
             commands::dir_create,
             commands::watch_start,
             commands::watch_status,

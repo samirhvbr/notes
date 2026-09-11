@@ -1,4 +1,7 @@
-import { ArrowDownAZ, ArrowUpZA, FilePlus, FolderPlus, ListCollapse } from "lucide-react";
+import { ArrowDownAZ, ArrowUpZA, FileInput, FilePlus, FolderPlus, ListCollapse } from "lucide-react";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { useState } from "react";
+import { PdfImport } from "../app/PdfImport";
 import { askText } from "../app/dialog";
 import { t } from "../i18n";
 import * as ipc from "../ipc";
@@ -25,6 +28,17 @@ export function ExplorerToolbar() {
   const setSort = useWorkspace((s) => s.setSort);
   const collapseAll = useWorkspace((s) => s.collapseAll);
   const openPath = useTabs((s) => s.openPath);
+  const [pdf, setPdf] = useState<{ name: string; text: string } | null>(null);
+
+  const importPdf = async () => {
+    const picked = await openDialog({ multiple: false, filters: [{ name: "PDF", extensions: ["pdf"] }] });
+    if (typeof picked !== "string") return;
+    try {
+      const text = await ipc.pdfExtract(picked);
+      const file = picked.split(/[\\/]/).pop() ?? "import";
+      setPdf({ name: file.replace(/\.pdf$/i, ""), text });
+    } catch (e) { fail(e); }
+  };
 
   const newNote = async () => {
     const name = await askText({
@@ -87,6 +101,9 @@ export function ExplorerToolbar() {
       >
         <FolderPlus size={15} aria-hidden="true" />
       </button>
+      <button type="button" className="icon-btn" aria-label={t("pdf.import")} title={t("pdf.import")} onClick={() => void importPdf()}>
+        <FileInput size={15} aria-hidden="true" />
+      </button>
       <button
         type="button"
         className="icon-btn"
@@ -112,6 +129,12 @@ export function ExplorerToolbar() {
       >
         <ListCollapse size={15} aria-hidden="true" />
       </button>
+      {pdf && <PdfImport name={pdf.name} text={pdf.text} onCancel={() => setPdf(null)} onSave={async (name, text) => {
+        const entry = await ipc.pdfSave(name, text);
+        await refresh(ROOT);
+        await openPath(entry.path);
+        setPdf(null);
+      }} />}
     </div>
   );
 }

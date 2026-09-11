@@ -560,6 +560,8 @@ code { font-family: var(--font-mono); }
 .dialog .actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
 .dialog .primary { border-color: var(--accent); }
 .dialog .danger { border-color: var(--bad); color: var(--on-bad); }
+.dialog.pdf-import { width: min(760px, calc(100vw - 32px)); }
+.dialog.pdf-import textarea { width: 100%; min-height: 45vh; resize: vertical; box-sizing: border-box; }
 
 /* ---- tabs (0.1c) ------------------------------------------------------- */
 /* The dirty marker is a dot, not a colour: state never rides on colour alone. */

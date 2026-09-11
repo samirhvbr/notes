@@ -8,6 +8,13 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.27 - import PDF text as Markdown
+
+Add a desktop PDF import flow that extracts plain text into an editable preview.
+The original PDF and its images remain outside the workspace; only an explicit
+save writes a new Markdown note. The backend bounds input size and the UI test
+covers reviewing text before the save callback runs.
+
 ## 0.20.26 - add the local macOS installer build
 
 Add a root `build-local.sh` that produces a local macOS DMG for installed-build

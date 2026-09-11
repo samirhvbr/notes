@@ -58,6 +58,7 @@ ts-rs = { version = "12", features = ["serde-compat"] }
 tempfile = "3"
 ignore = "0.4"
 regex = "1"
+pdf-extract = "0.12"
 
 [profile.release]
 opt-level = "s"

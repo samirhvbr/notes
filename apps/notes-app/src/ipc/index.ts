@@ -161,6 +161,9 @@ export const conflictList = () => invoke<Conflicts>("conflict_list");
 
 export const noteCreate = (dir: RelPath, name: string) =>
   invoke<Entry>("note_create", { dir, name });
+export const pdfExtract = (path: string) => invoke<string>("pdf_extract", { path });
+export const pdfSave = (name: string, text: string) =>
+  invoke<Entry>("pdf_save", { name, text });
 export const dirCreate = (dir: RelPath, name: string) =>
   invoke<Entry>("dir_create", { dir, name });
 

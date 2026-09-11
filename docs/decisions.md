@@ -1936,3 +1936,15 @@ The operation makes no network request and never writes a source file, changes
 queue contents or cursors, or acknowledges a revision. This keeps restoration
 repair explicit and prevents a mixed backup from silently choosing a source of
 truth by timestamp.
+
+
+## ADR-068 — PDF import saves reviewed plain text only
+
+**Status:** ACTIVE · Implemented in 0.20.27.
+
+**Decision.** Select PDFs through the native dialog, extract only plain text in
+the desktop backend, and show that text in an editable import view before any
+workspace mutation. The source PDF remains outside the workspace and images,
+layout and embedded files are not preserved. Only an explicit save creates a
+new Markdown note; cancellation writes nothing. Bound the selected input to
+32 MiB and refuse malformed or unsupported PDFs without guessing content.

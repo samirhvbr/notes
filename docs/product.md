@@ -134,7 +134,9 @@ nothing until the editor is good.
 
 The sidebar shows directories, Markdown files, search and recent files
 (favourites later), and supports create note, create folder, rename, move,
-delete and duplicate. Drag-and-drop for moving files and folders is designed for
+delete, duplicate and PDF text import. Import opens a selected PDF outside the
+workspace as editable plain text; it does not retain images or copy the PDF.
+Only an explicit save creates a new `.md` note. Drag-and-drop for moving files and folders is designed for
 from the start, even where it lands later.
 
 ### Mobile layout

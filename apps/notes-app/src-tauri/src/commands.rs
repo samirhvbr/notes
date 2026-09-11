@@ -143,6 +143,38 @@ pub fn note_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> 
     svc(&app)?.create_note(&dir, &name)
 }
 
+/// Extract plain text from an operator-selected PDF. It is deliberately not a
+/// workspace operation: cancelling the import must leave no source file behind.
+#[tauri::command]
+pub fn pdf_extract(path: String) -> R<String> {
+    let path = PathBuf::from(path);
+    let metadata =
+        std::fs::metadata(&path).map_err(|e| CoreError::io("read", path.display(), &e))?;
+    if !metadata.is_file() || metadata.len() > 32 * 1024 * 1024 {
+        return Err(CoreError::Unsupported {
+            cap: "PDF text extraction".into(),
+        });
+    }
+    pdf_extract::extract_text(&path).map_err(|_| CoreError::Unsupported {
+        cap: "PDF text extraction".into(),
+    })
+}
+
+/// Persist text that the user reviewed in the PDF import preview as a Markdown
+/// note. This is the only import operation that writes into the workspace.
+#[tauri::command]
+pub fn pdf_save(app: State<'_, App>, name: String, text: String) -> R<Entry> {
+    let entry = svc(&app)?.create_note(&RelPath::root(), &name)?;
+    let opened = svc(&app)?.open_note(&entry.path)?;
+    let result = svc(&app)?.save_note(opened.note_id, &text, 1, &opened.base_rev)?;
+    if !matches!(result, SaveResult::Saved { .. }) {
+        return Err(CoreError::Internal {
+            message: "new PDF import could not be saved".into(),
+        });
+    }
+    Ok(entry)
+}
+
 #[tauri::command]
 pub fn dir_create(app: State<'_, App>, dir: RelPath, name: String) -> R<Entry> {
     svc(&app)?.create_dir(&dir, &name)
