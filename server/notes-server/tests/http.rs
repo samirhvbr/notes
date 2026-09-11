@@ -564,6 +564,7 @@ fn publication(
         attachments: vec![],
         branches: vec![],
         history: vec![],
+        payload_pruned: false,
         workspace,
         expected,
         revision: notes_sync::Revision::new(

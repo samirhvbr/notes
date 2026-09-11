@@ -23,6 +23,11 @@ pub struct Publication {
     /// applicable because their original bytes are no longer present.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<Revision>,
+    /// Set only by the offline retention operation. The revision remains in the
+    /// append log and causal graph, but its original bytes and attachments were
+    /// intentionally removed. A later live publication is the receive baseline.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub payload_pruned: bool,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -159,6 +164,17 @@ pub fn payload_size(p: &Publication) -> Result<usize> {
     if p.branches.len() + p.history.len() > 20 {
         return Err(Error::Limit);
     }
+    if p.payload_pruned {
+        if p.content_base64.is_some()
+            || !p.attachments.is_empty()
+            || p.revision.content.is_none()
+            || !p.branches.is_empty()
+            || !p.history.is_empty()
+        {
+            return Err(Error::InvalidState);
+        }
+        return Ok(0);
+    }
     let mut size =
         content(p)?.len() + attachment_size(&p.revision, &p.content_base64, &p.attachments)?;
     for b in &p.branches {
@@ -182,6 +198,23 @@ pub fn prune_resolved_payloads(p: &mut Publication) -> Result<usize> {
     p.history
         .extend(p.branches.drain(..).map(|branch| branch.revision));
     Ok(before - payload_size(p)?)
+}
+
+/// Retain causal metadata and the append-log slot while dropping bytes from an
+/// acknowledged, non-current linear publication. The caller must retain a
+/// later live publication for the same note as a receive baseline.
+pub fn prune_linear_payload(p: &mut Publication) -> Result<usize> {
+    if p.payload_pruned {
+        return Ok(0);
+    }
+    let before = payload_size(p)?;
+    if p.revision.content.is_none() || !p.branches.is_empty() || !p.history.is_empty() {
+        return Err(Error::InvalidState);
+    }
+    p.content_base64 = None;
+    p.attachments.clear();
+    p.payload_pruned = true;
+    Ok(before)
 }
 /// Replay a publication into a disposable journal. Callers validate the complete
 /// graph once after replay, and publish the journal only if that succeeds.
@@ -246,4 +279,41 @@ fn insert(graph: &mut crate::Journal, r: &Revision) -> Result<()> {
     }
     graph.revisions.insert(r.id, r.clone());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use notes_model::{ContentHash, NoteId, RelPath};
+
+    #[test]
+    fn pruned_linear_payload_keeps_the_revision_replayable() {
+        let workspace = Uuid::new_v4();
+        let bytes = b"retained only by the later baseline";
+        let revision = Revision::new(
+            NoteId::default(),
+            Default::default(),
+            Uuid::new_v4(),
+            RelPath::parse("note.md").unwrap(),
+            Some(ContentHash::from_bytes(*blake3::hash(bytes).as_bytes())),
+        );
+        let mut publication = Publication {
+            attachments: vec![],
+            workspace,
+            expected: None,
+            revision,
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches: vec![],
+            history: vec![],
+            payload_pruned: false,
+        };
+        assert!(prune_linear_payload(&mut publication).unwrap() > 0);
+        assert!(publication.payload_pruned);
+        assert!(publication.content_base64.is_none());
+        assert_eq!(payload_size(&publication).unwrap(), 0);
+        let mut journal = crate::Journal::new(workspace);
+        append(&mut journal, &publication).unwrap();
+        journal.validate().unwrap();
+        assert!(content(&publication).is_err());
+    }
 }

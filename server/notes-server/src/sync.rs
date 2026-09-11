@@ -345,18 +345,26 @@ pub fn prune_resolved(root: &Path, workspace: &str) -> Result<PruneReport> {
         let mut pruned_resolutions = 0usize;
         let mut pruned_payload_bytes = 0usize;
         if known_devices > 0 {
-            for publication in &mut v.publications {
-                if publication.branches.is_empty()
-                    || !v.journal.acknowledgments.keys().all(|device| {
-                        v.journal
-                            .acknowledgments
-                            .get(device)
-                            .and_then(|notes| notes.get(&publication.revision.note))
-                            .is_some_and(|receipt| {
-                                v.journal.is_ancestor(publication.revision.id, *receipt)
-                            })
-                    })
-                {
+            let children = revision_children(&v.journal);
+            let candidates: Vec<_> = v
+                .publications
+                .iter()
+                .map(|publication| {
+                    (
+                        !publication.branches.is_empty()
+                            && acknowledged_by_every_device(v, publication.revision.id),
+                        linear_payload_is_prunable(v, &children, publication),
+                    )
+                })
+                .collect();
+            for (publication, (resolved, linear)) in v.publications.iter_mut().zip(candidates) {
+                if publication.branches.is_empty() || !resolved {
+                    if !linear {
+                        continue;
+                    }
+                    pruned_payload_bytes += notes_sync::transfer::prune_linear_payload(publication)
+                        .map_err(|_| Error::Storage)?;
+                    pruned_resolutions += 1;
                     continue;
                 }
                 pruned_payload_bytes += notes_sync::transfer::prune_resolved_payloads(publication)
@@ -374,6 +382,73 @@ pub fn prune_resolved(root: &Path, workspace: &str) -> Result<PruneReport> {
             },
             pruned_resolutions > 0,
         ))
+    })
+}
+
+fn acknowledged_by_every_device(vault: &Vault, revision: Uuid) -> bool {
+    vault.journal.acknowledgments.keys().all(|device| {
+        vault
+            .journal
+            .acknowledgments
+            .get(device)
+            .and_then(|notes| notes.get(&vault.journal.revisions[&revision].note))
+            .is_some_and(|receipt| vault.journal.is_ancestor(revision, *receipt))
+    })
+}
+
+fn revision_children(journal: &Journal) -> BTreeMap<Uuid, Vec<Uuid>> {
+    let mut children = BTreeMap::new();
+    for revision in journal.revisions.values() {
+        for parent in &revision.parents {
+            children
+                .entry(*parent)
+                .or_insert_with(Vec::new)
+                .push(revision.id);
+        }
+    }
+    children
+}
+
+/// A compacted linear entry stays in its original append-log slot. Its current
+/// live head must retain bytes, and every edge to that head must be one-parent,
+/// one-child; a merge or divergence therefore never loses a payload here.
+fn linear_payload_is_prunable(
+    vault: &Vault,
+    children: &BTreeMap<Uuid, Vec<Uuid>>,
+    publication: &Publication,
+) -> bool {
+    if publication.payload_pruned
+        || publication.revision.content.is_none()
+        || !publication.branches.is_empty()
+        || !publication.history.is_empty()
+        || !acknowledged_by_every_device(vault, publication.revision.id)
+    {
+        return false;
+    }
+    let Some(mut next) = vault.journal.heads.get(&publication.revision.note).copied() else {
+        return false;
+    };
+    if next == publication.revision.id
+        || vault
+            .journal
+            .revisions
+            .get(&next)
+            .is_none_or(|head| head.content.is_none())
+    {
+        return false;
+    }
+    let mut backward = Vec::new();
+    while next != publication.revision.id {
+        let revision = &vault.journal.revisions[&next];
+        if revision.parents.len() != 1 {
+            return false;
+        }
+        backward.push(next);
+        next = *revision.parents.iter().next().unwrap();
+    }
+    backward.into_iter().all(|id| {
+        let parent = vault.journal.revisions[&id].parents.iter().next().copied();
+        parent.is_some_and(|parent| children.get(&parent).is_some_and(|rows| rows.len() == 1))
     })
 }
 #[derive(Serialize)]
@@ -433,6 +508,12 @@ pub fn fetch(root: &Path, c: &Credential, id: Uuid) -> Result<Publication> {
 }
 pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
     require(c, Permission::Read)?;
+    // Metadata-only publications are produced exclusively by the offline
+    // operator prune. A credential can retry its original envelope, never
+    // manufacture or replay the compacted form.
+    if p.payload_pruned {
+        return Err(Error::Invalid);
+    }
     let size = notes_sync::transfer::payload_size(&p).map_err(sync_error)?;
     transaction(root, c, |v| {
         if p.workspace != v.journal.workspace {
@@ -448,7 +529,12 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
                 && !p.branches.is_empty()
                 && notes_sync::transfer::prune_resolved_payloads(&mut compacted_retry).is_ok()
                 && *old == compacted_retry;
-            return if *old == p || is_pre_prune_retry {
+            let mut linear_retry = p.clone();
+            let is_pre_linear_prune_retry = p.branches.is_empty()
+                && p.history.is_empty()
+                && notes_sync::transfer::prune_linear_payload(&mut linear_retry).is_ok()
+                && *old == linear_retry;
+            return if *old == p || is_pre_prune_retry || is_pre_linear_prune_retry {
                 if is_pre_prune_retry {
                     for branch in &p.branches {
                         authorize(
@@ -462,6 +548,7 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
                                 content_base64: branch.content_base64.clone(),
                                 branches: vec![],
                                 history: vec![],
+                                payload_pruned: false,
                             },
                         )?;
                     }
@@ -506,6 +593,7 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
                     content_base64: branch.content_base64.clone(),
                     branches: vec![],
                     history: vec![],
+                    payload_pruned: false,
                 },
             )?;
             v.journal
@@ -565,4 +653,87 @@ pub fn acknowledge(
         v.device_owners.insert(receipt.device, c.id);
         Ok(((), old != Some(receipt.revision)))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use notes_model::{ContentHash, RelPath};
+    use std::collections::BTreeSet;
+
+    fn publication(
+        workspace: Uuid,
+        expected: Option<Uuid>,
+        revision: Revision,
+        bytes: &[u8],
+    ) -> Publication {
+        Publication {
+            attachments: vec![],
+            workspace,
+            expected,
+            revision,
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches: vec![],
+            history: vec![],
+            payload_pruned: false,
+        }
+    }
+
+    #[test]
+    fn linear_retention_keeps_the_live_head_as_the_baseline() {
+        let workspace = Uuid::new_v4();
+        let note = NoteId::default();
+        let device = Uuid::new_v4();
+        let path = RelPath::parse("note.md").unwrap();
+        let revision = |parent: Option<Uuid>, bytes: &[u8]| {
+            Revision::new(
+                note,
+                parent.into_iter().collect::<BTreeSet<_>>(),
+                Uuid::new_v4(),
+                path.clone(),
+                Some(ContentHash::from_bytes(*blake3::hash(bytes).as_bytes())),
+            )
+        };
+        let first = revision(None, b"one");
+        let second = revision(Some(first.id), b"two");
+        let head = revision(Some(second.id), b"three");
+        let mut journal = Journal::new(workspace);
+        for (expected, value) in [
+            (None, first.clone()),
+            (Some(first.id), second.clone()),
+            (Some(second.id), head.clone()),
+        ] {
+            journal.commit(value, expected).unwrap();
+        }
+        journal
+            .acknowledge(device, BTreeMap::from([(note, head.id)]))
+            .unwrap();
+        let vault = Vault {
+            schema: 1,
+            journal,
+            publications: vec![
+                publication(workspace, None, first.clone(), b"one"),
+                publication(workspace, Some(first.id), second.clone(), b"two"),
+                publication(workspace, Some(second.id), head.clone(), b"three"),
+            ],
+            device_owners: BTreeMap::from([(device, Uuid::new_v4())]),
+        };
+        let children = revision_children(&vault.journal);
+        assert!(linear_payload_is_prunable(
+            &vault,
+            &children,
+            &vault.publications[0]
+        ));
+        assert!(linear_payload_is_prunable(
+            &vault,
+            &children,
+            &vault.publications[1]
+        ));
+        assert!(!linear_payload_is_prunable(
+            &vault,
+            &children,
+            &vault.publications[2]
+        ));
+    }
 }

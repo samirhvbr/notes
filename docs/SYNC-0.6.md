@@ -1188,6 +1188,20 @@ vault backup/restore, client/server mismatch, branch export removal and continue
 receive application. Linear publication content, current resolution bytes,
 whole-log cursor compaction and automatic scheduling remain queued.
 
+### Device-confirmed linear payload retention (0.20.22)
+
+The same offline `sync-prune` operation now also compacts acknowledged,
+strictly linear non-head publications. The publication remains at its original
+append-log cursor and its revision metadata remains in the causal graph; only
+its bytes and attachments are removed. The current live head remains intact as
+the baseline for a newly enrolled receiver. A fork, merge, tombstone head,
+missing receipt or zero known devices prevents this compaction.
+
+Receive queues compact only after fetching the exact server envelope. A newly
+enrolled receiver advances through pruned causal entries without touching its
+folder, then applies the retained current payload. This preserves cursor
+positions and ancestry while avoiding reconstruction from removed bytes.
+
 ### Explicit device retirement (0.20.20)
 
 An abandoned device no longer has to block retention forever. With the server

@@ -1898,3 +1898,22 @@ source files. Pending pairing and mixed application backups remain invalid.
 This visibility proof cannot establish the complete server prefix, so
 `recover-server` remains restricted to unscoped retained queues. The operation
 does not repair restored application identities or infer missing publications.
+
+
+## ADR-066 — Linear retention keeps append positions and the live baseline
+
+**Status:** ACTIVE · Implemented in 0.20.22.
+
+**Decision.** Extend the offline server retention operation to acknowledged,
+strictly linear history. Keep every publication and revision in its original
+append-log position, but replace eligible non-head payloads with a
+`payload_pruned` metadata record. The current live head retains its content and
+acts as the baseline for a newly enrolled receiver. Every known device must have
+acknowledged the candidate or a descendant; a fork, merge, tombstone head,
+unresolved branch, missing receipt or zero devices refuses linear compaction.
+
+The client compacts only after fetching the exact server form, as with ADR-063.
+A receiver that did not retain an old payload advances across its causal record
+without changing source files and applies the later live baseline. Cursor values
+and revision identities never move. This is payload retention, not history
+deletion or restored-application identity repair.

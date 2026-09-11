@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.22 - compact acknowledged linear sync payloads
+
+Extend the offline sync retention pass beyond resolved divergent branches to
+strictly linear, unanimously acknowledged non-head publications. Keep immutable
+revision metadata and append-log cursor positions, retain the current live
+payload as a receive baseline, and require the client to fetch the exact compact
+server envelope before replacing local bytes. Focused server, transfer and new
+receiver tests cover baseline application and causal replay.
+
 ## 0.20.21 - keep implementation records out of the queue
 
 Move the durable product specification and superseded planning drafts from

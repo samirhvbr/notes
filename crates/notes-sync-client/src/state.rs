@@ -470,6 +470,7 @@ impl Store {
                 attachments,
                 branches: vec![],
                 history: vec![],
+                payload_pruned: false,
                 workspace: state.local.workspace,
                 expected,
                 revision,
@@ -509,6 +510,7 @@ impl Store {
             content_base64: None,
             branches: vec![],
             history: vec![],
+            payload_pruned: false,
         });
         self.save(&state, false)?;
         Ok(revision.id)
@@ -596,12 +598,16 @@ impl Store {
         let mut pruned_payload_bytes = 0usize;
         for index in 0..app.acknowledged {
             let publication = &state.received[index];
-            if publication.branches.is_empty() {
-                continue;
-            }
             let mut compacted = publication.clone();
-            let bytes = notes_sync::transfer::prune_resolved_payloads(&mut compacted)
-                .map_err(|_| Error::Invalid)?;
+            let bytes = if !compacted.branches.is_empty() {
+                notes_sync::transfer::prune_resolved_payloads(&mut compacted)
+                    .map_err(|_| Error::Invalid)?
+            } else if compacted.revision.content.is_some() && !compacted.payload_pruned {
+                notes_sync::transfer::prune_linear_payload(&mut compacted)
+                    .map_err(|_| Error::Invalid)?
+            } else {
+                continue;
+            };
             if transport.fetch(compacted.revision.id)? != compacted {
                 continue;
             }
@@ -915,6 +921,7 @@ impl Store {
             content_base64: bytes.map(|bytes| STANDARD.encode(bytes)),
             branches,
             history: vec![],
+            payload_pruned: false,
         };
         // Prove the peer can reconstruct the exact chosen parents from this
         // envelope. No pending bytes are removed until the whole state is saved.
@@ -984,6 +991,7 @@ impl Store {
                         content_base64: b.content_base64.clone(),
                         branches: vec![],
                         history: vec![],
+                        payload_pruned: false,
                     })
             })
             .ok_or(Error::Invalid)?;
@@ -1297,13 +1305,34 @@ impl Store {
             .chain(app.next..state.received.len())
             .take(20)
             .collect();
+        let incoming = Self::incoming(&state)?;
         for index in pending {
             let p = &state.received[index];
+            // A server-retained cursor slot with no payload is causal metadata.
+            // Existing receivers compact it only after application; a new
+            // receiver advances to the later live baseline without touching its
+            // source folder.
+            if p.payload_pruned {
+                if !app.deferred.remove(&index) {
+                    app.next += 1;
+                }
+                app.superseded.insert(index);
+                self.save_application(&app)?;
+                continue;
+            }
             if !effects && p.revision.content.is_none() {
                 return Err(Error::UnsupportedApplication);
             }
             let previous = app.notes.get(&p.revision.note).cloned();
-            if previous.as_ref().map(|n| n.revision) != p.expected {
+            let baseline = previous.is_none()
+                && p.expected.is_some_and(|expected| {
+                    state.received[..index].iter().any(|earlier| {
+                        earlier.payload_pruned
+                            && earlier.revision.note == p.revision.note
+                            && incoming.is_ancestor(earlier.revision.id, expected)
+                    })
+                });
+            if previous.as_ref().map(|n| n.revision) != p.expected && !baseline {
                 return Err(Error::Conflict);
             }
             if !effects && previous.as_ref().is_some_and(|n| n.path != p.revision.path) {
@@ -1628,6 +1657,7 @@ impl Store {
             content_base64: Some(STANDARD.encode(bytes)),
             branches: vec![],
             history: vec![],
+            payload_pruned: false,
         });
         state.capture = Some(ReceiverCapture {
             publishable,
@@ -1724,6 +1754,7 @@ impl Store {
             content_base64: Some(STANDARD.encode(bytes)),
             branches,
             history,
+            payload_pruned: false,
         };
         // Reserve one branch slot for this capture when resolving it later.
         if publication.branches.len() >= 20 {
@@ -2061,6 +2092,7 @@ impl Store {
                         content_base64: Some(STANDARD.encode(bytes)),
                         branches: vec![],
                         history: vec![],
+                        payload_pruned: false,
                     });
                 }
                 notes_sync::PairingAction::Download { .. } => {}
@@ -2422,6 +2454,7 @@ impl Store {
             branches: vec![],
             history: vec![],
             attachments,
+            payload_pruned: false,
         });
         state.capture = Some(ReceiverCapture {
             publishable: true,

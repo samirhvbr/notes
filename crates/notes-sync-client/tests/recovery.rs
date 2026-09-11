@@ -605,6 +605,7 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
         content_base64: Some(STANDARD.encode(bytes)),
         branches: vec![],
         history: vec![],
+        payload_pruned: false,
     };
     let remote = remote_publication(&base, b"remote");
     peer.publish(&remote).unwrap();
@@ -708,6 +709,7 @@ fn client_prunes_only_server_confirmed_applied_branches_and_keeps_future_sync() 
         content_base64: Some(STANDARD.encode(b"remote")),
         branches: vec![],
         history: vec![],
+        payload_pruned: false,
     };
     peer.publish(&remote).unwrap();
     assert!(sender.transfer(&mut peer).is_err());
@@ -770,11 +772,40 @@ fn client_prunes_only_server_confirmed_applied_branches_and_keeps_future_sync() 
         content_base64: Some(STANDARD.encode(b"after prune")),
         branches: vec![],
         history: vec![],
+        payload_pruned: false,
     };
     peer.publish(&next).unwrap();
     receiver.fetch(&mut peer).unwrap();
     receiver.apply(&data).unwrap();
     assert_eq!(fs::read(target.join("test.md")).unwrap(), b"after prune");
+}
+
+#[test]
+fn new_receiver_uses_the_retained_live_publication_as_a_linear_baseline() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"first bytes").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    fs::write(root.join("test.md"), b"current bytes").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    assert!(notes_sync::transfer::prune_linear_payload(&mut peer.log[0]).unwrap() > 0);
+
+    let target = dir.path().join("new-receiver-notes");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("new-receiver-state")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    assert_eq!(
+        receiver
+            .apply(&dir.path().join("new-receiver-data"))
+            .unwrap(),
+        1
+    );
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"current bytes");
+    assert_eq!(receiver.status().unwrap().superseded_revisions, 1);
 }
 
 #[test]
