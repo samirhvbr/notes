@@ -388,7 +388,8 @@ with tempfile.TemporaryDirectory() as temp:
         ps_source, ps_target = temp / "ps-source", temp / "ps-target"
         (ps_source / "shared").mkdir(parents=True); ps_target.mkdir()
         (ps_source / "shared/same.md").write_bytes(b"same")
-        (ps_source / "shared/remote.md").write_bytes(b"remote only")
+        (ps_source / "shared/remote.md").write_bytes(b"remote only\r\n![asset](asset.bin)\r\n")
+        (ps_source / "shared/asset.bin").write_bytes(bytes([0, 255, 1]))
         (ps_source / "outside.md").write_bytes(b"outside scope")
         ps_sender, ps_receiver, ps_data = temp / "ps-sender", temp / "ps-receiver", temp / "ps-data"
         run([client, "init-upload", str(ps_sender), str(ps_source), base, "paired-scope", str(full_secret), "--allow-private"])
@@ -400,9 +401,10 @@ with tempfile.TemporaryDirectory() as temp:
         preview = json.loads(run([client, "pair-preview", str(ps_receiver), str(ps_data)]))
         run([client, "pair-confirm", str(ps_receiver), str(ps_data), str(scoped_secret), preview["confirmation"]])
         run([client, "transfer", str(ps_receiver), str(scoped_secret)])
-        run([client, "apply", str(ps_receiver), str(ps_data)])
+        run([client, "apply-bundle", str(ps_receiver), str(ps_data)])
         run([client, "acknowledge", str(ps_receiver), str(scoped_secret)])
-        assert (ps_target / "remote.md").read_bytes() == b"remote only"
+        assert (ps_target / "remote.md").read_bytes() == b"remote only\r\n![asset](asset.bin)\r\n"
+        assert (ps_target / "asset.bin").read_bytes() == bytes([0, 255, 1])
         assert (ps_target / "local.md").read_bytes() == b"local only"
         assert not (ps_target / "outside.md").exists()
         assert not (ps_target / "shared").exists()

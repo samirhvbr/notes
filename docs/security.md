@@ -280,3 +280,10 @@ true of a control.
 - [decisions.md](decisions.md) — the ADR log.
 - [`../SECURITY.md`](../SECURITY.md) — the reporting path GitHub reads.
 - [`../.claude/README.md`](../.claude/README.md) — the agent permission posture.
+
+Sync attachment manifests use the same workspace jail and credential scope as
+notes, including retained historical branches. The server validates references,
+canonical base64 and hashes; combined publication bytes remain limited to 8 MiB.
+A manifest requires create and update permission. No remote URL is downloaded.
+Application preserves changed local attachments via BaseRev checks and advances
+the note receipt only after its attachments succeed; see ADR-057.

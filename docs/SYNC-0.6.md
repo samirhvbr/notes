@@ -799,3 +799,60 @@ This is explicit enrollment and reconciliation, not background bidirectional syn
 
 The 0.20.12 pairing bootstrap and tombstone receipt fields require updated clients;
 older readers reject them. Preserve a full operational-state backup for rollback.
+
+## Apply note effects and referenced attachments (0.20.13)
+
+`stage` captures unambiguous source renames. For a closed rename cycle, the
+explicit inventory correlates unique native file identities with unchanged
+content before reconciling occupied paths. Ambiguous identities, simultaneous
+content changes and backends without native identity do not qualify for this
+cycle correlation. The outbox orders a cycle through a temporary Markdown path
+in the same directory; it never renames the uploader's files.
+
+Missing files still do not silently become deletions. Use the note identity and
+exact live head from `status`/`received` to request a tombstone explicitly:
+
+```sh
+notes-sync-client stage-delete /private/sender NOTE_UUID EXPECTED_HEAD_UUID
+notes-sync-client transfer /private/sender /private/token
+notes-sync-client fetch /private/receiver /private/token
+notes-sync-client apply-bundle /private/receiver /private/app-data
+```
+
+`stage-delete` verifies that the identity is absent from a fresh source inventory.
+`apply-bundle` applies FIFO creations, edits, moves and deletions with durable
+intent and identity/BaseRev guards. Colliding targets and changed local notes
+refuse application. Move destination directories must already exist. A crash
+can leave an intermediate cycle path; repeat the command to finish the saved
+queue. All cooperating editors must be closed, using the same app-data directory.
+
+Captures include local non-Markdown files referenced by Markdown links/images,
+using the shared Markdown parser and the filesystem jail. References resolve
+relative to the note, including safe parent traversal within the workspace.
+Hidden paths, remote URLs and wiki links are excluded; missing eligible files
+refuse capture. Note bytes, line endings and references are never rewritten.
+At most 32 attachments are allowed per revision, and the existing 8 MiB decoded
+publication limit includes all note, attachment and retained branch bytes.
+
+Attachments carry their path, content hash and exact binary bytes. Scope checks
+cover primary and historical branch manifests; publishing a manifest requires
+create and update permission. Subfolder transport translates manifest paths.
+Binary-only edits produce revisions and can be captured as receiver conflicts.
+Pairing refuses divergent attachment bytes even when the Markdown matches.
+
+`apply-bundle` installs attachments before acknowledging the note. Identical
+existing attachment bytes can be reused; different bytes require the prior
+recorded BaseRev. A local edit blocks replacement. Durable per-file intent and
+receipts resume interrupted bundles; multi-file application is not atomic, so
+some attachments may be present before a later note precondition fails. The
+editor's prepared-queue action and plain `apply` refuse attachment bundles.
+
+Retained branch attachments can be recovered without source writes:
+
+```sh
+notes-sync-client export-attachment /private/receiver REVISION_UUID attachments/image.png
+```
+
+The command creates a private non-overwriting `.bin` export and prints its path.
+Unreferenced attachments are never automatically deleted. Background scheduling,
+editor bundle controls, retention/pruning and device acceptance remain open.

@@ -87,7 +87,9 @@ one-line version of both:
   0.20.11 explicitly recaptures newer saved edits while retaining earlier branches.
   Version 0.20.12 adds recoverable receiver move/delete effects and confirmed
   subfolder/reconciliation pairing.
-  Source rename/deletion application, editor conflict controls, broader pairing
+  Version 0.20.13 adds explicit deletion capture, ordered rename effects and
+  referenced attachment bundles with guarded recovery.
+  Background scheduling, editor conflict controls, broader pairing
   and transport UI remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).

@@ -1748,3 +1748,26 @@ pairing receipts/baselines with the client state atomically; never pretend that
 older superseded publications were applied. Retaining both divergent files requires
 an explicit local rename and fresh preview. No new server permission or endpoint
 is introduced, and enrollment does not imply automatic two-way synchronization.
+
+## ADR-056 — Explicit note effects use ordered recoverable publications
+
+**Status:** ACTIVE · Implemented in 0.20.13.
+
+**Decision.** Missing inventory entries require an explicit current-head tombstone
+request. Correlate closed rename cycles only with unique native identities and
+unchanged bytes; order their publications through a temporary same-directory
+path. Apply each effect with the existing exclusive core guards and durable
+intent. Source capture never mutates user files. Ambiguous external cycles are
+not inferred from hashes alone.
+
+## ADR-057 — Referenced attachments travel with immutable note revisions
+
+**Status:** ACTIVE · Implemented in 0.20.13.
+
+**Decision.** The shared Markdown parser selects local references. Capture exact
+binary bytes through core, retaining optional bounded manifests with primary
+and divergent revisions. Validate references, hashes and scope, including all
+historical manifests. Keep Markdown unchanged. Apply attachments with individual
+BaseRev checks and durable intents before the note receipt; interrupted bundles
+resume but are not multi-file transactions. Preserve locally changed files and
+retain branch exports. Do not delete assets merely because references disappear.

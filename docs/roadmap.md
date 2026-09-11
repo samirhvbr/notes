@@ -161,13 +161,15 @@ In 0.20.7 upload queues resolve same-path divergence explicitly while preserving
 both histories. In 0.20.8 upload conflicts involving renames/deletions have
 explicit result choices. In 0.20.9 saved same-path receiver edits can be
 captured, resolved and applied with separate superseded/deferred progress.
-Source rename/deletion application and editor conflict controls remain open.
+Editor conflict controls remain open.
 Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 The 0.20.10 sync increment restores remote rename/delete conflicts explicitly
 at the receiver's applied path. Version 0.20.11 adds explicit recapture
 of further saved edits, retaining prior branches. Version 0.20.12 applies explicit receiver move/delete choices and confirms
-subfolder/reconciliation pairing. Automatic source effects and cycles remain pending.
+subfolder/reconciliation pairing. Version 0.20.13 adds explicit deletion capture, ordered rename cycles and
+referenced binary bundles with guarded recovery. Background scheduling, UI and
+retention remain pending.
 
 ## 0.7 — AI
 

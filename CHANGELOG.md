@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.13 - apply recoverable device bundles
+
+Capture explicit current-head tombstones and order rename cycles without source
+writes. Transfer referenced attachments, retain divergent binary bytes, guard
+local replacements and resume individual file intents before note acknowledgment.
+Expose bundle application and private attachment export through the CLI. Update
+the queue and document recovery boundaries. Native/Windows clippy, all new
+regressions, real TCP transport, byte-preservation and frontend checks passed.
+The existing macOS watcher startup timing test exceeded 100 ms locally, including
+an isolated repeat; the rest of the workspace suite passed separately.
+
 ## 0.20.13 - guard sync filesystem effects in core
 
 Correlate closed rename permutations using unique native identities plus unchanged

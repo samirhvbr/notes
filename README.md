@@ -180,3 +180,7 @@ prior branches and requiring a new explicit choice; see [recapture](docs/SYNC-0.
 Version 0.20.12 adds recoverable receiver move/delete choices and explicit
 subfolder pairing with reconciliation preview and identity confirmation. See
 [the workflows](docs/SYNC-0.6.md#apply-an-explicit-receiver-move-or-deletion-02012).
+
+Version 0.20.13 adds explicit deletion capture, ordered rename cycles and
+referenced attachment bundles without changing Markdown bytes. See
+[application and recovery](docs/SYNC-0.6.md#apply-note-effects-and-referenced-attachments-02013).

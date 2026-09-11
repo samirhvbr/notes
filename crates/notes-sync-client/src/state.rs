@@ -52,6 +52,17 @@ struct ReceiverCapture {
     local: notes_core::sync::Applied,
 }
 impl State {
+    fn attachments_at(&self, id: Uuid) -> Vec<notes_sync::transfer::Attachment> {
+        for p in self.pending.iter().chain(&self.received) {
+            if p.revision.id == id {
+                return p.attachments.clone();
+            }
+            if let Some(b) = p.branches.iter().find(|b| b.revision.id == id) {
+                return b.attachments.clone();
+            }
+        }
+        vec![]
+    }
     fn validate(&self) -> Result<()> {
         if self.schema != 1
             || !self.source.is_absolute()
@@ -314,12 +325,51 @@ impl Store {
                 !present.contains(id) && state.local.head(**id).is_some_and(|r| r.content.is_some())
             })
             .count();
-        for (file, bytes) in snapshot {
-            if state
-                .local
-                .head(file.note)
-                .is_some_and(|r| r.path == file.path && r.content.as_ref() == Some(&file.content))
-            {
+        let mut remaining = snapshot;
+        let mut temporary_notes = BTreeSet::new();
+        while !remaining.is_empty() {
+            let ready = remaining.iter().position(|(file, _)| {
+                !state.local.heads.keys().any(|id| {
+                    *id != file.note
+                        && state
+                            .local
+                            .head(*id)
+                            .is_some_and(|r| r.content.is_some() && r.path == file.path)
+                })
+            });
+            let (file, bytes) = if let Some(index) = ready {
+                remaining.remove(index)
+            } else {
+                // Break a cycle without touching the uploader's source files.
+                // The original captured revision bytes travel with this step.
+                let (mut file, bytes) = remaining[0].clone();
+                if !temporary_notes.insert(file.note) {
+                    return Err(Error::Conflict);
+                }
+                let current = state.local.head(file.note).ok_or(Error::Conflict)?;
+                if current.path == file.path {
+                    return Err(Error::Conflict);
+                }
+                file.path = file
+                    .path
+                    .parent()
+                    .unwrap_or_else(notes_model::RelPath::root)
+                    .join(&format!("sync-move-{}.md", Uuid::new_v4()))
+                    .map_err(|_| Error::Invalid)?;
+                (file, bytes)
+            };
+            let attachments = notes_core::sync::capture_attachments(
+                &state.source,
+                &self.dir.join("core"),
+                &file.path,
+                &bytes,
+            )
+            .map_err(|_| Error::ApplicationBlocked)?;
+            if state.local.head(file.note).is_some_and(|r| {
+                r.path == file.path
+                    && r.content.as_ref() == Some(&file.content)
+                    && state.attachments_at(r.id) == attachments
+            }) {
                 continue;
             }
             let expected = state.local.heads.get(&file.note).copied();
@@ -335,7 +385,7 @@ impl Store {
                 .commit(revision.clone(), expected)
                 .map_err(|_| Error::Conflict)?;
             state.pending.push(Publication {
-                attachments: vec![],
+                attachments,
                 branches: vec![],
                 workspace: state.local.workspace,
                 expected,
@@ -346,6 +396,40 @@ impl Store {
         self.save(&state, false)?;
         Ok(missing)
     }
+    /// Explicit deletion confirmation names the exact observed live head.
+    pub fn stage_delete(&self, note: notes_model::NoteId, expected: Uuid) -> Result<Uuid> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        if state.mode != Mode::Upload {
+            return Err(Error::Invalid);
+        }
+        let head = state.local.head(note).ok_or(Error::Invalid)?.clone();
+        if head.id != expected || head.content.is_none() {
+            return Err(Error::Conflict);
+        }
+        let inventory = notes_core::sync::inventory(&state.source, &self.dir.join("core"))
+            .map_err(|_| Error::ApplicationBlocked)?;
+        if inventory.iter().any(|f| f.note == note) {
+            return Err(Error::Conflict);
+        }
+        let revision = Revision::new(note, [expected].into(), state.device, head.path, None);
+        state
+            .local
+            .commit(revision.clone(), Some(expected))
+            .map_err(|_| Error::Conflict)?;
+        state.pending.push(Publication {
+            attachments: vec![],
+            workspace: state.local.workspace,
+            expected: Some(expected),
+            revision: revision.clone(),
+            content_base64: None,
+            branches: vec![],
+        });
+        self.save(&state, false)?;
+        Ok(revision.id)
+    }
+
     /// Execute one bounded batch. Every receipt is checkpointed separately;
     /// unknown outcomes retain the original UUID and bytes for idempotent retry.
     pub fn transfer(&self, transport: &mut impl Transport) -> Result<()> {
@@ -480,7 +564,8 @@ impl Store {
         if state.mode == Mode::Receive {
             let capture = state.capture.as_ref().ok_or(Error::Invalid)?;
             let app = self.application(&state)?.ok_or(Error::Invalid)?;
-            if app.intent.is_some() || app.resolution_intent.is_some() {
+            if app.intent.is_some() || app.resolution_intent.is_some() || app.asset_intent.is_some()
+            {
                 return Err(Error::Invalid);
             }
             if capture.note != a.note || !state.local.is_ancestor(capture.branch, local) {
@@ -536,7 +621,7 @@ impl Store {
                     .iter()
                     .cloned()
                     .chain(std::iter::once(notes_sync::transfer::Branch {
-                        attachments: vec![],
+                        attachments: p.attachments.clone(),
                         revision: p.revision.clone(),
                         content_base64: p.content_base64.clone(),
                     }))
@@ -546,8 +631,20 @@ impl Store {
                 }
             }
         }
+        let data = state
+            .capture
+            .as_ref()
+            .map(|c| c.core_data.clone())
+            .unwrap_or_else(|| self.dir.join("core"));
+        let attachments = match &bytes {
+            Some(raw) => {
+                notes_core::sync::capture_attachments(&state.source, &data, &revision.path, raw)
+                    .map_err(|_| Error::ApplicationBlocked)?
+            }
+            None => vec![],
+        };
         let publication = Publication {
-            attachments: vec![],
+            attachments,
             workspace: state.local.workspace,
             expected: Some(remote),
             revision: revision.clone(),
@@ -572,6 +669,28 @@ impl Store {
         self.save(&state, false)?;
         Ok(revision.id)
     }
+    /// Recover a retained attachment into private state without replacing a file.
+    pub fn export_attachment(&self, id: Uuid, path: &notes_model::RelPath) -> Result<PathBuf> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        let asset = state
+            .attachments_at(id)
+            .into_iter()
+            .find(|a| a.path == *path)
+            .ok_or(Error::Invalid)?;
+        let bytes = asset.bytes().map_err(|_| Error::Invalid)?;
+        let mut temp = tempfile::NamedTempFile::new_in(&self.dir).map_err(|_| Error::Storage)?;
+        temp.write_all(&bytes).map_err(|_| Error::Storage)?;
+        temp.as_file().sync_all().map_err(|_| Error::Storage)?;
+        let destination = self.dir.join(format!(
+            "attachment-{id}-{}.bin",
+            asset.hash.to_string().replace(':', "-")
+        ));
+        temp.persist_noclobber(&destination)
+            .map_err(|_| Error::Storage)?;
+        Ok(destination)
+    }
     /// Export pending, received or retained branch bytes into private operational
     /// storage. It is not a source write and cannot overwrite an existing file.
     pub fn export(&self, id: Uuid) -> Result<PathBuf> {
@@ -590,7 +709,7 @@ impl Store {
                     .iter()
                     .find(|b| b.revision.id == id)
                     .map(|b| Publication {
-                        attachments: vec![],
+                        attachments: b.attachments.clone(),
                         workspace: p.workspace,
                         expected: None,
                         revision: b.revision.clone(),
@@ -634,6 +753,10 @@ struct ApplicationReceipt {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Application {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    assets: std::collections::BTreeMap<notes_model::RelPath, notes_model::BaseRev>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    asset_intent: Option<(Uuid, notes_model::RelPath)>,
     schema: u32,
     core_data: PathBuf,
     next: usize,
@@ -657,6 +780,7 @@ struct Pairing {
 #[derive(Serialize)]
 pub struct PairingPreview {
     pub confirmation: String,
+    pub attachment_conflicts: Vec<notes_model::RelPath>,
     pub actions: Vec<notes_sync::PairingAction>,
 }
 impl Store {
@@ -688,7 +812,14 @@ impl Store {
         Self::validate_application(state, app)
     }
     fn validate_application(state: &State, app: Application) -> Result<Option<Application>> {
-        if app.schema != 1
+        if app.assets.len() > 10_000
+            || app.asset_intent.as_ref().is_some_and(|(id, path)| {
+                !state
+                    .received
+                    .iter()
+                    .any(|p| p.revision.id == *id && p.attachments.iter().any(|a| a.path == *path))
+            })
+            || app.schema != 1
             || !app.core_data.is_absolute()
             || app.next > state.received.len()
             || app.acknowledged > app.next
@@ -752,6 +883,51 @@ impl Store {
         }
         Ok(Some(app))
     }
+    fn apply_assets(&self, state: &State, app: &mut Application, p: &Publication) -> Result<()> {
+        if app
+            .asset_intent
+            .as_ref()
+            .is_some_and(|(id, _)| *id != p.revision.id)
+        {
+            return Err(Error::Invalid);
+        }
+        let mut assets: Vec<_> = p.attachments.iter().collect();
+        assets.sort_by_key(|a| {
+            app.asset_intent
+                .as_ref()
+                .is_none_or(|(_, path)| *path != a.path)
+        });
+        for asset in assets {
+            if !app.assets.contains_key(&asset.path) && app.assets.len() >= 10_000 {
+                return Err(Error::Limit);
+            }
+            let expected = app.assets.get(&asset.path).cloned();
+            let data = app.core_data.clone();
+            let retry = app
+                .asset_intent
+                .as_ref()
+                .is_some_and(|(id, path)| *id == p.revision.id && *path == asset.path);
+            let applied = notes_core::sync::apply_attachment(
+                &state.source,
+                &data,
+                asset,
+                expected.as_ref(),
+                retry,
+                || {
+                    app.asset_intent = Some((p.revision.id, asset.path.clone()));
+                    self.save_application(app)
+                        .map_err(|_| notes_model::CoreError::Internal {
+                            message: "could not persist attachment intent".into(),
+                        })
+                },
+            )
+            .map_err(|_| Error::ApplicationBlocked)?;
+            app.assets.insert(asset.path.clone(), applied);
+            app.asset_intent = None;
+            self.save_application(app)?;
+        }
+        Ok(())
+    }
     fn save_application(&self, app: &Application) -> Result<()> {
         let bytes = serde_json::to_vec(app).map_err(|_| Error::Storage)?;
         if bytes.len() > MAX_STATE {
@@ -771,13 +947,31 @@ impl Store {
     /// Apply received creations/updates to the bound folder, with the workspace
     /// closed in every cooperating client using this same application data path.
     pub fn apply(&self, core_data: &Path) -> Result<usize> {
-        self.apply_using(core_data, |root, path, bytes, expected, retry, prepare| {
-            notes_core::sync::apply_received(root, core_data, path, bytes, expected, retry, prepare)
-        })
+        self.apply_using(
+            core_data,
+            false,
+            |root, path, bytes, expected, retry, prepare| {
+                notes_core::sync::apply_received(
+                    root, core_data, path, bytes, expected, retry, prepare,
+                )
+            },
+        )
+    }
+    pub fn apply_effects(&self, core_data: &Path) -> Result<usize> {
+        self.apply_using(
+            core_data,
+            true,
+            |root, path, bytes, expected, retry, prepare| {
+                notes_core::sync::apply_received(
+                    root, core_data, path, bytes, expected, retry, prepare,
+                )
+            },
+        )
     }
     fn apply_using(
         &self,
         core_data: &Path,
+        effects: bool,
         mut execute: impl FnMut(
             &Path,
             &notes_model::RelPath,
@@ -801,6 +995,8 @@ impl Store {
         fs::create_dir_all(core_data).map_err(|_| Error::Storage)?;
         let core_data = fs::canonicalize(core_data).map_err(|_| Error::Storage)?;
         let mut app = self.application(&state)?.unwrap_or(Application {
+            assets: Default::default(),
+            asset_intent: None,
             schema: 1,
             core_data: core_data.clone(),
             next: 0,
@@ -834,44 +1030,70 @@ impl Store {
             .collect();
         for index in pending {
             let p = &state.received[index];
-            if p.revision.content.is_none() {
+            if !effects && p.revision.content.is_none() {
                 return Err(Error::UnsupportedApplication);
             }
             let previous = app.notes.get(&p.revision.note).cloned();
             if previous.as_ref().map(|n| n.revision) != p.expected {
                 return Err(Error::Conflict);
             }
-            if previous.as_ref().is_some_and(|n| n.path != p.revision.path) {
+            if !effects && previous.as_ref().is_some_and(|n| n.path != p.revision.path) {
                 return Err(Error::UnsupportedApplication);
+            }
+            if !p.attachments.is_empty() || app.asset_intent.is_some() {
+                if !effects {
+                    return Err(Error::UnsupportedApplication);
+                }
+                self.apply_assets(&state, &mut app, p)?;
             }
             let bytes = content(p).map_err(|_| Error::Invalid)?;
             let retry = app.intent == Some(p.revision.id);
-            let applied = execute(
-                &state.source,
-                &p.revision.path,
-                &bytes,
-                previous
-                    .as_ref()
-                    .filter(|n| !n.deleted)
-                    .or_else(|| {
-                        if previous.is_some() {
-                            return None;
-                        }
-                        state
-                            .pairing
-                            .as_ref()
-                            .and_then(|pairing| pairing.created.get(&p.revision.note))
+            let mut prepare = || {
+                app.intent = Some(p.revision.id);
+                self.save_application(&app)
+                    .map_err(|_| notes_model::CoreError::Internal {
+                        message: "could not persist application intent".into(),
                     })
-                    .map(|n| &n.local),
-                retry,
-                &mut || {
-                    app.intent = Some(p.revision.id);
-                    self.save_application(&app)
-                        .map_err(|_| notes_model::CoreError::Internal {
-                            message: "could not persist application intent".into(),
+            };
+            let applied = if effects
+                && previous
+                    .as_ref()
+                    .is_some_and(|n| p.revision.content.is_none() || n.path != p.revision.path)
+            {
+                let before = previous.as_ref().ok_or(Error::Invalid)?;
+                notes_core::sync::apply_resolution_effect(
+                    &state.source,
+                    &core_data,
+                    &before.path,
+                    &p.revision.path,
+                    p.revision.content.as_ref().map(|_| bytes.as_slice()),
+                    &before.local,
+                    retry || before.deleted,
+                    &mut prepare,
+                )
+            } else {
+                execute(
+                    &state.source,
+                    &p.revision.path,
+                    &bytes,
+                    previous
+                        .as_ref()
+                        .filter(|n| !n.deleted)
+                        .or_else(|| {
+                            if previous.is_some() {
+                                return None;
+                            }
+                            state
+                                .pairing
+                                .as_ref()
+                                .and_then(|pairing| pairing.created.get(&p.revision.note))
                         })
-                },
-            )
+                        .map(|n| &n.local),
+                    retry,
+                    &mut prepare,
+                )
+                .map(Some)
+            }
             .map_err(|e| match e {
                 notes_model::CoreError::LockTimeout => Error::Busy,
                 _ => Error::ApplicationBlocked,
@@ -879,10 +1101,10 @@ impl Store {
             app.notes.insert(
                 p.revision.note,
                 ApplicationReceipt {
-                    deleted: false,
+                    deleted: applied.is_none(),
                     revision: p.revision.id,
                     path: p.revision.path.clone(),
-                    local: applied,
+                    local: applied.unwrap_or_else(|| previous.as_ref().unwrap().local.clone()),
                 },
             );
             if !app.deferred.remove(&index) {
@@ -976,21 +1198,25 @@ impl Store {
             };
         }
         let data = service.data_dir().to_path_buf();
-        let outcome = self.apply_using(&data, |root, path, bytes, expected, retry, prepare| {
-            if service.workspace_root()? != root {
-                return Err(notes_model::CoreError::Unsupported {
-                    cap: "receive queue belongs to another workspace".into(),
-                });
-            }
-            let applied =
-                apply_in_workspace(service, path, bytes, expected, retry, &buffers, prepare)?;
-            for buffer in &mut buffers {
-                if buffer.note_id == applied.note_id {
-                    buffer.base_rev = applied.base_rev.clone();
+        let outcome = self.apply_using(
+            &data,
+            false,
+            |root, path, bytes, expected, retry, prepare| {
+                if service.workspace_root()? != root {
+                    return Err(notes_model::CoreError::Unsupported {
+                        cap: "receive queue belongs to another workspace".into(),
+                    });
                 }
-            }
-            Ok(applied)
-        });
+                let applied =
+                    apply_in_workspace(service, path, bytes, expected, retry, &buffers, prepare)?;
+                for buffer in &mut buffers {
+                    if buffer.note_id == applied.note_id {
+                        buffer.base_rev = applied.base_rev.clone();
+                    }
+                }
+                Ok(applied)
+            },
+        );
         let mut report = Self::reload_for_editor(service, &buffers);
         report.applied = outcome.as_ref().ok().map(|n| *n as u32);
         if let Err(error) = outcome {
@@ -1050,7 +1276,11 @@ impl Store {
         }
         let app = self.application(&state)?.ok_or(Error::Invalid)?;
         let data = fs::canonicalize(core_data).map_err(|_| Error::Invalid)?;
-        if data != app.core_data || app.intent.is_some() || app.resolution_intent.is_some() {
+        if data != app.core_data
+            || app.intent.is_some()
+            || app.resolution_intent.is_some()
+            || app.asset_intent.is_some()
+        {
             return Err(Error::Invalid);
         }
         let incoming = Self::incoming(&state)?;
@@ -1075,7 +1305,12 @@ impl Store {
             &previous.local,
         )
         .map_err(|_| Error::ApplicationBlocked)?;
-        if local.base_rev.hash == previous.local.base_rev.hash {
+        let attachments =
+            notes_core::sync::capture_attachments(&state.source, &data, &previous.path, &bytes)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        if local.base_rev.hash == previous.local.base_rev.hash
+            && attachments == state.attachments_at(previous.revision)
+        {
             return Err(Error::Conflict);
         }
         let revision = Revision::new(
@@ -1092,7 +1327,7 @@ impl Store {
             .commit(revision.clone(), Some(previous.revision))
             .map_err(|_| Error::Conflict)?;
         state.pending.push(Publication {
-            attachments: vec![],
+            attachments,
             workspace: state.local.workspace,
             expected: Some(previous.revision),
             revision: revision.clone(),
@@ -1127,6 +1362,7 @@ impl Store {
             || data != capture.core_data
             || app.intent.is_some()
             || app.resolution_intent.is_some()
+            || app.asset_intent.is_some()
             || app
                 .notes
                 .get(&capture.note)
@@ -1149,7 +1385,12 @@ impl Store {
         let (local, bytes) =
             notes_core::sync::capture_conflict(&state.source, &data, &capture.path, &capture.local)
                 .map_err(|_| Error::ApplicationBlocked)?;
-        if local.base_rev.hash == capture.local.base_rev.hash {
+        let attachments =
+            notes_core::sync::capture_attachments(&state.source, &data, &capture.path, &bytes)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        if local.base_rev.hash == capture.local.base_rev.hash
+            && attachments == state.attachments_at(capture.branch)
+        {
             return Err(Error::Conflict);
         }
         let revision = Revision::new(
@@ -1163,13 +1404,13 @@ impl Store {
         if let Some(previous) = state.pending.pop() {
             branches = previous.branches;
             branches.push(notes_sync::transfer::Branch {
-                attachments: vec![],
+                attachments: previous.attachments,
                 revision: previous.revision,
                 content_base64: previous.content_base64,
             });
         }
         let publication = Publication {
-            attachments: vec![],
+            attachments,
             workspace: state.local.workspace,
             expected: Some(capture.branch),
             revision: revision.clone(),
@@ -1247,6 +1488,7 @@ impl Store {
         }) {
             return Err(Error::Conflict);
         }
+        self.apply_assets(&state, &mut app, p)?;
         let bytes = content(p).map_err(|_| Error::Invalid)?;
         let retry = app.resolution_intent == Some(id);
         let applied = notes_core::sync::apply_resolution_effect(
@@ -1327,6 +1569,31 @@ impl Store {
             &remote,
         )
         .map_err(|_| Error::Conflict)?;
+        let mut asset_hashes = vec![];
+        let mut attachment_conflicts = vec![];
+        let mut total_assets = 0;
+        for (file, bytes) in &local {
+            let assets =
+                notes_core::sync::capture_attachments(&state.source, data, &file.path, bytes)
+                    .map_err(|_| Error::ApplicationBlocked)?;
+            if let Some(remote) = incoming
+                .heads
+                .keys()
+                .filter_map(|id| incoming.head(*id))
+                .find(|r| r.path == file.path && r.content.as_ref() == Some(&file.content))
+            {
+                if state.attachments_at(remote.id) != assets {
+                    attachment_conflicts.push(file.path.clone());
+                }
+            }
+            for a in assets {
+                total_assets += a.content_base64.len();
+                if total_assets > MAX_STATE {
+                    return Err(Error::Limit);
+                }
+                asset_hashes.push((file.note, a.path, a.hash));
+            }
+        }
         let encoded = serde_json::to_vec(&(
             state.local.workspace,
             state.cursor,
@@ -1334,11 +1601,13 @@ impl Store {
             &state.source,
             data,
             &actions,
+            &asset_hashes,
         ))
         .map_err(|_| Error::Invalid)?;
         Ok((
             PairingPreview {
                 confirmation: blake3::hash(&encoded).to_hex().to_string(),
+                attachment_conflicts,
                 actions,
             },
             local,
@@ -1367,7 +1636,8 @@ impl Store {
         let mut state = self.load()?;
         let data = fs::canonicalize(data).map_err(|_| Error::Invalid)?;
         let (preview, snapshot) = self.pairing_snapshot(&state, &data)?;
-        if preview.confirmation != confirmation
+        if !preview.attachment_conflicts.is_empty()
+            || preview.confirmation != confirmation
             || preview
                 .actions
                 .iter()
@@ -1403,6 +1673,8 @@ impl Store {
             observed.insert(f.note, actual);
         }
         let mut app = Application {
+            assets: Default::default(),
+            asset_intent: None,
             schema: 1,
             core_data: data,
             next: state.received.len(),
@@ -1419,6 +1691,15 @@ impl Store {
             match action {
                 notes_sync::PairingAction::Link { local, remote } => {
                     let head = incoming.head(remote.note).ok_or(Error::Invalid)?;
+                    for asset in state.attachments_at(head.id) {
+                        let base = notes_core::sync::confirm_attachment(
+                            &state.source,
+                            &app.core_data,
+                            &asset,
+                        )
+                        .map_err(|_| Error::ApplicationBlocked)?;
+                        app.assets.insert(asset.path, base);
+                    }
                     app.notes.insert(
                         remote.note,
                         ApplicationReceipt {
@@ -1456,8 +1737,15 @@ impl Store {
                             local: observed[&local.note].clone(),
                         },
                     );
+                    let attachments = notes_core::sync::capture_attachments(
+                        &state.source,
+                        &app.core_data,
+                        &revision.path,
+                        &bytes,
+                    )
+                    .map_err(|_| Error::ApplicationBlocked)?;
                     state.pending.push(Publication {
-                        attachments: vec![],
+                        attachments,
                         workspace: state.local.workspace,
                         expected: None,
                         revision,

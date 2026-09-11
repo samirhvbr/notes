@@ -1368,3 +1368,150 @@ fn pairing_refuses_divergent_bytes_and_unseen_remote_updates() {
         b"remote update"
     );
 }
+
+#[test]
+fn captured_rename_cycles_and_explicit_deletions_apply_in_order() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"A").unwrap();
+    fs::write(root.join("b.md"), b"B").unwrap();
+    fs::write(root.join("c.md"), b"C").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let target = dir.path().join("cycle-target");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("cycle-receiver")).unwrap();
+    let data = dir.path().join("cycle-data");
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply(&data).unwrap();
+    fs::rename(root.join("test.md"), root.join("temporary.md")).unwrap();
+    fs::rename(root.join("c.md"), root.join("test.md")).unwrap();
+    fs::rename(root.join("b.md"), root.join("c.md")).unwrap();
+    fs::rename(root.join("temporary.md"), root.join("b.md")).unwrap();
+    sender.stage().unwrap();
+    assert_eq!(sender.status().unwrap().pending, 4);
+    sender.transfer(&mut peer).unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    assert!(receiver.apply(&data).is_err());
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 4);
+    for (path, bytes) in [("test.md", b"C"), ("b.md", b"A"), ("c.md", b"B")] {
+        assert_eq!(fs::read(target.join(path)).unwrap(), bytes);
+    }
+    assert!(!fs::read_dir(&target).unwrap().any(|e| e
+        .unwrap()
+        .file_name()
+        .to_string_lossy()
+        .starts_with("sync-move-")));
+    let head = peer
+        .journal
+        .heads
+        .keys()
+        .filter_map(|id| peer.journal.head(*id))
+        .find(|r| r.path.as_str() == "b.md")
+        .unwrap()
+        .clone();
+    assert!(sender.stage_delete(head.note, head.id).is_err());
+    fs::remove_file(root.join("b.md")).unwrap();
+    assert!(sender.stage_delete(head.note, Uuid::new_v4()).is_err());
+    sender.stage_delete(head.note, head.id).unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 1);
+    assert!(!target.join("b.md").exists());
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 0);
+}
+
+#[test]
+fn attachment_bundles_preserve_markdown_and_resolve_binary_only_conflicts() {
+    let (dir, root, sender, mut peer) = fixture();
+    let markdown = b"# Original\r\n![image](attachments/a.bin)\r\n";
+    fs::create_dir(root.join("attachments")).unwrap();
+    fs::write(root.join("test.md"), markdown).unwrap();
+    fs::write(root.join("attachments/a.bin"), [0, 255, 1]).unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    assert_eq!(peer.log[0].attachments.len(), 1);
+    let target = dir.path().join("assets-target");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("assets-receiver")).unwrap();
+    let data = dir.path().join("assets-data");
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    assert!(receiver.apply(&data).is_err());
+    assert!(!target.join("test.md").exists());
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 0);
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), markdown);
+    assert_eq!(
+        fs::read(target.join("attachments/a.bin")).unwrap(),
+        [0, 255, 1]
+    );
+    let exported = receiver
+        .export_attachment(
+            peer.log[0].revision.id,
+            &notes_model::RelPath::parse("attachments/a.bin").unwrap(),
+        )
+        .unwrap();
+    assert_eq!(fs::read(exported).unwrap(), [0, 255, 1]);
+    let checkpoint = dir.path().join("assets-receiver/application.json");
+    let mut interrupted: serde_json::Value =
+        serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+    interrupted["next"] = serde_json::json!(0);
+    interrupted["notes"] = serde_json::json!({});
+    interrupted["assets"] = serde_json::json!({});
+    interrupted["asset_intent"] = serde_json::json!([peer.log[0].revision.id, "attachments/a.bin"]);
+    interrupted["intent"] = serde_json::json!(peer.log[0].revision.id);
+    fs::write(&checkpoint, serde_json::to_vec(&interrupted).unwrap()).unwrap();
+    let before = fs::metadata(target.join("attachments/a.bin"))
+        .unwrap()
+        .modified()
+        .unwrap();
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 1);
+    assert_eq!(
+        fs::metadata(target.join("attachments/a.bin"))
+            .unwrap()
+            .modified()
+            .unwrap(),
+        before
+    );
+    fs::write(root.join("attachments/a.bin"), [0, 255, 2]).unwrap();
+    sender.stage().unwrap();
+    assert_eq!(sender.status().unwrap().pending, 1);
+    sender.transfer(&mut peer).unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    fs::write(target.join("attachments/a.bin"), [0, 255, 3]).unwrap();
+    assert!(receiver.apply_effects(&data).is_err());
+    assert_eq!(
+        fs::read(target.join("attachments/a.bin")).unwrap(),
+        [0, 255, 3]
+    );
+    let note = peer.log[0].revision.note;
+    let branch = receiver.capture_receiver_conflict(&data, note).unwrap();
+    let remote = peer.log.last().unwrap().revision.id;
+    let result = dir.path().join("chosen.md");
+    fs::write(&result, markdown).unwrap();
+    let resolution = receiver.resolve(branch, remote, &result).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    receiver.apply_resolution(&data, resolution).unwrap();
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), markdown);
+    assert_eq!(
+        fs::read(target.join("attachments/a.bin")).unwrap(),
+        [0, 255, 3]
+    );
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 2);
+}
+
+#[test]
+fn missing_attachment_refuses_capture_without_changing_the_queue() {
+    let (dir, root, sender, _peer) = fixture();
+    let state = dir.path().join("state/client.json");
+    let before = fs::read(&state).unwrap();
+    fs::write(root.join("test.md"), b"![missing](missing.bin)").unwrap();
+    assert!(sender.stage().is_err());
+    assert_eq!(fs::read(&state).unwrap(), before);
+    assert!(!root.join("missing.bin").exists());
+}
