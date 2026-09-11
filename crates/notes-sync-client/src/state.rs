@@ -9,7 +9,7 @@ use notes_sync::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
@@ -528,6 +528,75 @@ impl Store {
         }
         self.fetch_into(&mut state, transport)
     }
+    /// Explicit recovery from an older server backup. The server must contain
+    /// an exact prefix of this unscoped queue's retained publications. Ordinary
+    /// transfer never resets cursors or elects a replacement history.
+    pub fn recover_server(&self, transport: &mut impl Transport) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        // Scoped cursors include invisible publications: they cannot prove a
+        // complete prefix and must use an unscoped recovery queue instead.
+        if state.endpoint.scope.is_some() {
+            return Err(Error::Invalid);
+        }
+        let cursor = Self::recovery_prefix(&state, transport)?;
+        let end = (cursor + 20).min(state.received.len());
+        for publication in &state.received[cursor..end] {
+            transport.publish(publication)?;
+        }
+        if Self::recovery_prefix(&state, transport)? != end {
+            return Err(Error::Conflict);
+        }
+        // Re-send only the latest previously acknowledged receipts, never intermediate
+        // revisions that could regress a server's surviving acknowledgment.
+        // Retrying is safe even when the previous response was lost.
+        if end == state.received.len() {
+            if let Some(app) = self.application(&state)? {
+                let mut receipts = BTreeMap::new();
+                for (index, publication) in state.received[..app.acknowledged].iter().enumerate() {
+                    if !app.superseded.contains(&index) {
+                        receipts.insert(publication.revision.note, publication.revision.id);
+                    }
+                }
+                for revision in receipts.into_values() {
+                    transport.acknowledge(&notes_sync::transfer::ApplicationAcknowledgment {
+                        workspace: state.local.workspace,
+                        device: state.device,
+                        revision,
+                    })?;
+                }
+            }
+        }
+        Ok(end - cursor)
+    }
+
+    fn recovery_prefix(state: &State, transport: &mut impl Transport) -> Result<usize> {
+        let mut cursor = 0;
+        loop {
+            let page = transport.page(cursor)?;
+            if page.workspace != state.local.workspace
+                || page.revisions.len() > 20
+                || page.next_cursor != cursor + page.revisions.len()
+                || page.next_cursor > state.received.len()
+                || (page.has_more && page.next_cursor == cursor)
+            {
+                return Err(Error::Protocol);
+            }
+            for revision in &page.revisions {
+                let retained = &state.received[cursor];
+                if *revision != retained.revision || transport.fetch(revision.id)? != *retained {
+                    return Err(Error::Conflict);
+                }
+                cursor += 1;
+            }
+            if !page.has_more {
+                break;
+            }
+        }
+        Ok(cursor)
+    }
+
     /// Receive without publishing, so a rejected outbox cannot hide its peer.
     pub fn fetch(&self, transport: &mut impl Transport) -> Result<()> {
         let mut lock = self.lock()?;

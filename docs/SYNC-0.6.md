@@ -153,8 +153,8 @@ so they can reveal aggregate activity within the authorized workspace. Empty
 pages can advance and must not terminate traversal while `has_more` is true.
 Heads are current, not a snapshot across pages. Save `next_cursor` only after
 processing the page and fetching required bytes. A restored older backup may
-require restarting at cursor zero; already accepted revision UUIDs make retries
-safe. A storage receipt is not a device application acknowledgment. The inbox
+require explicit retained-history recovery (see the 0.20.15 section below);
+do not reset a durable client cursor by hand. A storage receipt is not a device application acknowledgment. The inbox
 UUID is created on first authorized inventory access and retained across restart
 and backup/restore.
 
@@ -379,8 +379,9 @@ assertions and do not authorize deletion, pruning or automatic recovery.
 Exact retries are idempotent. A lost response or local checkpoint failure leaves
 the same receipt pending; retry sends it again without touching source notes.
 An older ancestor after a newer acknowledgment is refused, preserving the
-server's progress. Restoring an older client/server backup can therefore require
-the still-pending recovery/reconciliation flow. No automatic rollback or reset
+server's progress. An older server backup can use the explicit 0.20.15
+recovery below. Restoring an older client backup still requires future
+reconciliation support. No automatic rollback or reset
 is attempted. Revocation, workspace mismatch, hidden/out-of-scope history and
 unknown revisions are refused. Existing server request/body limits apply; the
 journal allows at most 1,024 acknowledging devices and evicts none.
@@ -910,3 +911,53 @@ and path, or explicitly choose deletion, then stage the two-parent resolution.
 Transfer that revision before applying its published result from history. Path
 collisions between unrelated identities require distinct paths; the UI does not
 silently merge them. Original byte exports remain private and non-overwriting.
+
+
+### Explicit older-server recovery (0.20.15)
+
+Pause all device schedules and other publishers during this maintenance operation.
+Keep backups of the stopped server and client state. Restore the server backup
+with its original workspace UUID and credentials, then use an **unscoped** queue
+that retains the missing publications:
+
+```sh
+notes-sync-client recover-server /absolute/queue /absolute/credential.secret
+```
+
+The command compares every server publication, including retained branches and
+attachment bytes, with the corresponding local received publication. Only an
+exact prefix is accepted. It replays at most twenty missing publications with
+original UUIDs, expectations and bytes, then audits the prefix again. Repeat
+until `replayed_publications` is zero. The CLI waits 61 seconds on server Busy
+responses and retries each request at most twice, allowing full-history audits
+to cross normal rate-limit windows without weakening server limits. Large audits
+can take several windows. Other failures stop immediately; rerun after fixing
+the cause. Lost responses preserve the same idempotent operation.
+
+When the complete retained history is present, the command re-sends the latest
+previously acknowledged application receipt for each note. Newer application
+receipts remain pending for the normal `acknowledge` command. It does not replay
+older acknowledgments, reset application counters, change outbox/cursor state,
+write notes or attachments, or infer application from server storage. Existing
+read/write permissions and device-to-credential bindings still apply. A read-only
+credential cannot restore missing publications. Each device that needs to restore
+its acknowledgments should recover while its retained history still covers the
+server prefix; recover shorter queues before longer queues. Once a server is
+ahead of a queue, fetch normally before retrying recovery.
+
+A different workspace UUID, any divergent prefix, hidden scoped history or a
+server history longer than the local received cache is refused. A partial replay
+can already have stored valid publications before a later request fails; inspect
+and retry the same queue. The audit is not a server-wide transaction, so keep
+other publishers paused until recovery completes. Unreceived publications lost
+from both the server backup and all device queues cannot be reconstructed.
+Retention/pruning, older-client reconciliation and automatic rollback recovery
+remain open.
+
+Validation covers bounded replay, restart after a lost storage response, a lost
+application response, tombstones, binary attachments, divergent/corrupt history,
+foreign workspace UUIDs, scoped/incomplete queues and unchanged local edits.
+The native TCP smoke restores an actual offline backup, recovers from two
+original CLI queues including retained conflict branches, and checks exact
+server publications and unchanged local application receipts. These are desktop
+process tests, not physical mobile lifecycle or owner acceptance.

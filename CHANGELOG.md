@@ -8,6 +8,12 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.15 - recover retained publications after server rollback
+
+Add explicit CLI recovery that verifies an exact unscoped server prefix before
+replaying retained immutable publications with their original identifiers and
+normal authorization. Preserve client cursors, pending work and source files.
+
 ## 0.20.14 - expose desktop synchronization controls
 
 Add typed native commands and an accessible localized sync panel for enrollment,

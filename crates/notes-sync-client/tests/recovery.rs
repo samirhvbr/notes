@@ -1515,3 +1515,206 @@ fn missing_attachment_refuses_capture_without_changing_the_queue() {
     assert_eq!(fs::read(&state).unwrap(), before);
     assert!(!root.join("missing.bin").exists());
 }
+
+fn rollback(peer: &mut Peer, retained: usize) {
+    let mut journal = Journal::new(peer.journal.workspace);
+    peer.log.truncate(retained);
+    for p in &peer.log {
+        notes_sync::transfer::append(&mut journal, p).unwrap();
+    }
+    peer.journal = journal;
+    peer.acknowledged.clear();
+}
+
+#[test]
+fn rollback_replay_is_bounded_resumes_after_lost_receipt_and_preserves_outbox() {
+    let (dir, root, store, mut peer) = fixture();
+    for i in 0..23 {
+        fs::write(root.join("note.md"), format!("revision {i}\r\n")).unwrap();
+        store.stage().unwrap();
+        store.transfer(&mut peer).unwrap();
+    }
+    let history = peer.log.clone();
+    fs::write(root.join("note.md"), b"offline edit\r\n").unwrap();
+    store.stage().unwrap();
+    let saved = fs::read(dir.path().join("state/client.json")).unwrap();
+    rollback(&mut peer, 0);
+    assert!(store.transfer(&mut peer).is_err());
+    peer.lose_receipt = true;
+    assert!(matches!(
+        store.recover_server(&mut peer),
+        Err(Error::Offline)
+    ));
+    assert_eq!(peer.log.len(), 1);
+    let restarted = Store::open(&dir.path().join("state")).unwrap();
+    assert_eq!(restarted.recover_server(&mut peer).unwrap(), 20);
+    assert_eq!(peer.log.len(), 21);
+    assert_eq!(restarted.recover_server(&mut peer).unwrap(), 2);
+    assert_eq!(peer.log, history);
+    assert_eq!(
+        fs::read(dir.path().join("state/client.json")).unwrap(),
+        saved
+    );
+    assert_eq!(fs::read(root.join("note.md")).unwrap(), b"offline edit\r\n");
+    restarted.transfer(&mut peer).unwrap();
+    assert_eq!(peer.log.len(), 24);
+}
+
+#[test]
+fn two_devices_restore_assets_tombstone_and_receipts_without_reapplying_files() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("note.md"), b"![asset](asset.bin)\r\n").unwrap();
+    fs::write(root.join("asset.bin"), [0, 255, 1, 128]).unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let local = dir.path().join("second");
+    fs::create_dir(&local).unwrap();
+    let data = dir.path().join("second-data");
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&local, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply_effects(&data).unwrap();
+    receiver.acknowledge(&mut peer).unwrap();
+    let note = peer.log[0].revision.note;
+    let head = peer.log[0].revision.id;
+    fs::remove_file(root.join("note.md")).unwrap();
+    sender.stage_delete(note, head).unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply_effects(&data).unwrap();
+    receiver.acknowledge(&mut peer).unwrap();
+    let history = peer.log.clone();
+    let receipts = fs::read(dir.path().join("receiver/application.json")).unwrap();
+    let cache = fs::read(dir.path().join("receiver/client.json")).unwrap();
+    // A user's unrelated saved work must not be touched by server recovery.
+    fs::write(local.join("offline.md"), b"keep me\r\n").unwrap();
+    rollback(&mut peer, 1);
+    peer.lose_receipt = true;
+    assert!(matches!(
+        receiver.recover_server(&mut peer),
+        Err(Error::Offline)
+    ));
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    peer.lose_receipt = true;
+    assert!(matches!(
+        receiver.recover_server(&mut peer),
+        Err(Error::Offline)
+    ));
+    assert_eq!(receiver.recover_server(&mut peer).unwrap(), 0);
+    assert_eq!(peer.log, history);
+    assert_eq!(peer.acknowledged, vec![history[1].revision.id; 2]);
+    assert_eq!(
+        fs::read(dir.path().join("receiver/application.json")).unwrap(),
+        receipts
+    );
+    assert_eq!(
+        fs::read(dir.path().join("receiver/client.json")).unwrap(),
+        cache
+    );
+    assert!(!local.join("note.md").exists());
+    assert_eq!(fs::read(local.join("asset.bin")).unwrap(), [0, 255, 1, 128]);
+    assert_eq!(fs::read(local.join("offline.md")).unwrap(), b"keep me\r\n");
+    assert_eq!(receiver.apply_effects(&data).unwrap(), 0);
+    receiver.fetch(&mut peer).unwrap();
+    sender.transfer(&mut peer).unwrap();
+}
+
+#[test]
+fn rollback_recovery_refuses_foreign_divergent_or_corrupt_history_without_writes() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("note.md"), b"original").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let saved = fs::read(dir.path().join("state/client.json")).unwrap();
+    let original = peer.log.clone();
+    assert!(matches!(
+        sender.recover_server(&mut Peer::new()),
+        Err(Error::Protocol)
+    ));
+    peer.bad_fetch = true;
+    assert!(matches!(
+        sender.recover_server(&mut peer),
+        Err(Error::Conflict)
+    ));
+    peer.bad_fetch = false;
+    peer.log[0].revision.id = Uuid::new_v4();
+    assert!(matches!(
+        sender.recover_server(&mut peer),
+        Err(Error::Conflict)
+    ));
+    assert_eq!(peer.log.len(), 1);
+    peer.log = original;
+    assert_eq!(
+        fs::read(dir.path().join("state/client.json")).unwrap(),
+        saved
+    );
+    assert_eq!(fs::read(root.join("note.md")).unwrap(), b"original");
+}
+
+#[test]
+fn rollback_recovery_rejects_scoped_or_incomplete_queues() {
+    let (dir, root, sender, mut peer) = fixture();
+    let scoped_root = dir.path().join("scoped-root");
+    fs::create_dir(&scoped_root).unwrap();
+    let scoped = Store::open(&dir.path().join("scoped-state")).unwrap();
+    let mut scope = endpoint();
+    scope.scope = Some(notes_model::RelPath::parse("shared").unwrap());
+    scoped
+        .initialize(&scoped_root, scope, Mode::Receive, &mut peer)
+        .unwrap();
+    assert!(matches!(
+        scoped.recover_server(&mut peer),
+        Err(Error::Invalid)
+    ));
+    let local = dir.path().join("old-root");
+    fs::create_dir(&local).unwrap();
+    let old = Store::open(&dir.path().join("old-state")).unwrap();
+    old.initialize(&local, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    fs::write(root.join("note.md"), b"new").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let history = peer.log.clone();
+    assert!(matches!(
+        old.recover_server(&mut peer),
+        Err(Error::Protocol)
+    ));
+    assert_eq!(peer.log, history);
+}
+
+#[test]
+fn rollback_recovery_does_not_skip_pending_application_acknowledgments() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("note.md"), b"first").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let local = dir.path().join("second");
+    fs::create_dir(&local).unwrap();
+    let data = dir.path().join("data");
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&local, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply(&data).unwrap();
+    receiver.acknowledge(&mut peer).unwrap();
+    for bytes in [b"second".as_slice(), b"third".as_slice()] {
+        fs::write(root.join("note.md"), bytes).unwrap();
+        sender.stage().unwrap();
+        sender.transfer(&mut peer).unwrap();
+        receiver.fetch(&mut peer).unwrap();
+        receiver.apply(&data).unwrap();
+    }
+    let history = peer.log.clone();
+    rollback(&mut peer, 1);
+    receiver.recover_server(&mut peer).unwrap();
+    assert_eq!(peer.acknowledged, vec![history[0].revision.id]);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 2);
+    assert_eq!(
+        peer.acknowledged,
+        history.iter().map(|p| p.revision.id).collect::<Vec<_>>()
+    );
+    assert_eq!(fs::read(local.join("note.md")).unwrap(), b"third");
+}

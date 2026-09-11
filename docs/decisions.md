@@ -1785,3 +1785,18 @@ Pause cancels between requests; retries preserve original revision identities.
 The worker never applies source effects, merges conflicts, or promises execution
 after process exit. Desktop controls call typed individual IPC commands for
 pairing, review, explicit application, capture/resolution and recovery exports.
+
+
+## ADR-059 — Server rollback recovery replays only an exact retained prefix
+
+**Status:** ACTIVE · Implemented in 0.20.15.
+
+**Decision.** Make older-server recovery an explicit CLI maintenance operation.
+An unscoped queue audits the complete server prefix before and after a bounded
+replay of original immutable publications. Never reset client cursors, choose a
+winner, synthesize application or mutate source files. Re-send only current
+durable previously acknowledged receipts after the retained history is restored. Preserve
+normal permissions, device ownership and request limits. Operators pause other
+publishers because the audit is not a server-wide transaction. Divergent,
+foreign, scoped or locally incomplete history requires separate reconciliation;
+this operation does not authorize pruning or older-client recovery.

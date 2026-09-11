@@ -1,5 +1,5 @@
 use notes_sync_client::{
-    remote::{Endpoint, Remote},
+    remote::{Endpoint, Page, Remote, Transport},
     state::{Mode, Store},
     Error, Result,
 };
@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.as_slice() == ["--help"] {
-        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client init-subfolder STATE ROOT ORIGIN WORKSPACE SCOPE TOKEN_FILE [--allow-private]\nnotes-sync-client pair-preview STATE APP_DATA_DIRECTORY\nnotes-sync-client pair-confirm STATE APP_DATA_DIRECTORY TOKEN_FILE CONFIRMATION\nnotes-sync-client stage-delete STATE NOTE_UUID EXPECTED_HEAD_UUID\nnotes-sync-client apply-bundle STATE APP_DATA_DIRECTORY\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export-attachment STATE REVISION_UUID ATTACHMENT_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Subfolder pairing requires a matching credential scope.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
+        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client init-subfolder STATE ROOT ORIGIN WORKSPACE SCOPE TOKEN_FILE [--allow-private]\nnotes-sync-client pair-preview STATE APP_DATA_DIRECTORY\nnotes-sync-client pair-confirm STATE APP_DATA_DIRECTORY TOKEN_FILE CONFIRMATION\nnotes-sync-client stage-delete STATE NOTE_UUID EXPECTED_HEAD_UUID\nnotes-sync-client apply-bundle STATE APP_DATA_DIRECTORY\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge|recover-server STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export-attachment STATE REVISION_UUID ATTACHMENT_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Subfolder pairing requires a matching credential scope.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nRecovery requires paused publishers and an unscoped retained queue; repeat until zero publications are replayed.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
         return Ok(());
     }
     let ca = std::env::var_os("NOTES_SYNC_CA_FILE").map(PathBuf::from);
@@ -140,6 +140,15 @@ fn run() -> Result<()> {
                 store.transfer(&mut remote)?;
             }
         }
+        "recover-server" if args.len() == 3 => {
+            let mut remote =
+                Remote::connect(&store.endpoint()?, Path::new(&args[2]), ca.as_deref())?;
+            let count = store.recover_server(&mut RecoveryRemote(&mut remote))?;
+            println!(
+                "{}",
+                serde_json::json!({"replayed_publications": count, "source_written": false})
+            );
+        }
         "acknowledge" if args.len() == 3 => {
             let mut remote =
                 Remote::connect(&store.endpoint()?, Path::new(&args[2]), ca.as_deref())?;
@@ -198,4 +207,37 @@ fn run() -> Result<()> {
         serde_json::to_string(&store.status()?).map_err(|_| Error::Invalid)?
     );
     Ok(())
+}
+
+// Full-history audits can cross the server's normal credential request window.
+// Retry only admission/rate-limit failures, keeping the same operation and IDs.
+struct RecoveryRemote<'a>(&'a mut Remote);
+fn recovery_request<T>(mut request: impl FnMut() -> Result<T>) -> Result<T> {
+    for _ in 0..2 {
+        match request() {
+            Err(Error::Busy) => {
+                eprintln!("notes-sync-client: recovery paused by server; retrying in 61 seconds");
+                std::thread::sleep(std::time::Duration::from_secs(61));
+            }
+            result => return result,
+        }
+    }
+    request()
+}
+impl Transport for RecoveryRemote<'_> {
+    fn page(&mut self, cursor: usize) -> Result<Page> {
+        recovery_request(|| self.0.page(cursor))
+    }
+    fn fetch(&mut self, id: uuid::Uuid) -> Result<notes_sync::transfer::Publication> {
+        recovery_request(|| self.0.fetch(id))
+    }
+    fn publish(&mut self, publication: &notes_sync::transfer::Publication) -> Result<()> {
+        recovery_request(|| self.0.publish(publication))
+    }
+    fn acknowledge(
+        &mut self,
+        receipt: &notes_sync::transfer::ApplicationAcknowledgment,
+    ) -> Result<()> {
+        recovery_request(|| self.0.acknowledge(receipt))
+    }
 }
