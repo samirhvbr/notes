@@ -1113,8 +1113,8 @@ An interrupted audit can be repeated after restart. Recovery is cache/outbox
 reconciliation, not a repair of lost file identities or stale application receipts.
 If application data was rolled back while source files advanced, ordinary guarded
 application can still refuse; preserve those files and resolve that mismatch
-separately. No timestamp chooses a winner. Restored application identity repair
-and broader retention remain unimplemented. A scoped queue still cannot prove a
+separately. No timestamp chooses a winner. Restored application identity
+reconciliation is an explicit local operation described below. A scoped queue still cannot prove a
 complete server prefix for `recover-server`, so server recovery remains unscoped.
 
 ### Interrupted two-device effects (0.20.18)
@@ -1201,6 +1201,28 @@ Receive queues compact only after fetching the exact server envelope. A newly
 enrolled receiver advances through pruned causal entries without touching its
 folder, then applies the retained current payload. This preserves cursor
 positions and ancestry while avoiding reconstruction from removed bytes.
+
+### Restored application identity reconciliation (0.20.23)
+
+When application data was restored independently from a fully applied receive
+queue, use this local command after preserving the original backup:
+
+```sh
+notes-sync-client reconcile-application /absolute/queue
+```
+
+The command is available only to a receive queue with no pending publications,
+capture, deferred application, or interrupted application effect. It re-observes
+each current, non-deleted receipt through the restored application data and
+requires the file bytes and base hash to equal that receipt's immutable remote
+revision. It then replaces only the operational local `NoteId` and `BaseRev`
+stored in `application.json`, so later guarded updates can continue using the
+restored registry.
+
+It never writes a source file, changes the queue or cursor, contacts the server,
+or acknowledges a revision. A changed, missing, deleted, unresolved, or
+incompletely applied file is refused with the checkpoint left unchanged. Resolve
+the local change first; the command does not select a winner by timestamp.
 
 ### Explicit device retirement (0.20.20)
 

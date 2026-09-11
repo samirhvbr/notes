@@ -1917,3 +1917,22 @@ A receiver that did not retain an old payload advances across its causal record
 without changing source files and applies the later live baseline. Cursor values
 and revision identities never move. This is payload retention, not history
 deletion or restored-application identity repair.
+
+
+## ADR-067 — Reconcile restored application identity explicitly
+
+**Status:** ACTIVE · Implemented in 0.20.23.
+
+**Decision.** Provide a local `reconcile-application` operation for a fully
+applied receive queue after its application data was restored. Re-observe each
+live non-deleted receipt through the restored application registry, require its
+current bytes and content hash to exactly match the immutable remote revision,
+and replace only the receipt's operational `NoteId` and `BaseRev`. Refuse any
+pending publication, capture, deferred work, interrupted effect, missing
+payload, altered file, or non-receive queue. Deleted receipts remain historical
+metadata and are never reinterpreted as local files.
+
+The operation makes no network request and never writes a source file, changes
+queue contents or cursors, or acknowledges a revision. This keeps restoration
+repair explicit and prevents a mixed backup from silently choosing a source of
+truth by timestamp.

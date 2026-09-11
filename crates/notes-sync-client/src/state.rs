@@ -701,6 +701,61 @@ impl Store {
         Ok(visible - retained)
     }
 
+    /// Explicitly re-observe the files behind fully applied receive receipts
+    /// after application data was restored. The remote revision and bytes must
+    /// still match; this changes only operational identity/metadata, never a
+    /// source file, queue entry or server acknowledgment.
+    pub fn reconcile_application_identities(&self) -> Result<usize> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        if state.mode != Mode::Receive || !state.pending.is_empty() || state.capture.is_some() {
+            return Err(Error::Invalid);
+        }
+        let mut app = self.application(&state)?.ok_or(Error::Invalid)?;
+        if app.next != state.received.len()
+            || !app.deferred.is_empty()
+            || app.intent.is_some()
+            || app.asset_intent.is_some()
+            || app.resolution_intent.is_some()
+        {
+            return Err(Error::Conflict);
+        }
+        let mut reconciled = 0;
+        for receipt in app.notes.values_mut().filter(|receipt| !receipt.deleted) {
+            let publication = state
+                .received
+                .iter()
+                .find(|p| p.revision.id == receipt.revision)
+                .ok_or(Error::Invalid)?;
+            let expected = publication
+                .revision
+                .content
+                .as_ref()
+                .ok_or(Error::Invalid)?;
+            let (observed, bytes) =
+                notes_core::sync::capture_saved(&state.source, &app.core_data, &receipt.path, None)
+                    .map_err(|_| Error::ApplicationBlocked)?;
+            if observed.base_rev.hash != *expected
+                || notes_model::ContentHash::from_bytes(*blake3::hash(&bytes).as_bytes())
+                    != *expected
+            {
+                return Err(Error::Conflict);
+            }
+            if receipt.local.note_id != observed.note_id
+                || receipt.local.base_rev != observed.base_rev
+            {
+                receipt.local = observed;
+                reconciled += 1;
+            }
+        }
+        if reconciled > 0 {
+            Self::validate_application(&state, app.clone())?;
+            self.save_application(&app)?;
+        }
+        Ok(reconciled)
+    }
+
     fn recovery_prefix(state: &State, transport: &mut impl Transport) -> Result<usize> {
         let mut cursor = 0;
         loop {

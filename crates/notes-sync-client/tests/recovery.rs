@@ -351,6 +351,66 @@ fn apply_checkpoints_updates_and_preserves_local_edits() {
 }
 
 #[test]
+fn restored_application_identity_is_reconciled_only_for_unchanged_files() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    assert_eq!(receiver.apply(&data).unwrap(), 1);
+    receiver.acknowledge(&mut peer).unwrap();
+
+    let restored_data = dir.path().join("restored-app-data");
+    fs::create_dir(&restored_data).unwrap();
+    let checkpoint = dir.path().join("receiver/application.json");
+    let mut restored: serde_json::Value =
+        serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+    restored["core_data"] = serde_json::json!(fs::canonicalize(&restored_data).unwrap());
+    fs::write(&checkpoint, serde_json::to_vec(&restored).unwrap()).unwrap();
+
+    let before = fs::read(target.join("test.md")).unwrap();
+    assert_eq!(receiver.reconcile_application_identities().unwrap(), 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), before);
+    assert_eq!(receiver.reconcile_application_identities().unwrap(), 0);
+
+    fs::write(root.join("test.md"), b"updated").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    assert_eq!(receiver.apply(&restored_data).unwrap(), 1);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"updated");
+}
+
+#[test]
+fn restored_application_identity_refuses_changed_files_without_checkpoint_write() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"initial").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let (target, receiver) = receiver(dir.path(), &mut peer);
+    let data = dir.path().join("app-data");
+    receiver.apply(&data).unwrap();
+
+    let restored_data = dir.path().join("restored-app-data");
+    fs::create_dir(&restored_data).unwrap();
+    let checkpoint = dir.path().join("receiver/application.json");
+    let mut restored: serde_json::Value =
+        serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+    restored["core_data"] = serde_json::json!(fs::canonicalize(&restored_data).unwrap());
+    fs::write(&checkpoint, serde_json::to_vec(&restored).unwrap()).unwrap();
+    let before = fs::read(&checkpoint).unwrap();
+    fs::write(target.join("test.md"), b"local work").unwrap();
+
+    assert!(matches!(
+        receiver.reconcile_application_identities(),
+        Err(Error::Conflict)
+    ));
+    assert_eq!(fs::read(&checkpoint).unwrap(), before);
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"local work");
+}
+
+#[test]
 fn durable_intent_recovers_lost_receipt_without_rewriting_but_rejects_later_edits() {
     let (dir, root, sender, mut peer) = fixture();
     fs::write(root.join("test.md"), b"remote").unwrap();

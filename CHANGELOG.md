@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.23 - reconcile restored application identities
+
+Add an explicit local receive-queue operation for application data restored
+independently from its fully applied queue. It re-observes unchanged live files,
+checks them against immutable remote content hashes, and updates only their
+operational local identities. Regression tests cover a later guarded update
+through the restored registry and refusal without checkpoint or source writes
+when a file changed.
+
 ## 0.20.22 - compact acknowledged linear sync payloads
 
 Extend the offline sync retention pass beyond resolved divergent branches to
