@@ -20,6 +20,7 @@ use tauri::State;
 
 pub struct App {
     pub svc: Mutex<WorkspaceService>,
+    pub network: std::sync::Arc<notes_sync_client::control::Controller>,
     pub received: Mutex<Option<notes_sync_client::state::Store>>,
     pub dmabuf: DmabufReport,
 }
@@ -498,4 +499,134 @@ pub async fn sync_reload(
         &mut *svc(&app)?,
         &buffers,
     ))
+}
+
+// Blocking network/filesystem work runs outside both the UI thread and editor mutex.
+#[tauri::command]
+pub async fn sync_control_status(
+    app: State<'_, App>,
+) -> R<notes_sync_client::control::DeviceSnapshot> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.snapshot().map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_configure(
+    app: State<'_, App>,
+    connection: notes_sync_client::control::SyncConnection,
+) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        controller.configure(connection).map_err(sync_error)
+    })
+    .await
+    .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_conditions(
+    app: State<'_, App>,
+    conditions: notes_sync_client::control::SyncConditions,
+) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        controller.conditions(conditions).map_err(sync_error)
+    })
+    .await
+    .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_run(app: State<'_, App>) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.run(true).map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_pair(
+    app: State<'_, App>,
+    request: notes_sync_client::control::SyncPairRequest,
+) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.pair(request).map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_preview(
+    app: State<'_, App>,
+) -> R<notes_sync_client::control::SyncPairPreview> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.preview().map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_confirm(app: State<'_, App>, confirmation: String) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        controller.confirm(confirmation).map_err(sync_error)
+    })
+    .await
+    .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_apply(app: State<'_, App>, resolution: Option<String>) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.apply(resolution).map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_capture(app: State<'_, App>, note: String) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.capture(note).map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_resolve(
+    app: State<'_, App>,
+    local: String,
+    remote: String,
+    path: String,
+    result: Option<String>,
+) -> R<String> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        controller
+            .resolve(local, remote, path, result)
+            .map_err(sync_error)
+    })
+    .await
+    .map_err(sync_error)?
+}
+#[tauri::command]
+pub async fn sync_control_export(
+    app: State<'_, App>,
+    id: String,
+    attachment: Option<String>,
+) -> R<String> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        controller.export(id, attachment).map_err(sync_error)
+    })
+    .await
+    .map_err(sync_error)?
+}
+
+#[tauri::command]
+pub async fn sync_control_recapture(app: State<'_, App>) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.recapture().map_err(sync_error))
+        .await
+        .map_err(sync_error)?
+}
+
+#[tauri::command]
+pub async fn sync_control_pause(app: State<'_, App>) -> R<()> {
+    let controller = app.network.clone();
+    tauri::async_runtime::spawn_blocking(move || controller.pause().map_err(sync_error))
+        .await
+        .map_err(sync_error)?
 }

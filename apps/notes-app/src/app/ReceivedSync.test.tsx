@@ -9,6 +9,7 @@ import { useWorkspace } from "../stores/workspace";
 import { useSync } from "../stores/sync";
 vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(async () => "/receive-state") }));
 vi.mock("../ipc", async original => ({ ...await original<typeof import("../ipc")>(), syncOpen: vi.fn(), syncApply: vi.fn(), syncReload: vi.fn() }));
+vi.mock("./DeviceSync", () => ({ DeviceSync: () => null }));
 const originals = { ws: useWorkspace.getState(), sync: useSync.getState() };
 const rev = { hash: "b3:abc", size: 3, mtime_ns: "1" } as ipc.BaseRev;
 const fresh = { note_id: "note", path: "test.md", text: "new", base_rev: rev, read_only: null, draft: null, profile: {} } as ipc.OpenedNote;

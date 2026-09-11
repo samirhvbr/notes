@@ -856,3 +856,57 @@ notes-sync-client export-attachment /private/receiver REVISION_UUID attachments/
 The command creates a private non-overwriting `.bin` export and prints its path.
 Unreferenced attachments are never automatically deleted. Background scheduling,
 editor bundle controls, retention/pruning and device acceptance remain open.
+
+## Desktop background transfer and controls (0.20.14)
+
+Expand **Device sync** above the editor. New pairing selects the local folder,
+a private operational queue outside it, a pre-provisioned credential file outside
+notes, the server/workspace and optional subfolder scope. Credentials are read
+by Rust; the webview receives no token bytes. HTTPS and the existing explicit
+private-network exception retain their validation, DNS pinning and no-redirect
+rules. The app reuses operator-managed token files; it does not create accounts
+or store tokens in notes, the webview or settings.
+
+Choose sending to an empty inbox, receiving into an empty folder, or reconciling
+existing folders. Sending captures local saved files. Receiving/reconciliation
+fetches a preview; confirmation binds the actual local identities and refuses
+divergent note or attachment bytes. Close the workspace before previewing or
+confirming. If enrollment succeeds but its first fetch fails, reconnect the
+created queue and retry transfer; do not initialize the same directory again.
+Large inboxes may need multiple bounded passes before confirmation succeeds.
+
+The active connection and schedule are persisted in private app data as
+`sync-control.json`; other queue directories remain intact and can be reconnected.
+Automatic transfer defaults off. Intervals range from 120 to 3600 seconds.
+A native worker serializes transfers outside the editor mutex while the app
+process exists, including while its controls are collapsed. Network/power hints
+are refreshed by the host; missing or older-than-45-second observations pause
+transfer. Unknown network or battery status also pauses unless explicitly
+permitted. The UI never assumes that missing battery APIs mean AC power, or
+that Wi-Fi is unmetered. A suspended host may pause; the worker does not promise
+OS wakeups, execution after quit, or mobile background execution.
+
+Each pass is bounded to 48 transport requests plus credential validation, with
+existing page/content limits and checkpointed progress. Transient failures back
+off exponentially up to one hour; no timestamps choose conflict winners. Power
+and network conditions are checked between requests. **Pause transfer** disables
+the persisted schedule and cancels between requests without waiting for the
+editor mutex. An already sent request may finish; its outcome remains resumable.
+Offline edits remain ordinary local files. Upload queues capture them on a
+permitted pass. Receive queues report changed local files as pending; publication
+of their edits remains the explicit conflict workflow when a remote branch
+exists. Pairing reconciliation does not enable automatic bidirectional capture.
+
+The status distinguishes disabled, offline, pending, syncing, up-to-date,
+conflict and error. Received-but-unapplied content is pending, not up-to-date.
+Transfers never apply files in the background. Use **Apply received files** with
+the workspace closed, or the existing barrier-protected editor action for
+supported plain-note updates. Acknowledgment uses only durable application receipts.
+
+History lists up to 200 recent revisions with retained branches and attachment
+exports. A saved local receiver edit can be captured; newer edits can be
+recaptured without discarding earlier bytes. Choose a resulting Markdown file
+and path, or explicitly choose deletion, then stage the two-parent resolution.
+Transfer that revision before applying its published result from history. Path
+collisions between unrelated identities require distinct paths; the UI does not
+silently merge them. Original byte exports remain private and non-overwriting.

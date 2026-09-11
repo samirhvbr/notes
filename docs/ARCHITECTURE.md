@@ -1125,3 +1125,12 @@ retained original bytes (ADR-054). Subfolder transport pins and translates the
 credential namespace while preserving filtered cursor positions. Confirmed pairing
 links observed equal-byte identities, stages local-only files and defers downloads
 in an atomic client-state bootstrap (ADR-055); divergent bytes refuse confirmation.
+
+### Desktop sync coordination (0.20.14)
+
+The desktop holds an `Arc<notes_sync_client::control::Controller>`. Its native
+worker serializes bounded transfers outside the editor service mutex. Individual
+Tauri commands run blocking work off the UI executor; typed DTOs are generated
+from Rust alongside core DTOs. Expiring host conditions gate requests. The
+controller owns no editor buffers and never applies source files automatically.
+See ADR-058 and [desktop controls](SYNC-0.6.md#desktop-background-transfer-and-controls-02014).

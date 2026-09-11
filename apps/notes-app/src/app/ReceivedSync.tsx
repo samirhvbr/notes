@@ -1,3 +1,4 @@
+import { DeviceSync } from "./DeviceSync";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
@@ -35,6 +36,7 @@ export function ReceivedSyncShell({ children }: { children: ReactNode }) {
   }, []);
   return <div className="sync-shell">
     <ReceivedSyncControls />
+    <DeviceSync />
     <div className="sync-content" inert={locked} aria-busy={locked}>{children}</div>
   </div>;
 }

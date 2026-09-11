@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.14 - expose desktop synchronization controls
+
+Add typed native commands and an accessible localized sync panel for enrollment,
+reconciliation confirmation, schedules, received application, retained history,
+conflict capture/recapture, explicit resolution and original-byte export. Preserve
+the editor barrier and require closed workspaces for filesystem effects.
+Validated native reconnection, conservative pause, automatic upload and history
+against a disposable loopback server. Native/Windows clippy, frontend and TCP
+checks passed. The existing macOS watcher timing test failed locally; the
+remaining workspace suite and new client regressions passed separately.
+
 ## 0.20.14 - schedule bounded background device transfers
 
 Add an opt-in desktop worker with persisted connection settings, network/power

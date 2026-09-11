@@ -122,7 +122,7 @@ and link-local ranges (`127.0.0.0/8`, `10/8`, `172.16/12`, `192.168/16`,
 allow-list of hosts. Cloud metadata endpoints are the target that makes this
 non-theoretical.
 
-The device sync CLI has a narrow operator-selected exception (ADR-046): one
+The device sync transport has a narrow operator-selected exception (ADR-046): one
 persisted endpoint can explicitly allow private addresses, with literal-loopback
 HTTP permitted only under that flag. Redirects and inherited proxies are disabled;
 resolved addresses are validated and pinned, and link-local/metadata destinations
@@ -287,3 +287,9 @@ canonical base64 and hashes; combined publication bytes remain limited to 8 MiB.
 A manifest requires create and update permission. No remote URL is downloaded.
 Application preserves changed local attachments via BaseRev checks and advances
 the note receipt only after its attachments succeed; see ADR-057.
+
+Desktop sync controls reuse the device transport; only an explicitly selected
+operator credential file is read in Rust. The webview sees its path, never token
+bytes. Scheduled transport is opt-in, bounded, serialized and separate from
+source application. Expiring network/power observations pause transfers; manual
+application still requires the core identity/draft/BaseRev guards (ADR-058).

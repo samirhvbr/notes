@@ -15,6 +15,7 @@ pub fn run() {
     // WebView are readable before it exists. A settings file that cannot be read
     // yields defaults, and the default is `auto` — never `off`.
     let service = WorkspaceService::new().expect("resolve the data directory");
+    let network = notes_sync_client::control::Controller::new(service.data_dir());
     let setting = service.settings().linux.webkit_dmabuf_workaround.clone();
 
     // Before `tauri::Builder`, and therefore before any WebView: WebKit reads
@@ -48,6 +49,7 @@ pub fn run() {
         .manage(App {
             svc: Mutex::new(service),
             received: Mutex::new(None),
+            network,
             dmabuf: DmabufReport {
                 applied: decision.applied,
                 explanation: decision.explanation,
@@ -60,6 +62,19 @@ pub fn run() {
         .register_uri_scheme_protocol("notes-asset", asset::serve)
         .invoke_handler(tauri::generate_handler![
             commands::env_report,
+            commands::sync_control_status,
+            commands::sync_control_configure,
+            commands::sync_control_conditions,
+            commands::sync_control_run,
+            commands::sync_control_pause,
+            commands::sync_control_pair,
+            commands::sync_control_preview,
+            commands::sync_control_confirm,
+            commands::sync_control_apply,
+            commands::sync_control_capture,
+            commands::sync_control_recapture,
+            commands::sync_control_resolve,
+            commands::sync_control_export,
             commands::sync_open,
             commands::sync_apply,
             commands::sync_reload,

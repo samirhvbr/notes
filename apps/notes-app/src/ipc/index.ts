@@ -274,3 +274,24 @@ export const knowledgeGet=()=>invoke<import("./generated/Knowledge").Knowledge>(
 export const metadataGet=(text:string)=>invoke<import("./generated/Metadata").Metadata>("metadata_get",{text});
 export const wikiCandidates=(target:string)=>invoke<RelPath[]>("wiki_candidates",{target});
 export const attachmentImport=(note:RelPath,bytes:number[])=>invoke<import("./generated/Attachment").Attachment>("attachment_import",{note,bytes});
+
+export type { SyncConnection } from "./generated/SyncConnection";
+export type { SyncConditions } from "./generated/SyncConditions";
+export type { SyncPairRequest } from "./generated/SyncPairRequest";
+export type { DeviceSnapshot } from "./generated/DeviceSnapshot";
+export type { SyncPairPreview } from "./generated/SyncPairPreview";
+export const deviceStatus = () => invoke<import("./generated/DeviceSnapshot").DeviceSnapshot>("sync_control_status");
+export const deviceConfigure = (connection: import("./generated/SyncConnection").SyncConnection) => invoke<void>("sync_control_configure", {connection});
+export const deviceConditions = (conditions: import("./generated/SyncConditions").SyncConditions) => invoke<void>("sync_control_conditions", {conditions});
+export const deviceRun = () => invoke<void>("sync_control_run");
+export const devicePair = (request: import("./generated/SyncPairRequest").SyncPairRequest) => invoke<void>("sync_control_pair", {request});
+export const devicePreview = () => invoke<import("./generated/SyncPairPreview").SyncPairPreview>("sync_control_preview");
+export const deviceConfirm = (confirmation: string) => invoke<void>("sync_control_confirm", {confirmation});
+export const deviceApply = (resolution: string | null = null) => invoke<void>("sync_control_apply", {resolution});
+export const deviceCapture = (note: string) => invoke<void>("sync_control_capture", {note});
+export const deviceResolve = (local: string, remote: string, path: string, result: string | null) => invoke<string>("sync_control_resolve", {local,remote,path,result});
+export const deviceExport = (id: string, attachment: string | null = null) => invoke<string>("sync_control_export", {id,attachment});
+
+export const deviceRecapture = () => invoke<void>("sync_control_recapture");
+
+export const devicePause = () => invoke<void>("sync_control_pause");

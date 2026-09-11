@@ -89,8 +89,9 @@ one-line version of both:
   subfolder/reconciliation pairing.
   Version 0.20.13 adds explicit deletion capture, ordered rename effects and
   referenced attachment bundles with guarded recovery.
-  Background scheduling, editor conflict controls, broader pairing
-  and transport UI remain open. Owner verification on installed
+  Version 0.20.14 adds opt-in desktop background transport and typed
+  pairing/history/conflict controls. Retention, mobile lifecycle and
+  broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).
 - **Never do, without an ADR that reverses the one named:**

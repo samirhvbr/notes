@@ -184,3 +184,7 @@ subfolder pairing with reconciliation preview and identity confirmation. See
 Version 0.20.13 adds explicit deletion capture, ordered rename cycles and
 referenced attachment bundles without changing Markdown bytes. See
 [application and recovery](docs/SYNC-0.6.md#apply-note-effects-and-referenced-attachments-02013).
+
+Version 0.20.14 adds opt-in desktop background transfer and a Device sync panel
+for pairing, conditions, history and explicit conflict choices. See
+[desktop controls](docs/SYNC-0.6.md#desktop-background-transfer-and-controls-02014).

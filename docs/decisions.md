@@ -1771,3 +1771,17 @@ historical manifests. Keep Markdown unchanged. Apply attachments with individual
 BaseRev checks and durable intents before the note receipt; interrupted bundles
 resume but are not multi-file transactions. Preserve locally changed files and
 retain branch exports. Do not delete assets merely because references disappear.
+
+## ADR-058 — The desktop schedules transfer independently of source application
+
+**Status:** ACTIVE · Implemented in 0.20.14.
+
+**Decision.** A native worker in `notes-sync-client` owns bounded transport passes,
+serialized independently of the editor mutex. Persist one active queue and an
+opt-in schedule, storing only the path to an operator-managed credential file.
+Reuse the device transport's existing endpoint policy; note-derived URLs have
+no access to this channel. Host observations are conservative and expire.
+Pause cancels between requests; retries preserve original revision identities.
+The worker never applies source effects, merges conflicts, or promises execution
+after process exit. Desktop controls call typed individual IPC commands for
+pairing, review, explicit application, capture/resolution and recovery exports.
