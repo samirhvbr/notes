@@ -532,6 +532,7 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
     fs::write(root.join("test.md"), b"local offline").unwrap();
     store.stage().unwrap();
     let remote_publication = |parent: &Publication, bytes: &[u8]| Publication {
+        attachments: vec![],
         workspace: parent.workspace,
         expected: Some(parent.revision.id),
         revision: Revision::new(
@@ -599,6 +600,7 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
         |Branch {
              revision,
              content_base64,
+             ..
          }| revision.id == local
             && content_base64.as_deref() == Some(&STANDARD.encode(b"local offline"))
     ));

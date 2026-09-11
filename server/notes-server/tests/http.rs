@@ -561,6 +561,7 @@ fn publication(
     use base64::Engine;
     let expected = prior.map(|p| p.revision.id);
     notes_server::sync::Publication {
+        attachments: vec![],
         branches: vec![],
         workspace,
         expected,
@@ -1012,6 +1013,7 @@ fn resolution(
     );
     p.revision.parents.insert(local.revision.id);
     p.branches.push(notes_sync::transfer::Branch {
+        attachments: vec![],
         revision: local.revision.clone(),
         content_base64: local.content_base64.clone(),
     });
@@ -1085,6 +1087,7 @@ async fn sync_resolution_rejects_hidden_branches_forgery_and_unrelated_history()
         Some(b"unconsumed"),
     );
     unrelated.branches.push(notes_sync::transfer::Branch {
+        attachments: vec![],
         revision: extra.revision,
         content_base64: extra.content_base64,
     });
@@ -1140,4 +1143,59 @@ async fn sync_resolution_preserves_create_move_and_delete_permissions() {
         f.token = original;
         assert_eq!(post_revision(&f, &merge).await, StatusCode::OK);
     }
+}
+
+#[tokio::test]
+async fn sync_attachments_validate_references_hashes_and_historical_scope() {
+    use notes_sync::transfer::Attachment;
+    let mut f = Fixture::new(&all());
+    let workspace = sync_workspace(&f).await;
+    let mut p = publication(workspace, None, "allowed/test.md", Some(b"![a](asset.bin)"));
+    let asset = Attachment::new(RelPath::parse("allowed/asset.bin").unwrap(), &[0, 255]);
+    p.attachments = vec![asset.clone(), asset.clone()];
+    assert!(!post_revision(&f, &p).await.is_success());
+    p.attachments = vec![asset.clone()];
+    p.attachments[0].content_base64 = "AAAA".into();
+    assert!(!post_revision(&f, &p).await.is_success());
+    p.attachments = vec![Attachment::new(
+        RelPath::parse("allowed/unreferenced.bin").unwrap(),
+        b"x",
+    )];
+    assert!(!post_revision(&f, &p).await.is_success());
+    p.attachments = vec![asset];
+    assert_eq!(post_revision(&f, &p).await, StatusCode::OK);
+    let mut outside = publication(
+        workspace,
+        Some(&p),
+        "allowed/test.md",
+        Some(b"![a](../secret.bin)"),
+    );
+    outside.attachments = vec![Attachment::new(
+        RelPath::parse("secret.bin").unwrap(),
+        b"private",
+    )];
+    assert_eq!(post_revision(&f, &outside).await, StatusCode::FORBIDDEN);
+    let scoped = f.token.clone();
+    let output = f._dir.path().join("attachment-root.secret");
+    admin::create_token(
+        &f.data,
+        "root".into(),
+        "home".into(),
+        RelPath::root(),
+        all().into_iter().collect(),
+        false,
+        &output,
+    )
+    .unwrap();
+    f.token = fs::read_to_string(output).unwrap();
+    assert_eq!(post_revision(&f, &outside).await, StatusCode::OK);
+    f.token = scoped;
+    let (_, _, page) = f.request("GET", SYNC, None, &[]).await;
+    assert_eq!(page["revisions"], json!([]));
+    assert_eq!(
+        f.request("GET", &format!("{SYNC}/{}", p.revision.id), None, &[])
+            .await
+            .0,
+        StatusCode::NOT_FOUND
+    );
 }

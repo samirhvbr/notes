@@ -307,6 +307,22 @@ impl Transport for Remote {
         for branch in &mut p.branches {
             self.localize(&mut branch.revision)?;
         }
+        if let Some(scope) = &self.scope {
+            for asset in p
+                .attachments
+                .iter_mut()
+                .chain(p.branches.iter_mut().flat_map(|b| &mut b.attachments))
+            {
+                asset.path = notes_model::RelPath::parse(
+                    asset
+                        .path
+                        .as_str()
+                        .strip_prefix(&format!("{scope}/"))
+                        .ok_or(Error::Denied)?,
+                )
+                .map_err(|_| Error::Protocol)?;
+            }
+        }
         Ok(p)
     }
     fn publish(&mut self, p: &Publication) -> Result<()> {
@@ -314,6 +330,16 @@ impl Transport for Remote {
         self.globalize(&mut wire.revision)?;
         for branch in &mut wire.branches {
             self.globalize(&mut branch.revision)?;
+        }
+        if let Some(scope) = &self.scope {
+            for asset in wire
+                .attachments
+                .iter_mut()
+                .chain(wire.branches.iter_mut().flat_map(|b| &mut b.attachments))
+            {
+                asset.path = notes_model::RelPath::parse(&format!("{scope}/{}", asset.path))
+                    .map_err(|_| Error::Invalid)?;
+            }
         }
         let receipt: Receipt = decode(
             self.client

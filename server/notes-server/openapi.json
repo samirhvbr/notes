@@ -1636,6 +1636,14 @@
               "$ref": "#/components/schemas/SyncBranch"
             },
             "description": "Optional divergent history in parent-before-child order. Only accepted atomically with a two-parent resolution consuming the observed expected head. Total decoded bytes including result are limited to 8 MiB. Omitted for linear publications."
+          },
+          "attachments": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/SyncAttachment"
+            },
+            "description": "Optional referenced local binary files. Paths are workspace-relative, scoped and unique. Combined note, attachment and branch bytes must fit 8 MiB. Tombstones cannot contain attachments. Publishing requires create and update permission."
           }
         }
       },
@@ -1718,6 +1726,39 @@
             "contentEncoding": "base64",
             "maxLength": 11184812,
             "description": "Canonical standard base64 of up to 8 MiB. Null exactly when revision.content is null."
+          },
+          "attachments": {
+            "type": "array",
+            "maxItems": 32,
+            "items": {
+              "$ref": "#/components/schemas/SyncAttachment"
+            },
+            "description": "Optional referenced local binary files. Paths are workspace-relative, scoped and unique. Combined note, attachment and branch bytes must fit 8 MiB. Tombstones cannot contain attachments. Publishing requires create and update permission."
+          }
+        }
+      },
+      "SyncAttachment": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "hash",
+          "content_base64"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "maxLength": 4096
+          },
+          "hash": {
+            "type": "string",
+            "pattern": "^b3:[0-9a-f]{64}$",
+            "description": "BLAKE3 of exact binary bytes."
+          },
+          "content_base64": {
+            "type": "string",
+            "contentEncoding": "base64",
+            "maxLength": 11184812
           }
         }
       }

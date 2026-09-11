@@ -90,6 +90,16 @@ impl Vault {
             .values()
             .filter(|r| r.note == note)
             .all(|r| allowed_path(&r.path, credential, false))
+            && self
+                .publications
+                .iter()
+                .filter(|p| p.revision.note == note)
+                .all(|p| {
+                    p.attachments
+                        .iter()
+                        .chain(p.branches.iter().flat_map(|b| &b.attachments))
+                        .all(|a| allowed_attachment(&a.path, credential, false))
+                })
     }
 }
 fn sync_error(e: notes_sync::Error) -> Error {
@@ -157,7 +167,29 @@ fn authorize(v: &Vault, c: &Credential, p: &Publication) -> Result<()> {
     if !p.revision.parents.is_empty() && p.revision.content.is_some() {
         require(c, Permission::Update)?;
     }
+    if !p.attachments.is_empty() {
+        require(c, Permission::Create)?;
+        require(c, Permission::Update)?;
+    }
+    if p.attachments
+        .iter()
+        .any(|a| !allowed_attachment(&a.path, c, true))
+    {
+        return Err(Error::Forbidden);
+    }
     Ok(())
+}
+fn allowed_attachment(path: &RelPath, c: &Credential, write: bool) -> bool {
+    path.as_str().len() <= 4096
+        && !path.is_root()
+        && !path.is_note()
+        && !path.as_str().split('/').any(|s| s.starts_with('.'))
+        && within(path, &c.scope)
+        && (!write
+            || !c.review
+            || c.scope
+                .join("proposals")
+                .is_ok_and(|scope| within(path, &scope)))
 }
 fn transaction<T>(
     root: &Path,
@@ -308,6 +340,7 @@ pub fn publish(root: &Path, c: &Credential, p: Publication) -> Result<Uuid> {
                 v,
                 c,
                 &Publication {
+                    attachments: branch.attachments.clone(),
                     workspace: p.workspace,
                     expected: None,
                     revision: branch.revision.clone(),

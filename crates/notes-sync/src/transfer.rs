@@ -7,6 +7,8 @@ pub const MAX_CONTENT: usize = 8 * 1024 * 1024;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Publication {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
     pub workspace: Uuid,
     pub expected: Option<Uuid>,
     pub revision: Revision,
@@ -20,8 +22,101 @@ pub struct Publication {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Branch {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<Attachment>,
     pub revision: Revision,
     pub content_base64: Option<String>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct Attachment {
+    pub path: notes_model::RelPath,
+    pub hash: notes_model::ContentHash,
+    pub content_base64: String,
+}
+impl Attachment {
+    pub fn new(path: notes_model::RelPath, bytes: &[u8]) -> Self {
+        Self {
+            path,
+            hash: notes_model::ContentHash::from_bytes(*blake3::hash(bytes).as_bytes()),
+            content_base64: STANDARD.encode(bytes),
+        }
+    }
+    pub fn bytes(&self) -> Result<Vec<u8>> {
+        if self.content_base64.len() > MAX_CONTENT.div_ceil(3) * 4 {
+            return Err(Error::Limit);
+        }
+        let bytes = STANDARD
+            .decode(&self.content_base64)
+            .map_err(|_| Error::InvalidState)?;
+        if bytes.len() > MAX_CONTENT
+            || STANDARD.encode(&bytes) != self.content_base64
+            || blake3::hash(&bytes).as_bytes() != self.hash.as_bytes()
+        {
+            return Err(Error::InvalidState);
+        }
+        Ok(bytes)
+    }
+}
+pub fn attachment_paths(
+    path: &notes_model::RelPath,
+    bytes: &[u8],
+) -> std::collections::BTreeSet<notes_model::RelPath> {
+    let Ok(text) = std::str::from_utf8(bytes) else {
+        return Default::default();
+    };
+    let base = path.parent().unwrap_or_else(notes_model::RelPath::root);
+    notes_markdown::parse(text)
+        .links
+        .into_iter()
+        .filter(|l| {
+            !l.in_code
+                && !l.target.contains(':')
+                && !matches!(
+                    l.kind,
+                    notes_markdown::LinkKind::Url
+                        | notes_markdown::LinkKind::Anchor
+                        | notes_markdown::LinkKind::Wiki
+                )
+        })
+        .filter_map(|l| {
+            notes_markdown::url::resolve_relative(
+                &base,
+                l.target.split(['#', '?']).next().unwrap_or_default(),
+            )
+        })
+        .filter(|p| {
+            !p.is_root() && !p.is_note() && !p.as_str().split('/').any(|s| s.starts_with('.'))
+        })
+        .collect()
+}
+fn attachment_size(
+    revision: &Revision,
+    encoded: &Option<String>,
+    assets: &[Attachment],
+) -> Result<usize> {
+    if assets.len() > 32 || (revision.content.is_none() && !assets.is_empty()) {
+        return Err(Error::Limit);
+    }
+    if assets.is_empty() {
+        return Ok(0);
+    }
+    let paths = attachment_paths(&revision.path, &decode(revision, encoded)?);
+    let mut seen = std::collections::BTreeSet::new();
+    let mut size = 0;
+    for asset in assets {
+        if !paths.contains(&asset.path)
+            || !seen.insert(&asset.path)
+            || asset.path.as_str().len() > 4096
+        {
+            return Err(Error::InvalidState);
+        }
+        size += asset.bytes()?.len();
+        if size > MAX_CONTENT {
+            return Err(Error::Limit);
+        }
+    }
+    Ok(size)
 }
 pub fn content(p: &Publication) -> Result<Vec<u8>> {
     decode(&p.revision, &p.content_base64)
@@ -59,9 +154,11 @@ pub fn payload_size(p: &Publication) -> Result<usize> {
     if p.branches.len() > 20 {
         return Err(Error::Limit);
     }
-    let mut size = content(p)?.len();
+    let mut size =
+        content(p)?.len() + attachment_size(&p.revision, &p.content_base64, &p.attachments)?;
     for b in &p.branches {
-        size += decode(&b.revision, &b.content_base64)?.len();
+        size += decode(&b.revision, &b.content_base64)?.len()
+            + attachment_size(&b.revision, &b.content_base64, &b.attachments)?;
     }
     if size > MAX_CONTENT {
         return Err(Error::Limit);

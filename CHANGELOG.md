@@ -8,6 +8,13 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.13 - validate referenced attachment publications
+
+Extend immutable publications and retained branches with bounded attachment
+manifests. Validate Markdown references, exact hashes, decoded quotas and every
+historical scope. Translate subfolder attachment paths at the transport boundary
+and document the optional wire fields in OpenAPI.
+
 ## 0.20.12 - exercise the expanded device workflows over real transport
 
 Add TCP/HTTPS CLI scenarios for receiver source effects and scoped enrollment,

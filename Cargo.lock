@@ -2601,6 +2601,7 @@ dependencies = [
  "base64 0.23.1",
  "blake3",
  "fd-lock",
+ "notes-markdown",
  "notes-model",
  "serde",
  "serde_json",

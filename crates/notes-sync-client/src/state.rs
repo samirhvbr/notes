@@ -335,6 +335,7 @@ impl Store {
                 .commit(revision.clone(), expected)
                 .map_err(|_| Error::Conflict)?;
             state.pending.push(Publication {
+                attachments: vec![],
                 branches: vec![],
                 workspace: state.local.workspace,
                 expected,
@@ -535,6 +536,7 @@ impl Store {
                     .iter()
                     .cloned()
                     .chain(std::iter::once(notes_sync::transfer::Branch {
+                        attachments: vec![],
                         revision: p.revision.clone(),
                         content_base64: p.content_base64.clone(),
                     }))
@@ -545,6 +547,7 @@ impl Store {
             }
         }
         let publication = Publication {
+            attachments: vec![],
             workspace: state.local.workspace,
             expected: Some(remote),
             revision: revision.clone(),
@@ -587,6 +590,7 @@ impl Store {
                     .iter()
                     .find(|b| b.revision.id == id)
                     .map(|b| Publication {
+                        attachments: vec![],
                         workspace: p.workspace,
                         expected: None,
                         revision: b.revision.clone(),
@@ -1088,6 +1092,7 @@ impl Store {
             .commit(revision.clone(), Some(previous.revision))
             .map_err(|_| Error::Conflict)?;
         state.pending.push(Publication {
+            attachments: vec![],
             workspace: state.local.workspace,
             expected: Some(previous.revision),
             revision: revision.clone(),
@@ -1158,11 +1163,13 @@ impl Store {
         if let Some(previous) = state.pending.pop() {
             branches = previous.branches;
             branches.push(notes_sync::transfer::Branch {
+                attachments: vec![],
                 revision: previous.revision,
                 content_base64: previous.content_base64,
             });
         }
         let publication = Publication {
+            attachments: vec![],
             workspace: state.local.workspace,
             expected: Some(capture.branch),
             revision: revision.clone(),
@@ -1450,6 +1457,7 @@ impl Store {
                         },
                     );
                     state.pending.push(Publication {
+                        attachments: vec![],
                         workspace: state.local.workspace,
                         expected: None,
                         revision,

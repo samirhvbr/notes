@@ -8,6 +8,7 @@ repository.workspace = true
 
 [dependencies]
 notes-model.workspace = true
+notes-markdown.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
