@@ -161,7 +161,8 @@ In 0.20.7 upload queues resolve same-path divergence explicitly while preserving
 both histories. In 0.20.8 upload conflicts involving renames/deletions have
 explicit result choices. In 0.20.9 saved same-path receiver edits can be
 captured, resolved and applied with separate superseded/deferred progress.
-Desktop pairing and conflict controls ship in 0.20.14; see [SYNC-0.6.md](SYNC-0.6.md).
+Desktop pairing and conflict controls ship in 0.20.14, with explicit
+older-server recovery and two-device rollback regressions in 0.20.15; see [SYNC-0.6.md](SYNC-0.6.md).
 
 The 0.20.10 sync increment restores remote rename/delete conflicts explicitly
 at the receiver's applied path. Version 0.20.11 adds explicit recapture

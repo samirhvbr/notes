@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.15 - verify device recovery after server rollback
+
+Exercise two-device recovery, interrupted replay, retained local edits and
+application receipts after restoring an older server history. Native TCP backup
+restore, 34 client regressions, native/Windows clippy and the remaining workspace
+suite passed. The existing macOS watcher startup timing test failed locally;
+its threshold was not changed. The receive-interface regression now waits for
+enrollment to finish before clicking Apply; all 80 frontend tests passed.
+
 ## 0.20.15 - recover retained publications after server rollback
 
 Add explicit CLI recovery that verifies an exact unscoped server prefix before

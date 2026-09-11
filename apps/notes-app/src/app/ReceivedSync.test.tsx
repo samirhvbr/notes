@@ -23,7 +23,8 @@ async function connected() {
   const navigate = vi.fn();
   render(<ReceivedSyncShell><button onClick={navigate}>Navigate</button></ReceivedSyncShell>);
   fireEvent.click(screen.getByRole("button", { name: "Open received workspace" }));
-  await screen.findByRole("button", { name: "Apply received revisions" });
+  const apply = await screen.findByRole<HTMLButtonElement>("button", { name: "Apply received revisions" });
+  await waitFor(() => expect(apply.disabled).toBe(false));
   doc();
   return navigate;
 }

@@ -187,6 +187,20 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "acknowledge", str(receiver), str(client_secret)])
         run([client, "acknowledge", str(receiver), str(client_secret)])
         assert json.loads(run([client, "status", str(receiver)]))["acknowledged_revisions"] == 1
+        if not compose:
+            proc.terminate()
+            proc.wait(timeout=15)
+            cli("backup", str(temp / "older.tar.gz"))
+            proc = subprocess.Popen([binary, "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(100):
+                try:
+                    if request("GET", "/healthz", auth=False)[0] == 200:
+                        break
+                except (urllib.error.URLError, ConnectionError):
+                    pass
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("server did not restart after backup")
         (source / "original.md").write_bytes(b"remote update\r\n")
         run([client, "stage", str(sender)])
         run([client, "transfer", str(sender), str(client_secret)])
@@ -448,4 +462,35 @@ with tempfile.TemporaryDirectory() as temp:
         cli("restore", str(temp / "backup.tar.gz"), str(temp / "restored"))
         assert (temp / "restored/workspaces/smoke/smoke.md").read_bytes() == b"changed\r\nonce\r\n"
         assert json.loads((temp / "restored/sync/smoke/vault.json").read_text())["publications"] == [publication]
+        # Restore the earlier backup under the same endpoint with both original
+        # client queues intact. The receiver has a saved local conflict; recovery
+        # must never overwrite it or discard either device's retained branches.
+        cli("restore", str(temp / "older.tar.gz"), str(temp / "rollback"))
+        env["NOTES_SERVER_DATA"] = str(temp / "rollback")
+        proc = subprocess.Popen([binary, "serve"], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            for _ in range(100):
+                try:
+                    if request("GET", "/healthz", auth=False)[0] == 200:
+                        break
+                except (urllib.error.URLError, ConnectionError):
+                    pass
+                time.sleep(0.1)
+            else:
+                raise RuntimeError("restored server did not start")
+            before = (receiver / "application.json").read_bytes()
+            failed = subprocess.run([client, "fetch", str(receiver), str(client_secret)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert failed.returncode != 0
+            run([client, "recover-server", str(receiver), str(client_secret)])
+            run([client, "recover-server", str(sender), str(client_secret)])
+            assert (target / "original.md").read_bytes() == b"local work"
+            assert (receiver / "application.json").read_bytes() == before
+            expected = json.loads((sender / "client.json").read_text())["received"]
+            restored = json.loads((temp / "rollback/sync/client/vault.json").read_text())
+            assert restored["publications"] == expected
+            run([client, "fetch", str(receiver), str(client_secret)])
+            assert (target / "original.md").read_bytes() == b"local work"
+        finally:
+            proc.terminate()
+            proc.wait(timeout=15)
     print("HTTPS container and offline restore smoke passed" if compose else "native TCP and offline restore smoke passed")
