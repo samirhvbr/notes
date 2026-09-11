@@ -1,14 +1,17 @@
 # Synchronization domain and pairing preview
 
-> **Status:** ACTIVE · Domain in 0.19.0, server inbox in 0.19.1, device client in 0.20.0.
-> **Milestone 0.6 remains open.** Guarded CLI application was added in 0.20.1.
+> **Status:** ACTIVE · The delivered sync contract is recorded here through
+> `0.20.20`; milestone 0.6 remains open for the explicitly queued retention,
+> two-device, receiver-edge-case and owner-acceptance work in
+> [`.continue/0.6-sync.md`](../.continue/0.6-sync.md).
 
 The `notes-sync` crate defines causal revision histories and produces plans.
 `notes-core` supplies bounded inventories of real folders, and the standalone
 `notes-sync-plan` command previews initial pairing. Planning never copies,
 overwrites or deletes source notes. The server inbox and device client below transfer immutable bytes with durable
-queues. Explicit closed-workspace application is described below; background scheduling
-and app controls remain open.
+queues. Explicit closed-workspace application, desktop scheduling and app
+controls are described below; remaining work is limited to the queue linked
+above.
 
 ## Run the preview
 

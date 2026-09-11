@@ -1,7 +1,7 @@
 # Acceptance — milestone 0.1d (Interface)
 
-> **Status:** `ACTIVE` · The milestone is `.continue/0.1d-interface.md`; this is
-> its acceptance, and **almost all of it is a person's**. 0.1d produced very
+> **Status:** `ACTIVE` · Implementation was delivered in `0.13.0`; this is its
+> remaining acceptance, and **almost all of it is a person's**. 0.1d produced very
 > little core code and a great deal of frontend, at a point where this project's
 > testing strength is in the core — so the automated half is narrow and honest
 > about being narrow, and everything else has a box with nobody's tick in it.
@@ -16,8 +16,7 @@
 
 ## 1. The interface, area by area
 
-The ten rows of `.continue/0.1d-interface.md` §7, in the order the eye meets
-them.
+The ten interface areas, in the order the eye meets them.
 
 | # | Area | Expected | Verified |
 |---|---|---|---|
@@ -121,8 +120,8 @@ they were re-indexed rather than ticked where they were (ADR-037).
 
 ## 4. Out of this milestone, and not to be found in it
 
-`.continue/0.1d-interface.md` §8, restated because a milestone's boundary is
-part of its acceptance: **graph view** (0.3), **backlinks and their counter**
+The delivered milestone boundary is part of its acceptance: **graph view**
+(0.3), **backlinks and their counter**
 (0.3), a properties panel (0.3), themes, plugins, Live Preview (§18), and
 anything from 0.2.
 
@@ -134,7 +133,7 @@ milestone, that is a defect and not a bonus.
 
 ## 5. What this milestone changed about the core
 
-Almost nothing, on purpose (`.continue/0.1d-interface.md` §5). Two things are
+Almost nothing, on purpose. Two things are
 worth naming:
 
 - **`tests/switch.rs`** — six tests over a path that was unreachable until the

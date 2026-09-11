@@ -1,7 +1,7 @@
 # Acceptance — milestone 0.1b
 
 > **Status:** `ACTIVE` · Every acceptance criterion of milestone 0.1b
-> (`.continue/SCOPE_final.md` §17), against a **named automated test** or a
+> ([SCOPE.md](SCOPE.md) §17), against a **named automated test** or a
 > **documented manual step**. A criterion with neither is listed as not met, and
 > the half of one that has neither is listed as not met even where the other
 > half is automated.
@@ -308,7 +308,7 @@ and nothing in the project measured it until `fixtures/deep` did.
 
 ## Scope items
 
-Everything listed under 0.1b in `.continue/SCOPE_final.md` §17:
+Everything listed under 0.1b in [SCOPE.md](SCOPE.md) §17:
 
 | Item | Where |
 |---|---|

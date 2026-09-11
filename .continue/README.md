@@ -1,86 +1,45 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at 0.20.20
+> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at `0.20.21`.
 
-Work in progress: drafts, plans under discussion, notes on things still being
-built, briefings for picking the work back up later.
+This folder contains only work that has not been completed. Implemented
+contracts, measurements and delivery history live in [`../docs/`](../docs/) and
+[`../CHANGELOG.md`](../CHANGELOG.md).
 
-**The norm this folder obeys lives once, in the fleet standard:**
-[samirhvbr/repodocs `docs/conventions.md`](https://github.com/samirhvbr/repodocs/blob/master/docs/conventions.md)
-— §1 (queue vs. record) and §2 (this README is mandatory). Read it there; a copy
-here would be a second source of truth.
+The queue rules live in the `QUEUE-RULE` block in
+[`../CLAUDE.md`](../CLAUDE.md). This README is its English index; queue items
+are in Portuguese.
 
-## How it works
+## Work remaining
 
-- **Git-tracked on purpose — deliberately NOT in `.gitignore`.** Opening the
-  project on another machine brings the context along, which is the whole point:
-  you can *continue* from where you stopped.
-- **When an item leaves, what "produce" means, and why length is not an exit
-  condition: the `QUEUE-RULE` block in [`../CLAUDE.md`](../CLAUDE.md).** It is
-  regenerated from the fleet standard and is the source — it is not restated
-  here, and it should not be. It was a local rule in this repository for one
-  version ([ADR-009](../docs/decisions.md#adr-009--an-item-leaves-continue-only-when-it-has-been-built),
-  [ADR-010](../docs/decisions.md#adr-010--continue-is-written-in-portuguese-everything-else-is-english));
-  the fleet adopted both, and the ADRs stay as the record of where the decision
-  was made.
-- **This README is the one file here that is not queue material.** It is the
-  folder's index, so it stays in English while the items around it are written
-  in the language their author thinks in.
-- **Nothing here is source of truth about what exists.** What already exists is
-  described in [`../docs/`](../docs/); the permanent record of *when* is
-  [`../CHANGELOG.md`](../CHANGELOG.md).
-- **In a contradiction, an `ACTIVE` document in `../docs/` wins — a `PROPOSED`
-  one does not.** A `PROPOSED` document describes something that has not been
-  built, so this folder is the authority on intent for as long as both exist.
-- The **Continue** IDE also uses this folder for its own configuration.
-
-## 1. What is left here
-
-<!-- One line per item. Delete a row when the item is done — do not tick it. -->
-
-| Item | State | Who unblocks it |
+| Item | What remains | Who unblocks it |
 |---|---|---|
-| [`SCOPE_final.md`](SCOPE_final.md) — **the specification to build**, v2.0 | Partially implemented through the milestones below; remaining requirements and acceptance stay open. Supersedes the two v1 drafts below | — |
-| [`0.1d-interface.md`](0.1d-interface.md) — **the interface milestone** | **Built and on screen** as of `0.13.0`: rail, sidebar, workspace selector, tabs, note header, column, divider, status bar. It stays here until the owner has walked [`../docs/ACCEPTANCE-0.1d.md`](../docs/ACCEPTANCE-0.1d.md) on the installed `.deb` **and repeated it on the release after** — the rule they set for this milestone and every one after | Samir |
-| [`0.2-indice.md`](0.2-indice.md) — index acceptance | Implemented in `0.14.0`; retained for the installed-release owner walk and repeat on the following release in [`ACCEPTANCE-0.2.md`](../docs/ACCEPTANCE-0.2.md). The crate boundary is now ADR-039 | Samir |
-| **Milestone 0.3 — knowledge and local agents** | Implemented in `0.16.0`; owner installed-release walk and following-release repeat remain in [ACCEPTANCE-0.3.md](../docs/ACCEPTANCE-0.3.md) | Samir |
-| **Milestone 0.4 — mobile** | Foundation from [PR #2](https://github.com/samirhvbr/notes/pull/2) integrated in `0.17.0`; mobile entry points, generated projects, UI, folder adapters and device acceptance remain in [ACCEPTANCE-0.4.md](../docs/ACCEPTANCE-0.4.md) | Mobile agent / Samir |
-| **Milestone 0.5 — self-hosting** | Implemented in `0.18.0`; installed-release owner walk and following-release repeat remain in [ACCEPTANCE-0.5.md](../docs/ACCEPTANCE-0.5.md). Sync and remote MCP remain milestones 0.6/0.7 | Samir |
-| [Milestone 0.6 — sync](0.6-sync.md) | Domain, server inbox, device transfer and guarded closed-workspace creations/updates plus explicit device acknowledgments implemented through `0.20.3`; editor application of prepared receive queues in `0.20.6`. Explicit same-path uploader resolution with retained branches in `0.20.7`; explicit rename/delete resolution choices in `0.20.8`; saved same-path receiver capture/resolution in `0.20.9`, with explicit restoration after remote moves/deletions in `0.20.10` and explicit recapture in `0.20.11`; explicit receiver move/delete effects and confirmed subfolder/reconciliation pairing in `0.20.12`. Explicit deletion capture, ordered rename cycles and referenced attachments implemented in `0.20.13`; desktop scheduling and pairing/history/conflict controls implemented in `0.20.14`; explicit older-server recovery and two-device rollback regressions in `0.20.15`; saved same-path receiver publications and default-off scheduled capture in `0.20.16`; independently enabled new-note and recognized-rename capture in `0.20.17`; audited restored-client cache/outbox recovery and interrupted two-device move/delete tests in `0.20.18`; unanimous resolved-branch payload pruning on server and receiver in `0.20.19`; explicit revoked-device retirement and scoped receiver recovery in `0.20.20`; broader retention, mobile lifecycle and owner acceptance remain open | Implementation / Samir |
-| **Milestone 0.7 — remote MCP** | Next after sync: existing MCP tools over server authentication and scopes | Implementation |
-| **Milestone 0.0 — the spike** | **Open.** The application builds, is tested and lints clean; what it establishes and what it does not is [`../docs/SPIKE-0.0.md`](../docs/SPIKE-0.0.md). It stays here until the §2 checklist is marked on Arch/Wayland/NVIDIA, an iPhone and an Android device — none of which exist on the machine that wrote it | Samir |
-| [`ARCHITECTURE.md`](ARCHITECTURE.md) — my §20 proposal | **Superseded** by [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), Samir's v2.0-aligned document. Kept, not deleted: it is where the questions were asked. Three of its §5 questions are answered there; the bundle identifier is answered only for the spike | — |
-| [`scope.md`](scope.md) · [`scope.md — Aplicativo Markdown Local-First.md`](scope.md%20%E2%80%94%20Aplicativo%20Markdown%20Local-First.md) — the v1 drafts | Superseded by `SCOPE_final.md`; kept until the work they describe exists | — |
+| [0.6 — sync](0.6-sync.md) | Linear-history retention, restored app-data identity reconciliation, two-device end-to-end coverage, receiver edge cases and owner acceptance | Implementation / Samir |
+| **0.7 — remote MCP** | Expose the existing MCP capabilities through server authentication and workspace/subfolder scopes after sync is ready | Implementation |
+| **0.4 — mobile** | Turn the merged foundation into usable iOS/Android applications: entry points, generated projects, UI, folder adapters, lifecycle handling and physical-device validation | Mobile agent / Samir |
+| [0.1d — interface acceptance](0.1d-interface.md) | Installed-release owner walk and repeat on the following release | Samir |
+| [0.2 — index acceptance](0.2-indice.md) | Installed-release owner walk and repeat on the following release | Samir |
+| **0.3 — knowledge and local agents acceptance** | Installed-release owner walk and repeat on the following release; see [ACCEPTANCE-0.3.md](../docs/ACCEPTANCE-0.3.md) | Samir |
+| **0.5 — self-hosting acceptance** | Installed-release owner walk and repeat on the following release; see [ACCEPTANCE-0.5.md](../docs/ACCEPTANCE-0.5.md) | Samir |
+| **0.0 — platform spike** | Physical checks on Arch/Wayland/NVIDIA, iPhone and Android; see [SPIKE-0.0.md](../docs/SPIKE-0.0.md) | Samir |
 
 ## Current implementation order
 
-1. Finish sync 0.6: linear-history retention, restored application-data identity reconciliation, broader device tests and owner acceptance. The detailed ordered queue is in
-   [0.6-sync.md](0.6-sync.md).
-2. Remote MCP 0.7: expose the existing tools through server authentication and
-   workspace/subfolder scopes once sync is ready.
-3. Mobile 0.4 continues as its own unfinished track: Tauri entry points,
-   generated projects, mobile UI, iOS bookmarks/Android SAF, lifecycle handling
-   and physical-device validation. The merged foundation is not a usable app.
-4. Owner acceptance remains open for 0.1d, 0.2, 0.3 and 0.5: installed-release
-   walkthrough and repeat on the next release. Spike 0.0 still needs the
-   Arch/Wayland/NVIDIA, iPhone and Android device checks.
+1. Finish sync 0.6 according to [0.6-sync.md](0.6-sync.md).
+2. Build remote MCP 0.7.
+3. Continue the mobile 0.4 track.
+4. Perform owner acceptance and platform checks when the required installed
+   builds and devices are available.
 
-The superseded drafts are retained context, not new implementation priorities.
-No owner acceptance has been inferred from CI or command-line tests.
+## Where the delivered record lives
 
-## 2. Where things went
-
-<!-- When a document leaves for ../docs/, give it a row with a relative link.
-     This is what keeps "it misleads whoever opens it" from becoming "nobody
-     can find it". -->
-
-| It was here | It is now at |
+| Subject | Record |
 |---|---|
-| The repodocs skeleton's `CHANGELOG.md` header defect | **Not this repository's item** — it is a defect in [samirhvbr/repodocs](https://github.com/samirhvbr/repodocs)'s skeleton, fixed *here* at `0.1.0` and still shipping to every new repository from there. Tracked where it can be fixed, not where it was noticed |
-| Concrete index/core/filesystem boundaries | [ADR-039](../docs/decisions.md#adr-039--sqlite-stores-facts-the-core-owns-workspace-io) |
+| Product specification | [SCOPE.md](../docs/SCOPE.md) |
+| Implemented architecture | [ARCHITECTURE.md](../docs/ARCHITECTURE.md) |
+| Milestone delivery order | [roadmap.md](../docs/roadmap.md) |
+| Sync contract and implementation history | [SYNC-0.6.md](../docs/SYNC-0.6.md) |
+| Older planning drafts | [docs/history/](../docs/history/) |
+| Version-by-version history | [CHANGELOG.md](../CHANGELOG.md) |
 
-## 3. Pending decisions
-
-| Decision | Whose | Note |
-|---|---|---|
-| _(nothing open)_ | | The four decisions that were here — stack, storage model, Git, and what a `Z` means — were all answered at `0.2.0`. They are ADR-002, ADR-001, ADR-006 and [../docs/versioning.md](../docs/versioning.md) respectively. Do not re-open one here; reverse it with a new ADR |
+No manual acceptance is inferred from CI, unit tests or command-line checks.

@@ -1,8 +1,8 @@
 # Roadmap — the order the product is built in
 
-> **Status:** `ACTIVE` through 0.3, `PROPOSED` from 0.4 onward. Code through
-> local knowledge/MCP exists in 0.16.0; installed-release owner acceptance
-> remains pending. Mobile foundation is independently in PR #2.
+> **Status:** delivered through the implemented portions of 0.6 at `0.20.20`.
+> Milestones 0.0, 0.1d, 0.2, 0.3 and 0.5 retain owner acceptance; 0.4, the
+> remaining 0.6 work and 0.7 remain queued in [`.continue/`](../.continue/README.md).
 
 The stage numbers below are **product milestones, not repository versions.** The
 repository version is whatever `../version.md` says and moves per commit; a

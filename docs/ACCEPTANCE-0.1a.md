@@ -1,7 +1,7 @@
 # Acceptance — milestone 0.1a
 
 > **Status:** `ACTIVE` · Every acceptance criterion of milestone 0.1a
-> (`.continue/SCOPE_final.md` §17), against a named automated test or a
+> ([SCOPE.md](SCOPE.md) §17), against a named automated test or a
 > documented manual step. **A criterion with neither is listed as not met.**
 > One was, until `0.7.5`: §5's full-disk half is now automated and the table
 > below reads `met` throughout.
@@ -212,7 +212,7 @@ that needs no MSVC toolchain.
 
 ## Scope items
 
-Everything listed under 0.1a in `.continue/SCOPE_final.md` §17:
+Everything listed under 0.1a in [SCOPE.md](SCOPE.md) §17:
 
 | Item | Where |
 |---|---|

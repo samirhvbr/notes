@@ -1134,7 +1134,7 @@ be wrong in both directions.
 ## ADR-037 — Milestone 0.1d exists: the interface is a milestone, not a finishing pass
 
 **Status:** `ACCEPTED` · 08/09/2026 · owner's decision, recorded here ·
-amends `.continue/SCOPE_final.md` §17
+amends [SCOPE.md](SCOPE.md) §17
 
 **Context.** 0.1a, 0.1b and 0.1c built a Markdown editor and its behaviour is
 tested on four platforms. What none of them built is an *interface*: the window
@@ -1182,7 +1182,7 @@ many applications never get one: there is always an index to build.
 ## ADR-038 — Graph view leaves "out of scope" and becomes 0.3, after backlinks
 
 **Status:** `ACCEPTED` · 08/09/2026 · owner's decision, recorded here ·
-amends `.continue/SCOPE_final.md` §18
+amends [SCOPE.md](SCOPE.md) §18
 
 **Context.** §18 listed graph view among the features that do not enter "until
 further order", beside canvas, plugins and a marketplace. The owner has given

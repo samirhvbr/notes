@@ -57,5 +57,5 @@ directory.
 
 ## Where the real thing is specified
 
-[`../../.continue/SCOPE_final.md`](../../.continue/SCOPE_final.md) and
+[`../../docs/SCOPE.md`](../../docs/SCOPE.md) and
 [`../../docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).

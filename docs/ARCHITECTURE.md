@@ -19,7 +19,7 @@ distribution pipeline. It is what an agent needs before writing 0.1a code.
 
 It is not the roadmap (`docs/roadmap.md`), not the product rules
 (`docs/product.md`; until built, the Portuguese scope v2.0 in
-`.continue/SCOPE_final.md`), and not the security policy —
+[SCOPE.md](SCOPE.md)), and not the security policy —
 **`docs/security.md` is normative and wins any conflict with this file.**
 
 This file replaces the earlier scope-v1 architecture page, kept as
@@ -960,7 +960,7 @@ user's, and the app tolerates them by falling back to defaults.
 
 ## 17.1 Points where this document overrides the Portuguese scope
 
-Resolved by the owner on 07/09/2026; `.continue/SCOPE_final.md` is not edited
+Resolved by the owner on 07/09/2026; [SCOPE.md](SCOPE.md) is not edited
 (the queue is not rewritten), so the divergence is recorded here.
 
 | Scope | Says | This document | Resolution |

@@ -1,5 +1,10 @@
 # SCOPE — Notes (nome provisório)
 
+> **Status:** `ACTIVE` for requirements implemented through `0.20.20`; later
+> requirements remain planned. This is the permanent product specification.
+> The executable queue is [`.continue/`](../.continue/README.md); completed
+> contracts and evidence are indexed in [README.md](README.md).
+
 Aplicativo de notas Markdown local-first. Documento **v2.0** — 2026-09-07.
 
 Este documento fecha o *quê* e as decisões que, se ficarem abertas, viram rewrite. O *como* (tipos, schema, contrato dos commands) vai para o `ARCHITECTURE.md`; mudança de decisão fechada aqui exige ADR.

@@ -10,7 +10,7 @@
 > **Every UI row starts unverified and is only ticked once the owner has seen
 > it.** Nothing here is ticked by the machine that wrote it.
 
-Milestone 0.1c is `.continue/SCOPE_final.md` §17: quick open · global search by
+Milestone 0.1c is [SCOPE.md](SCOPE.md) §17: quick open · global search by
 scan · tabs with restoration · command palette · minimum settings · `en`/`pt-BR`.
 
 **Not in this milestone**, and not pulled forward: `notes-index`, SQLite, FTS5

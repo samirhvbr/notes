@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.21 - keep implementation records out of the queue
+
+Move the durable product specification and superseded planning drafts from
+`.continue/` into `docs/`, reduce the interface, index and sync queue files to
+their actual unfinished work, and make the documentation index point to the
+delivered records. The queue now lists only implementation, physical-device and
+owner-acceptance work that remains open.
+
 ## 0.20.20 - recover scoped receiver queues
 
 Allow `recover-client` to audit and extend a restored scoped queue across

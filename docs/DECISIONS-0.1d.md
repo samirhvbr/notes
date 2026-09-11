@@ -5,11 +5,10 @@
 > `ARCHITECTURE.md`, and carry on*. One row per decision: what was decided,
 > which gap it closed, and **what the alternative is** if the owner disagrees.
 >
-> `.continue/0.1d-interface.md` §10 leaves three questions open by name and asks
-> for them to be decided by the rule and recorded here. They are D-03, D-04 and
-> D-05.
+> The original interface plan left three questions open by name and asked for
+> them to be decided by the rule and recorded here. They are D-03, D-04 and D-05.
 >
-> §5 of that document also sets this milestone's boundary: *"O core não muda por
+> The plan also sets this milestone's boundary: *"O core não muda por
 > causa da cara."* Where the interface met a gap in the core, it is written down
 > here rather than fixed on the way past — D-01 is the first of those.
 
@@ -24,7 +23,7 @@ save, reconcile and the preview's asset path. Every mutation is written
 immediately.
 
 **Why it came up.** The workspace selector switches with `close` then `open`
-(`.continue/0.1d-interface.md` §4.2), and the question was whether the third
+(the workspace-selector design), and the question was whether the third
 path — `open_workspace` called while another workspace is open, which replaces
 `self.open` outright — could drop an unwritten registry change. With the
 debounce as documented, it could: identity is **operational** state
@@ -62,7 +61,7 @@ and `@testing-library/jest-dom` join the **dev** dependencies. `vitest`'s
 environment stays `node` by default and a file opts in with
 `// @vitest-environment jsdom` on its first line.
 
-**Gap closed.** `.continue/0.1d-interface.md` §7 asks, in its own words, for
+**Gap closed.** The original acceptance asked, in its own words, for
 *"teste de componente com foco rastreado"* on the menus. Focus is not a
 property a reducer has. A pure state machine can prove which row is *selected*;
 only a document can prove that closing the menu put focus back on the button
@@ -89,7 +88,7 @@ not test the thing that breaks.
 
 **Decided.** ~700 px, in CSS, not in `settings.json`.
 
-**Gap closed.** `.continue/0.1d-interface.md` §10, first question.
+**Gap closed.** The original plan's first open question.
 
 **Why.** The rule is *the simplest option compatible with the scope*, and the
 scope's settings list is closed: §17 puts *"configurações mínimas (font, line
@@ -112,7 +111,7 @@ other four. It is a schema bump and it is the kind of setting people ask for.
 **Decided.** One vertical divider, two panes side by side. No vertical split, no
 grid, no more than two panes.
 
-**Gap closed.** `.continue/0.1d-interface.md` §10, second question.
+**Gap closed.** The original plan's second open question.
 
 **Why.** Split already exists as a *view mode* — source, preview, split
 (scope §9, `ADR-030`) — and 0.1d's job is to give it a real divider and a second
@@ -132,7 +131,7 @@ feature and it is several times this milestone's frontend work.
 **Decided.** With no workspace open the window shows the Welcome screen, not the
 rail-and-empty-sidebar shell.
 
-**Gap closed.** `.continue/0.1d-interface.md` §10, third question.
+**Gap closed.** The original plan's third open question.
 
 **Why.** Every control in the shell operates on a workspace: the explorer lists
 one, the tab bar holds notes from one, the note header acts on one, the status
@@ -155,7 +154,7 @@ costs an empty state for every panel in the shell rather than one screen.
 **Decided.** `stores/history.ts` keeps a single list of visited paths with a
 cursor. The note header's two arrows move it.
 
-**Gap closed.** `.continue/0.1d-interface.md` §4.3 says *"voltar/avançar
+**Gap closed.** The original interface plan says *"voltar/avançar
 (histórico da aba)"*, and a per-tab history does not have anything to hold.
 
 **Why.** A tab in this application is a **note**, not a viewport (ADR-030).
@@ -184,7 +183,7 @@ focus ring and to disabled controls, and an **8/255 sRGB step** to the three
 dark surfaces and the divider. It also fails the build on any hex written
 outside `:root`.
 
-**Gap closed.** `.continue/0.1d-interface.md` §7 asks for *"contraste AA de cada
+**Gap closed.** The original acceptance asks for *"contraste AA de cada
 par texto/superfície, verificado por script"*. Writing it revealed that "AA" is
 not one number and does not answer every question the palette raises.
 
