@@ -157,7 +157,9 @@ idempotent publication and incremental metadata pages. The 0.20.0 device client 
 workspace is closed and draft-free. The 0.20.3 block explicitly acknowledges
 durable application receipts to the server. The 0.20.5 core API supports
 exclusive open sessions with observed buffer checks. In 0.20.6 the app applies prepared receive queues behind an editing barrier.
-Conflicts, broader pairing and transport UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
+In 0.20.7 upload queues resolve same-path divergence explicitly while preserving
+both histories; receive-folder and rename/delete conflicts remain open.
+Broader pairing and transport/conflict UI remain open; see [SYNC-0.6.md](SYNC-0.6.md).
 
 ## 0.7 — AI
 

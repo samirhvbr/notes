@@ -75,9 +75,10 @@ impl Transport for Peer {
                 Err(Error::Conflict)
             };
         }
-        self.journal
-            .commit(p.revision.clone(), p.expected)
-            .map_err(|_| Error::Conflict)?;
+        let mut next = self.journal.clone();
+        notes_sync::transfer::append(&mut next, p).map_err(|_| Error::Conflict)?;
+        next.validate().map_err(|_| Error::Conflict)?;
+        self.journal = next;
         self.log.push(p.clone());
         if std::mem::take(&mut self.lose_receipt) {
             Err(Error::Offline)
@@ -513,4 +514,104 @@ fn editor_refuses_dirty_buffers_without_reloading_or_advancing() {
     assert!(report.refreshed.is_empty());
     assert_eq!(receiver.status().unwrap().applied_revisions, 1);
     assert_eq!(fs::read(target.join("test.md")).unwrap(), b"first");
+}
+
+#[test]
+fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use notes_sync::{transfer::Branch, Revision};
+    let (dir, root, store, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"base").unwrap();
+    store.stage().unwrap();
+    store.transfer(&mut peer).unwrap();
+    let base = peer.log[0].clone();
+    fs::write(root.join("test.md"), b"local offline").unwrap();
+    store.stage().unwrap();
+    let remote_publication = |parent: &Publication, bytes: &[u8]| Publication {
+        workspace: parent.workspace,
+        expected: Some(parent.revision.id),
+        revision: Revision::new(
+            parent.revision.note,
+            [parent.revision.id].into(),
+            Uuid::new_v4(),
+            parent.revision.path.clone(),
+            Some(notes_model::ContentHash::from_bytes(
+                *blake3::hash(bytes).as_bytes(),
+            )),
+        ),
+        content_base64: Some(STANDARD.encode(bytes)),
+        branches: vec![],
+    };
+    let remote = remote_publication(&base, b"remote");
+    peer.publish(&remote).unwrap();
+    assert!(matches!(store.transfer(&mut peer), Err(Error::Conflict)));
+    store.fetch(&mut peer).unwrap();
+    let conflicts = store.conflicts().unwrap();
+    let notes_sync::Action::Conflict {
+        local,
+        remote: remote_id,
+        ..
+    } = conflicts[0]
+    else {
+        panic!("missing divergence")
+    };
+    assert_eq!(remote_id, remote.revision.id);
+    let result = dir.path().join("chosen.md");
+    let chosen = b"\xef\xbb\xbfchosen\r\n\xff";
+    fs::write(&result, chosen).unwrap();
+    let before = fs::read(dir.path().join("state/client.json")).unwrap();
+    assert!(store.resolve(Uuid::new_v4(), remote_id, &result).is_err());
+    assert_eq!(
+        fs::read(dir.path().join("state/client.json")).unwrap(),
+        before
+    );
+    let merge = store.resolve(local, remote_id, &result).unwrap();
+    assert_eq!(fs::read(root.join("test.md")).unwrap(), b"local offline");
+    // A peer races after the operator chose its observed heads. Never overwrite it.
+    let newer = remote_publication(&remote, b"remote advanced");
+    peer.publish(&newer).unwrap();
+    assert!(matches!(store.transfer(&mut peer), Err(Error::Conflict)));
+    store.fetch(&mut peer).unwrap();
+    let final_id = store.resolve(merge, newer.revision.id, &result).unwrap();
+    assert_eq!(
+        fs::read(store.export(local).unwrap()).unwrap(),
+        b"local offline"
+    );
+    let queued = fs::read(dir.path().join("state/client.json")).unwrap();
+    peer.lose_receipt = true;
+    assert!(matches!(store.transfer(&mut peer), Err(Error::Offline)));
+    assert_eq!(
+        fs::read(dir.path().join("state/client.json")).unwrap(),
+        queued
+    );
+    let restarted = Store::open(&dir.path().join("state")).unwrap();
+    restarted.transfer(&mut peer).unwrap();
+    assert_eq!(restarted.status().unwrap().pending, 0);
+    assert!(restarted.conflicts().unwrap().is_empty());
+    let envelope = peer.log.last().unwrap();
+    assert_eq!(envelope.revision.id, final_id);
+    assert_eq!(envelope.revision.parents, [merge, newer.revision.id].into());
+    assert!(envelope.branches.iter().any(
+        |Branch {
+             revision,
+             content_base64,
+         }| revision.id == local
+            && content_base64.as_deref() == Some(&STANDARD.encode(b"local offline"))
+    ));
+    assert!(peer.journal.is_ancestor(local, final_id));
+    assert!(peer.journal.is_ancestor(remote_id, final_id));
+    // A receive client writes only accepted heads, never transient branch values.
+    let target = dir.path().join("receiver-notes");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    assert_eq!(
+        receiver.apply(&dir.path().join("receiver-data")).unwrap(),
+        4
+    );
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), chosen);
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 4);
 }

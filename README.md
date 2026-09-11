@@ -156,3 +156,8 @@ Version 0.20.6 connects prepared receive queues to the app. Close the current
 workspace, choose **Open received workspace**, select the CLI state directory,
 and use **Apply received revisions**. Dirty buffers/drafts are refused and input
 stays paused until a safe reload after uncertain outcomes. See [the app workflow](docs/SYNC-0.6.md#apply-a-received-queue-in-the-app-0206).
+
+Version 0.20.7 adds explicit same-path conflict resolution to upload queues:
+`fetch`, `conflicts`, `export`, then `resolve` with both observed revision UUIDs
+and a chosen result file. Both histories survive; publication still refuses a
+stale remote head. See [the resolution workflow](docs/SYNC-0.6.md#explicit-divergent-resolution-0207).

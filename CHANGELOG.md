@@ -8,6 +8,16 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.7 - expose explicit conflict resolution in the device CLI
+
+Add independent fetch, conflict inspection, branch export and file-based resolve
+commands so a blocked upload queue can retain both histories and resume after an
+explicit choice. End-to-end CLI smoke verifies publication and guarded receiver
+application without replacing uploader source files. Regression tests cover a
+second remote race, lost response, restart and export of retained original bytes.
+Update the protocol contract and remaining queue. The full local gate passed;
+installed-release owner acceptance remains open.
+
 ## 0.20.7 - preserve divergent history in explicit resolutions
 
 Accept bounded branch history atomically with an explicit two-parent resolution.

@@ -1623,3 +1623,33 @@ Transport, acknowledgment, pairing initialization and credentials remain CLI
 operations. Multi-buffer editing must extend the inventory before enabling this
 workflow. No automatic flush, draft deletion, overwrite-on-conflict, network
 listener, or server acknowledgment follows from the UI action.
+
+
+## ADR-051 — Import divergent history only with its explicit resolution
+
+**Status:** ACTIVE · Implemented in 0.20.7; extends ADR-045's inbox protocol.
+
+**Context.** A rejected linear publication remains queued, but its peer cannot
+resolve with two parents until the divergent history is available. Importing a
+branch as a head would choose a winner before the operator resolves it.
+
+**Decision.** Add an optional bounded `branches` field to immutable publications.
+The branches retain original revisions and bytes; only the enclosing two-parent
+resolution changes the head, under the existing expected-head compare-and-set.
+Parents precede children, every imported revision belongs to that note and leads
+to the divergent parent, and graph/hash/capacity checks include retained history.
+Authorize every imported mutation and historical path. Import plus resolution is
+one vault transaction; stale, forbidden or invalid submissions change nothing.
+
+The client provides independent fetch, conflict inspection, private export and
+explicit file-based resolution. It durably replaces selected pending envelopes
+only when their original histories and bytes are retained in the new envelope
+or already verified in the remote journal. No source write or network operation
+is implicit in choosing result bytes. Receive application keeps its existing
+revision guards and applies only accepted heads, not imported branch values.
+
+**Consequences.** Linear wire JSON stays unchanged; old readers reject envelopes
+with branches. Both sides must be upgraded. Branches share existing byte/revision
+quotas and have a 20-revision per-envelope limit. Whole-workspace upload queues
+support same-path live-note resolutions; rename/delete and receive-folder local
+conflicts, pairing and editor conflict controls remain open.

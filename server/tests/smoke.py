@@ -196,6 +196,40 @@ with tempfile.TemporaryDirectory() as temp:
         assert blocked.returncode != 0
         assert (target / "original.md").read_bytes() == b"local work"
         assert json.loads(run([client, "status", str(receiver)]))["applied_revisions"] == 1
+        # A second device publishes an independent successor while the uploader
+        # is offline. Its bytes can equal its parent; causal divergence still
+        # requires an explicit two-parent resolution.
+        parent = json.loads((sender / "client.json").read_text())["received"][-1]
+        other = json.loads(json.dumps(parent))
+        other["expected"] = parent["revision"]["id"]
+        other["revision"]["parents"] = [other["expected"]]
+        other["revision"]["id"] = str(uuid.uuid4())
+        other["revision"]["device"] = str(uuid.uuid4())
+        (source / "original.md").write_bytes(b"offline divergent edit")
+        run([client, "stage", str(sender)])
+        client_sync = "/v1/workspaces/client/sync/revisions"
+        assert request("POST", client_sync, other, {"Authorization": "Bearer " + client_token})[0] == 200
+        refused = subprocess.run([client, "transfer", str(sender), str(client_secret)], env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert refused.returncode != 0
+        run([client, "fetch", str(sender), str(client_secret)])
+        conflict = json.loads(run([client, "conflicts", str(sender)]))[0]
+        assert conflict["action"] == "conflict"
+        chosen = temp / "resolution.md"
+        chosen.write_bytes(b"chosen result\r\n")
+        run([client, "resolve", str(sender), conflict["local"], conflict["remote"], str(chosen)])
+        assert (source / "original.md").read_bytes() == b"offline divergent edit"
+        run([client, "transfer", str(sender), str(client_secret)])
+        assert json.loads(run([client, "conflicts", str(sender)])) == []
+        merged = json.loads((sender / "client.json").read_text())["received"][-1]
+        assert set(merged["revision"]["parents"]) == {conflict["local"], conflict["remote"]}
+        assert merged["branches"][0]["revision"]["id"] == conflict["local"]
+        fresh_root = temp / "resolved-source"
+        fresh_root.mkdir()
+        fresh_state = temp / "resolved-state"
+        run([client, "init-receive", str(fresh_state), str(fresh_root), base, "client", str(client_secret), "--allow-private"])
+        run([client, "fetch", str(fresh_state), str(client_secret)])
+        run([client, "apply", str(fresh_state), str(temp / "resolved-app-data")])
+        assert (fresh_root / "original.md").read_bytes() == chosen.read_bytes()
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

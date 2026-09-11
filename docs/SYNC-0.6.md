@@ -133,10 +133,10 @@ The authenticated OpenAPI contract describes three operations:
   `content_base64`. The response says `stored: true, applied: false`.
 
 `expected` is the observed inbox head UUID, or null for a new note. All parents
-must already be stored. A stale head, reused UUID with different facts, foreign
+must already be stored or included in the bounded resolution envelope described
+below (0.20.7). A stale head, reused UUID with different facts, foreign
 workspace UUID or exact path collision returns 409. The device must retain its
-unaccepted revision locally; this endpoint does not yet import divergent
-branches. Retrying the identical accepted publication succeeds even after the
+unaccepted revision locally until an explicit resolution retains that history. Retrying the identical accepted publication succeeds even after the
 head advances, without moving the head backward. No timestamp chooses a winner.
 
 Read permission is mandatory. Genesis and resurrection also require Create;
@@ -342,8 +342,9 @@ true only when that count is nonzero and equals the received count. It is **not*
 a live disk scan or an assertion that later local edits match the remote. These
 receipts are distinct from server `stored: true, applied: false` responses; the explicit command below reports them to the server.
 
-Renames, tombstones, divergence resolution, dirty-buffer integration and active
-editor application are still refused/queued. Do not delete drafts or local
+This closed-workspace command refuses renames, tombstones and local divergence.
+The later sections describe editor application (0.20.6) and explicit uploader
+resolution (0.20.7); neither bypasses these source guards. Do not delete drafts or local
 notes merely to bypass a refusal. Core tests cover byte preservation, failed
 intent persistence, interrupted receipt recovery, drafts and a real second
 process holding the workspace open. Client tests cover checkpoint progress,
@@ -468,7 +469,7 @@ or missing reloads keep the barrier in place; the UI never treats a missing
 response as proof that nothing was written. After recovery, apply again to
 resume the durable checkpoint. No draft is saved/discarded merely to enable sync.
 
-Renames, tombstones, divergent branches, broader pairing, credentials/UI transfer,
+Renames, tombstones, editor conflict controls, broader pairing, credentials/UI transfer,
 scheduling and automatic acknowledgments remain queued. This delivery adds app
 controls for prepared receive queues, not a complete sync settings interface.
 
@@ -481,3 +482,59 @@ uncertain responses, failed/missing recovery reloads, pending IPC and compositio
 The isolated Tauri development process launched, but the native automation
 surface did not expose its unbundled window. This is not installed GUI or owner
 acceptance; those checks remain open.
+
+## Explicit divergent resolution (0.20.7)
+
+An upload queue can now resolve divergent, live revisions of the same note at
+the same path. `fetch` receives one page without publishing, so a rejected
+outbox cannot block inspection of the peer. `conflicts` compares the saved local
+head with the received history; it does not capture dirty or unsaved buffers.
+
+```sh
+notes-sync-client fetch /private/sender /private/token.secret
+notes-sync-client conflicts /private/sender
+notes-sync-client export /private/sender REMOTE_UUID
+notes-sync-client export /private/sender LOCAL_UUID
+notes-sync-client resolve /private/sender LOCAL_UUID REMOTE_UUID /private/chosen.md
+notes-sync-client transfer /private/sender /private/token.secret
+```
+
+Fetch repeatedly for histories longer than 20 publications. Both UUIDs must be
+the currently observed heads in this queue. The result file supplies the exact
+chosen bytes, including its encoding and line endings. `resolve` only stages a
+publication: it does not write the source folder or contact the server. Keep the
+saved source consistent with the chosen result before staging again; `stage`
+continues to capture the actual saved files as new edits. No automated source
+replacement follows from resolving an upload queue.
+
+The publication has both heads as parents and `expected` remains the observed
+remote head. An optional `branches` array retains original divergent revisions
+and their content, in parent-before-child order. Imported branches cannot become
+heads independently: all must belong to the same note and lead to the other
+parent of the resolution. The two parents must diverge. The transaction checks
+the full graph, hashes, path collisions and authorization for every imported
+edge before persisting anything. A hidden historical path, missing mutation
+permission or stale head refuses the entire envelope. No clock selects a winner.
+
+At most 20 branch revisions and 8 MiB of aggregate decoded content (branches plus
+result) fit one envelope. All revisions count toward the server's 10,000-revision
+limit, and retained content counts toward its 32 MiB bound. Pages retain their
+append cursor: only the final resolution is a new publication; fetching it
+returns the retained branches too. Receivers import their history, apply only the
+accepted result through existing source guards, and acknowledge that result.
+`export` can recover retained branch bytes by UUID as well as pending/received
+results; it still refuses to overwrite an existing private export file.
+
+A race leaves the staged resolution intact. Fetch the new remote head and make
+another explicit choice; the former resolution and its branches are retained
+inside the replacement envelope. A lost response retries the same UUID and
+bytes, even after restart. No pending bytes are removed before the replacement
+client state has been persisted atomically.
+
+Linear publication JSON is unchanged. Upgrade server and clients before sending
+resolutions: older readers reject the nonempty `branches` field rather than
+silently dropping history. Keep a backup of operational state before downgrading.
+The CLI does not yet resolve rename/delete conflicts or local edits in a receive
+folder; conflict UI and broader pairing remain queued. HTTP and client tests
+cover stale races, lost receipts, restart, branch scope/hash rejection and source
+application; TCP/HTTPS smoke exercises the actual CLI commands end to end.

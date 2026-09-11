@@ -1072,12 +1072,14 @@ application uses core guards and a separate durable client checkpoint; shared
 workspace activity leases protect open cooperating processes (ADR-047).
 In 0.20.3, a separate client command sends durable application receipts through
 the authenticated server inbox, with credential-bound devices and a resumable
-local acknowledgment cursor (ADR-048). Active-editor application and app integration remain open. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
+local acknowledgment cursor (ADR-048). Later sections describe active-editor
+application and explicit uploader conflict resolution. ADR-044 and [SYNC-0.6.md](SYNC-0.6.md) define this implemented boundary.
 
 
 The 0.20.5 core seam admits an exclusive workspace before buffers are opened and
 accepts observed buffer snapshots for guarded application without closing that
-session (ADR-049). This is not wired to Tauri/React or the received-queue client.
+session (ADR-049). Version 0.20.5 supplied only the core host API; 0.20.6 wires
+it to Tauri/React and the received-queue client.
 The host must freeze editing and reload clean buffers; shared sessions cannot
 apply or upgrade in place. See the host contract in [SYNC-0.6.md](SYNC-0.6.md).
 
@@ -1088,3 +1090,9 @@ there is no second workspace service for app application. React's synchronous
 input/IPC barrier spans snapshot, bounded application and verified reload, with
 a persistent recovery control after unknown outcomes (ADR-050). The current
 single-buffer editor supplies its complete inventory; Split is a preview.
+
+The 0.20.7 shared publication contract adds bounded divergent branch envelopes.
+Server and client replay the same history rules from `notes-sync::transfer`.
+Only the enclosing resolution advances a head; branch bytes remain retrievable
+inside its immutable publication. The uploader's explicit resolve command stages
+chosen bytes and both observed parents without touching source files (ADR-051).

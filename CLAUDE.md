@@ -80,7 +80,9 @@ one-line version of both:
   0.20.1 adds guarded closed-workspace application of creations/updates.
   0.20.3 adds device acknowledgments; 0.20.5 adds the exclusive open-session
   core API. In 0.20.6 the app applies prepared receive queues with an editing
-  barrier. Conflict flows, broader pairing and transport UI remain open. Owner verification on installed
+  barrier. In 0.20.7 upload queues support explicit same-path divergent
+  resolution with retained branches. Receive-folder conflicts, broader pairing
+  and transport UI remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).
 - **Never do, without an ADR that reverses the one named:**
