@@ -8,6 +8,13 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.10 - restore receiver conflicts at their applied path
+
+Allow explicit live restoration at the receiver's applied path when the remote
+history renamed or deleted the note. Retain both branches and supersede remote
+ancestor revisions without applying their source effects or sending false
+receipts. Implicit path choices and local move/delete effects remain refused.
+
 ## 0.20.9 - expose the receiver conflict recovery workflow
 
 Add capture-conflict and apply-resolution commands for saved same-path receiver

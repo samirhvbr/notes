@@ -946,3 +946,115 @@ fn receiver_resolution_defers_interleaved_notes_without_false_receipts() {
     assert!(f.receiver.status().unwrap().applied);
     assert_eq!(f.receiver.acknowledge(&mut f.peer).unwrap(), 2);
 }
+
+#[test]
+fn receiver_restores_remote_moves_and_deletions_only_at_the_applied_path() {
+    for deleted in [false, true] {
+        for capture_first in [false, true] {
+            let mut f = receiver_conflict_fixture();
+            let early = capture_first.then(|| {
+                f.receiver
+                    .capture_receiver_conflict(&f.data, f.note)
+                    .unwrap()
+            });
+            let mut remote = f.peer.log.last().unwrap().clone();
+            remote.expected = Some(remote.revision.id);
+            remote.revision.parents = [remote.revision.id].into();
+            remote.revision.id = Uuid::new_v4();
+            remote.revision.path = notes_model::RelPath::parse("renamed.md").unwrap();
+            if deleted {
+                remote.revision.content = None;
+                remote.content_base64 = None;
+            }
+            f.peer.publish(&remote).unwrap();
+            f.receiver.fetch(&mut f.peer).unwrap();
+            let branch = early.unwrap_or_else(|| {
+                f.receiver
+                    .capture_receiver_conflict(&f.data, f.note)
+                    .unwrap()
+            });
+            let result = f.dir.path().join("result.md");
+            fs::write(&result, b"restored\r\n").unwrap();
+            fs::write(f.target.join("renamed.md"), b"unrelated local file").unwrap();
+            let state_path = f.dir.path().join("receiver/client.json");
+            let before = fs::read(&state_path).unwrap();
+            assert!(f
+                .receiver
+                .resolve(branch, remote.revision.id, &result)
+                .is_err());
+            assert!(f
+                .receiver
+                .resolve_to(
+                    branch,
+                    remote.revision.id,
+                    notes_model::RelPath::parse("renamed.md").unwrap(),
+                    &result
+                )
+                .is_err());
+            assert!(f
+                .receiver
+                .resolve_delete(
+                    branch,
+                    remote.revision.id,
+                    notes_model::RelPath::parse("test.md").unwrap()
+                )
+                .is_err());
+            assert_eq!(fs::read(&state_path).unwrap(), before);
+            let id = f
+                .receiver
+                .resolve_to(
+                    branch,
+                    remote.revision.id,
+                    notes_model::RelPath::parse("test.md").unwrap(),
+                    &result,
+                )
+                .unwrap();
+            assert_eq!(
+                fs::read(f.receiver.export(branch).unwrap()).unwrap(),
+                b"local receiver edit"
+            );
+            f.peer.lose_receipt = true;
+            assert!(matches!(
+                f.receiver.transfer(&mut f.peer),
+                Err(Error::Offline)
+            ));
+            f.receiver.transfer(&mut f.peer).unwrap();
+            assert_eq!(
+                f.peer.log.last().unwrap().revision.parents,
+                [branch, remote.revision.id].into()
+            );
+            assert_eq!(
+                fs::read(f.target.join("test.md")).unwrap(),
+                b"local receiver edit"
+            );
+            let checkpoint = f.dir.path().join("receiver/application.json");
+            let mut recovery: serde_json::Value =
+                serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+            recovery["resolution_intent"] = serde_json::json!(id);
+            assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 1);
+            let modified = fs::metadata(f.target.join("test.md"))
+                .unwrap()
+                .modified()
+                .unwrap();
+            fs::write(&checkpoint, serde_json::to_vec(&recovery).unwrap()).unwrap();
+            let restarted = Store::open(&f.dir.path().join("receiver")).unwrap();
+            assert_eq!(restarted.apply_resolution(&f.data, id).unwrap(), 1);
+            assert_eq!(
+                fs::metadata(f.target.join("test.md"))
+                    .unwrap()
+                    .modified()
+                    .unwrap(),
+                modified
+            );
+            assert_eq!(fs::read(f.target.join("test.md")).unwrap(), b"restored\r\n");
+            assert_eq!(
+                fs::read(f.target.join("renamed.md")).unwrap(),
+                b"unrelated local file"
+            );
+            assert_eq!(restarted.status().unwrap().superseded_revisions, 2);
+            assert_eq!(restarted.acknowledge(&mut f.peer).unwrap(), 1);
+            assert_eq!(f.peer.acknowledged, vec![f.peer.log[0].revision.id, id]);
+            assert_eq!(restarted.apply(&f.data).unwrap(), 0);
+        }
+    }
+}

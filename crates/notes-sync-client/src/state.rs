@@ -475,9 +475,7 @@ impl Store {
             }
             if capture.note != a.note
                 || a.path != capture.path
-                || b.path != capture.path
                 || a.content.is_none()
-                || b.content.is_none()
                 || result.is_none()
                 || path.as_ref().is_some_and(|p| p != &capture.path)
                 || !state.local.is_ancestor(capture.branch, local)
@@ -1025,11 +1023,7 @@ impl Store {
         }
         let previous = app.notes.get(&note).ok_or(Error::Invalid)?;
         let remote = incoming.head(note).ok_or(Error::Invalid)?;
-        if remote.id == previous.revision
-            || remote.path != previous.path
-            || remote.content.is_none()
-            || !incoming.is_ancestor(previous.revision, remote.id)
-        {
+        if remote.id == previous.revision || !incoming.is_ancestor(previous.revision, remote.id) {
             return Err(Error::Conflict);
         }
         let (local, bytes) = notes_core::sync::capture_conflict(
@@ -1123,10 +1117,7 @@ impl Store {
             .collect();
         if pending.iter().any(|i| {
             let q = &state.received[*i];
-            q.revision.note == capture.note
-                && (q.revision.path != capture.path
-                    || q.revision.content.is_none()
-                    || !incoming.is_ancestor(q.revision.id, id))
+            q.revision.note == capture.note && !incoming.is_ancestor(q.revision.id, id)
         }) {
             return Err(Error::Conflict);
         }
