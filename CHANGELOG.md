@@ -8,6 +8,11 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.12 - apply receiver move and deletion resolutions recoverably
+
+Apply explicit receiver path/tombstone choices under the captured source guard,
+with durable intent before filesystem effects and retained original history.
+
 ## 0.20.11 - expose explicit receiver recapture in the CLI
 
 Add recapture-conflict with the pinned application data directory. Document

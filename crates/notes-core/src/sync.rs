@@ -461,3 +461,165 @@ pub fn capture_conflict(
         bytes,
     ))
 }
+
+/// Closed-workspace move/delete resolution. The caller retains captured bytes
+/// and persists intent before any filesystem effect. A move creates its chosen
+/// destination without replacement before removing the guarded source.
+#[allow(clippy::too_many_arguments)]
+pub fn apply_resolution_effect(
+    root: &Path,
+    data: &Path,
+    from: &RelPath,
+    to: &RelPath,
+    bytes: Option<&[u8]>,
+    expected: &Applied,
+    retry: bool,
+    prepare: impl FnOnce() -> Result<()>,
+) -> Result<Option<Applied>> {
+    if let (true, Some(raw)) = (from == to, bytes) {
+        return apply_received(root, data, to, raw, Some(expected), retry, prepare).map(Some);
+    }
+    validate_state_location(&[root], data)?;
+    let mut service = WorkspaceService::with_data_dir(data)?;
+    service.record_visits = false;
+    service.open_sync_workspace(root)?;
+    let blocked = || CoreError::Unsupported {
+        cap: "sync move/delete precondition failed".into(),
+    };
+    for path in [from, to] {
+        if !path.is_note() || path.as_str().split('/').any(crate::ignore::is_hidden_name) {
+            return Err(blocked());
+        }
+        for name in path.as_str().split('/') {
+            notes_model::portable_name(name).map_err(|_| blocked())?;
+        }
+    }
+    if bytes.is_some_and(|b| b.len() > 8 * 1024 * 1024) {
+        return Err(blocked());
+    }
+    let dir = service.open()?.dir.clone();
+    let mut lock = crate::lock::acquire(&crate::paths::lock_file(&dir))?;
+    lock.with(|| {
+        let open = service.open()?;
+        if open.read_only || !open.sync_exclusive || !open.fs.caps().atomic_replace {
+            return Err(blocked());
+        }
+        match std::fs::read_dir(crate::paths::drafts_dir(&dir)) {
+            Ok(mut entries) => {
+                if entries.next().is_some() {
+                    return Err(blocked());
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(CoreError::io("sync_drafts", "state", &e)),
+        }
+        let read = |path: &RelPath| -> Result<Option<notes_model::BaseRev>> {
+            match service.open()?.fs.stat(path) {
+                Ok(stat) => {
+                    if stat.kind != EntryKind::File || stat.size > 8 * 1024 * 1024 {
+                        return Err(blocked());
+                    }
+                    let raw = service.open()?.fs.read(path)?;
+                    Ok(Some(notes_model::BaseRev {
+                        size: stat.size,
+                        mtime_ns: stat.mtime_ns,
+                        hash: notes_fs::hash(&raw),
+                    }))
+                }
+                Err(CoreError::NotFound { .. })
+                | Err(CoreError::Io {
+                    kind: notes_model::IoKind::NotFound,
+                    ..
+                }) => Ok(None),
+                Err(e) => Err(e),
+            }
+        };
+        let source = read(from)?;
+        if let Some(current) = &source {
+            if *current != expected.base_rev
+                || service
+                    .open()?
+                    .registry
+                    .record(expected.note_id)
+                    .is_none_or(|r| r.path != *from)
+            {
+                return Err(blocked());
+            }
+        } else if !retry {
+            return Err(blocked());
+        }
+        let destination = if bytes.is_some() { read(to)? } else { None };
+        if let Some(raw) = bytes {
+            if destination
+                .as_ref()
+                .is_some_and(|r| !retry || r.hash != notes_fs::hash(raw))
+            {
+                return Err(blocked());
+            }
+            if source.is_none() && destination.is_none() {
+                return Err(blocked());
+            }
+            if destination.is_none() {
+                // Existing parent folders only: no partial directory topology.
+                let parent = to.parent().ok_or_else(blocked)?;
+                if service.open()?.fs.stat(&parent)?.kind != EntryKind::Dir {
+                    return Err(blocked());
+                }
+                service.check_name(to.file_name(), to)?;
+            }
+        }
+        prepare()?;
+        if let Some(raw) = bytes {
+            if destination.is_none() {
+                service.open()?.fs.create_new(to, raw)?;
+            }
+        }
+        // Recheck after destination creation; a third-party edit stays intact.
+        if source.is_some() {
+            let stat = service.open()?.fs.stat(from)?;
+            if stat.size != expected.base_rev.size
+                || stat.mtime_ns != expected.base_rev.mtime_ns
+                || notes_fs::hash(&service.open()?.fs.read(from)?) != expected.base_rev.hash
+            {
+                return Err(blocked());
+            }
+            service.open()?.fs.delete(from)?;
+        }
+        let result = if let Some(raw) = bytes {
+            let stat = service.open()?.fs.stat(to)?;
+            let hash = notes_fs::hash(&service.open()?.fs.read(to)?);
+            if hash != notes_fs::hash(raw) {
+                return Err(blocked());
+            }
+            let registry = &mut service.open_mut()?.registry;
+            if registry
+                .record(expected.note_id)
+                .is_none_or(|r| r.path != *to)
+            {
+                registry.forget(to);
+                registry.repath(from, to);
+            }
+            let id = registry.observe(to, &stat, hash.clone());
+            if id != expected.note_id {
+                return Err(blocked());
+            }
+            Some(Applied {
+                note_id: id,
+                base_rev: notes_model::BaseRev {
+                    size: stat.size,
+                    mtime_ns: stat.mtime_ns,
+                    hash,
+                },
+            })
+        } else {
+            service.open_mut()?.registry.forget(from);
+            None
+        };
+        crate::state::store(
+            &crate::paths::registry_file(&dir),
+            &service.open()?.registry,
+        )?;
+        service.invalidate_paths();
+        Ok(result)
+    })?
+}

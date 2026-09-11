@@ -883,7 +883,7 @@ fn receiver_capture_refuses_open_workspaces_drafts_and_later_local_edits() {
         .resolve_delete(
             branch,
             f.remote,
-            notes_model::RelPath::parse("test.md").unwrap()
+            notes_model::RelPath::parse(".private/test.md").unwrap()
         )
         .is_err());
     let id = f.receiver.resolve(branch, f.remote, &result).unwrap();
@@ -988,7 +988,7 @@ fn receiver_restores_remote_moves_and_deletions_only_at_the_applied_path() {
                 .resolve_to(
                     branch,
                     remote.revision.id,
-                    notes_model::RelPath::parse("renamed.md").unwrap(),
+                    notes_model::RelPath::parse(".private/renamed.md").unwrap(),
                     &result
                 )
                 .is_err());
@@ -997,7 +997,7 @@ fn receiver_restores_remote_moves_and_deletions_only_at_the_applied_path() {
                 .resolve_delete(
                     branch,
                     remote.revision.id,
-                    notes_model::RelPath::parse("test.md").unwrap()
+                    notes_model::RelPath::parse(".private/test.md").unwrap()
                 )
                 .is_err());
             assert_eq!(fs::read(&state_path).unwrap(), before);
@@ -1214,4 +1214,61 @@ fn receiver_recapture_reserves_resolution_capacity_without_discarding_history() 
         fs::read(f.target.join("test.md")).unwrap(),
         b"over capacity"
     );
+}
+
+#[test]
+fn receiver_move_delete_resolution_recovers_and_preserves_source_on_collision() {
+    for deleted in [false, true] {
+        let mut f = receiver_conflict_fixture();
+        let branch = f
+            .receiver
+            .capture_receiver_conflict(&f.data, f.note)
+            .unwrap();
+        let path = notes_model::RelPath::parse("moved.md").unwrap();
+        let result = f.dir.path().join("result.md");
+        fs::write(&result, b"chosen moved bytes").unwrap();
+        let id = if deleted {
+            f.receiver.resolve_delete(branch, f.remote, path).unwrap()
+        } else {
+            f.receiver
+                .resolve_to(branch, f.remote, path, &result)
+                .unwrap()
+        };
+        f.receiver.transfer(&mut f.peer).unwrap();
+        let checkpoint = f.dir.path().join("receiver/application.json");
+        let mut recovery: serde_json::Value =
+            serde_json::from_slice(&fs::read(&checkpoint).unwrap()).unwrap();
+        if !deleted {
+            fs::write(f.target.join("moved.md"), b"occupied").unwrap();
+            assert!(f.receiver.apply_resolution(&f.data, id).is_err());
+            assert_eq!(
+                fs::read(f.target.join("test.md")).unwrap(),
+                b"local receiver edit"
+            );
+            assert_eq!(fs::read(f.target.join("moved.md")).unwrap(), b"occupied");
+            fs::remove_file(f.target.join("moved.md")).unwrap();
+        }
+        recovery["resolution_intent"] = serde_json::json!(id);
+        if !deleted {
+            // Recover after destination creation, before guarded source removal.
+            fs::write(f.target.join("moved.md"), b"chosen moved bytes").unwrap();
+            fs::write(&checkpoint, serde_json::to_vec(&recovery).unwrap()).unwrap();
+        }
+        assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 1);
+        assert!(!f.target.join("test.md").exists());
+        if !deleted {
+            assert_eq!(
+                fs::read(f.target.join("moved.md")).unwrap(),
+                b"chosen moved bytes"
+            );
+        }
+        fs::write(&checkpoint, serde_json::to_vec(&recovery).unwrap()).unwrap();
+        assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 1);
+        assert_eq!(f.receiver.apply_resolution(&f.data, id).unwrap(), 0);
+        assert_eq!(f.receiver.acknowledge(&mut f.peer).unwrap(), 1);
+        assert_eq!(
+            fs::read(f.receiver.export(branch).unwrap()).unwrap(),
+            b"local receiver edit"
+        );
+    }
 }

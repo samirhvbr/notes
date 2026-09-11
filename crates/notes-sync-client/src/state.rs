@@ -474,13 +474,7 @@ impl Store {
             if app.intent.is_some() || app.resolution_intent.is_some() {
                 return Err(Error::Invalid);
             }
-            if capture.note != a.note
-                || a.path != capture.path
-                || a.content.is_none()
-                || result.is_none()
-                || path.as_ref().is_some_and(|p| p != &capture.path)
-                || !state.local.is_ancestor(capture.branch, local)
-            {
+            if capture.note != a.note || !state.local.is_ancestor(capture.branch, local) {
                 return Err(Error::Conflict);
             }
         }
@@ -619,6 +613,8 @@ impl Store {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ApplicationReceipt {
+    #[serde(default)]
+    deleted: bool,
     revision: Uuid,
     path: notes_model::RelPath,
     local: notes_core::sync::Applied,
@@ -685,7 +681,8 @@ impl Store {
                 app.notes.get(id).is_none_or(|n| {
                     n.revision != r.id
                         || n.path != r.path
-                        || r.content.as_ref() != Some(&n.local.base_rev.hash)
+                        || n.deleted != r.content.is_none()
+                        || (!n.deleted && r.content.as_ref() != Some(&n.local.base_rev.hash))
                 })
             })
         {
@@ -822,7 +819,7 @@ impl Store {
                 &state.source,
                 &p.revision.path,
                 &bytes,
-                previous.as_ref().map(|n| &n.local),
+                previous.as_ref().filter(|n| !n.deleted).map(|n| &n.local),
                 retry,
                 &mut || {
                     app.intent = Some(p.revision.id);
@@ -839,6 +836,7 @@ impl Store {
             app.notes.insert(
                 p.revision.note,
                 ApplicationReceipt {
+                    deleted: false,
                     revision: p.revision.id,
                     path: p.revision.path.clone(),
                     local: applied,
@@ -1179,8 +1177,6 @@ impl Store {
             .ok_or(Error::Invalid)?;
         let p = &state.received[index];
         if p.revision.note != capture.note
-            || p.revision.path != capture.path
-            || p.revision.content.is_none()
             || state.local.heads.get(&capture.note) != Some(&id)
             || !incoming.is_ancestor(capture.branch, id)
         {
@@ -1207,12 +1203,13 @@ impl Store {
         }
         let bytes = content(p).map_err(|_| Error::Invalid)?;
         let retry = app.resolution_intent == Some(id);
-        let applied = notes_core::sync::apply_received(
+        let applied = notes_core::sync::apply_resolution_effect(
             &state.source,
             &data,
             &capture.path,
-            &bytes,
-            Some(&capture.local),
+            &p.revision.path,
+            p.revision.content.as_ref().map(|_| bytes.as_slice()),
+            &capture.local,
             retry,
             || {
                 app.resolution_intent = Some(id);
@@ -1235,9 +1232,10 @@ impl Store {
         app.notes.insert(
             capture.note,
             ApplicationReceipt {
+                deleted: applied.is_none(),
                 revision: id,
-                path: capture.path.clone(),
-                local: applied,
+                path: p.revision.path.clone(),
+                local: applied.unwrap_or_else(|| capture.local.clone()),
             },
         );
         app.resolution_intent = None;
