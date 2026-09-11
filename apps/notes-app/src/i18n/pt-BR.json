@@ -283,5 +283,7 @@
   "device.recapture": "Recapturar edições salvas mais recentes",
   "device.pause": "Pausar transporte",
   "device.reason.saved_receiver_changes": "Alterações locais salvas diferem da versão recebida. Ative a captura de edições para notas sincronizadas no mesmo caminho ou use a resolução explícita de conflitos.",
-  "device.captureSaved": "Publicar edições salvas de notas sincronizadas (mesmo caminho, workspace fechado)"
+  "device.captureSaved": "Publicar edições salvas de notas sincronizadas (mesmo caminho, workspace fechado)",
+  "device.captureNew": "Publicar novas notas locais (workspace fechado)",
+  "device.captureRenames": "Publicar renames locais reconhecidos (workspace fechado)"
 }

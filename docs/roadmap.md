@@ -171,6 +171,7 @@ subfolder/reconciliation pairing. Version 0.20.13 adds explicit deletion capture
 referenced binary bundles with guarded recovery. Version 0.20.14 adds desktop background transfer with conservative conditions
 and pairing/history/conflict controls. Version 0.20.16 adds saved same-path
 receiver publications and opt-in scheduled capture with the workspace closed.
+Version 0.20.17 adds independent new-note and recognized-rename capture.
 Retention and device acceptance remain pending.
 
 ## 0.7 — AI

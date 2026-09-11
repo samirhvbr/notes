@@ -1815,3 +1815,19 @@ resolution. Desktop capture is a separate default-off setting and remains bounde
 by the transfer scheduler. This extends transport while preserving ADR-058's
 separation from source application. New paths, missing paths and open buffers do
 not authorize automatic creation, movement or deletion.
+
+
+## ADR-061 — Receiver additions and renames require independent capture choices
+
+**Status:** ACTIVE · Implemented in 0.20.17.
+
+**Decision.** Extend ADR-060 with separate default-off choices for new local notes
+and recognized renames. Presence of a new path alone does not grant publication
+authority; existing saved-edit settings do not enable either choice. Use a closed,
+draft-free core inventory to correlate identities, retain a causal root for a new
+note and the original remote identity for a recognized rename. Confirm published
+bytes through reads only. An empty receiver may bind application data without
+source effects; a nonempty cache still requires explicit application. Missing
+tracked notes block creation guesses, and occupied destinations never authorize
+overwriting. Retention, deletion capture, ambiguous moves and open editor buffers
+remain outside these choices.

@@ -1015,3 +1015,61 @@ the native/HTTPS transport smoke sends an edit back from a scoped receiver and
 applies it on another receive queue. UI tests check the default-off setting.
 Continuous capture of new notes, renames/deletions and open editor buffers, plus
 physical mobile lifecycle validation, remain queued.
+
+
+### New notes and recognized receiver renames (0.20.17)
+
+Receiver capture now has three independent choices: saved same-path edits, new
+notes, and recognized renames. Each defaults off in transfer settings, including
+when reading settings from an earlier release. Enabling saved edits alone does
+not publish new files or rename revisions. Each transfer pass still captures at
+most one change, under closed-workspace, identity, draft and size guards.
+
+A new local note becomes a fresh remote note identity with no parent revision.
+Its actual local identity is retained separately for confirmation and later
+edits. Missing tracked notes block new-note capture, since an unrecognized move
+must not silently become a duplicate identity. Remote path collisions retain the
+outbox and both files; capture does not overwrite or choose an owner. A nonempty
+received cache must be explicitly applied first. An empty receive queue can bind
+application data without any file effects; the desktop does this when new-note
+capture is enabled. CLI users can bind it with an initial empty `apply` call.
+
+```sh
+notes-sync-client apply /absolute/queue /absolute/app-data
+notes-sync-client stage-receiver-new /absolute/queue
+notes-sync-client transfer /absolute/queue /absolute/credential.secret
+notes-sync-client confirm-receiver /absolute/queue
+```
+
+For renames, the core correlates a closed inventory with its existing identities.
+Only a recognized note at a different path is captured. The publication retains
+its remote note identity and uses the last applied head as its parent. Occupied
+remote destinations are refused. Missing notes are never inferred as deletions.
+Rename cycles, ambiguous identity changes and path-collision resolution remain
+separate work. Markdown references are not rewritten; referenced attachments
+must be readable at the new path and are captured with their actual bytes.
+
+```sh
+notes-sync-client stage-receiver-renames /absolute/queue
+notes-sync-client transfer /absolute/queue /absolute/credential.secret
+notes-sync-client confirm-receiver /absolute/queue
+```
+
+Confirmation reads the current source and updates receipts without moving or
+rewriting files. A new note edited after publication is recaptured as a successor.
+With rename capture enabled, a second recognized move after publication is also
+retained before confirmation; superseded intermediate revisions get no false
+application acknowledgment. An unpublished pending change is transferred first,
+never mutated in place. A divergent remote revision still requires explicit
+resolution. Later changes not yet confirmed remain protected by the source guards.
+
+The capture's prior applied revision is optional for a new causal root. Existing
+queues with a prior revision deserialize unchanged; older binaries may refuse
+new-root captures and must not be made to load them by deleting state fields.
+Server publication format, permissions, scope and retention policy are unchanged.
+
+Tests cover empty enrollment, original-byte/attachment retention, lost receipts,
+new-note edits during transfer, identity-preserving renames, a second move before
+confirmation, independent desktop options, draft/open-workspace refusal and
+retained path collisions. Native and HTTPS smoke tests publish new scoped notes
+and renames from one receiver and explicitly apply both on another device.

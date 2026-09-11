@@ -93,7 +93,8 @@ one-line version of both:
   pairing/history/conflict controls. Version 0.20.15 adds explicit older-server
   recovery from retained unscoped history. Version 0.20.16 adds saved same-path
   receiver publications and separate opt-in scheduled capture with the workspace
-  closed. Retention, mobile lifecycle and
+  closed. Version 0.20.17 adds independent new-note and recognized-rename capture.
+  Retention, mobile lifecycle and
   broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).

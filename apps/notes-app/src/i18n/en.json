@@ -283,5 +283,7 @@
   "device.recapture": "Recapture newer saved edits",
   "device.pause": "Pause transfer",
   "device.reason.saved_receiver_changes": "Saved local changes differ from the received version. Enable saved-edit capture for synchronized notes at the same path, or use explicit conflict resolution.",
-  "device.captureSaved": "Publish saved edits to synchronized notes (same path, workspace closed)"
+  "device.captureSaved": "Publish saved edits to synchronized notes (same path, workspace closed)",
+  "device.captureNew": "Publish new local notes (workspace closed)",
+  "device.captureRenames": "Publish recognized local renames (workspace closed)"
 }

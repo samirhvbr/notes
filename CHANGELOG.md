@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.17 - expose receiver file capture options
+
+Expose independent default-off desktop options and CLI commands for capturing
+new receiver notes and recognized local renames. Keep source application
+explicit. Scoped TCP smoke verified both changes on another receiver; 82
+frontend tests, native/Windows clippy, generated bindings and the remaining
+workspace suite passed. The full local gate failed only the existing watcher
+startup timing test; its assertion remains unchanged.
+
 ## 0.20.17 - retain receiver file changes
 
 Retain local-only receiver notes as durable causal roots and recognized moves

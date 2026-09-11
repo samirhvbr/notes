@@ -441,6 +441,23 @@ with tempfile.TemporaryDirectory() as temp:
         run([client, "apply-bundle", str(observer_queue), str(observer_data)])
         assert (observer_root / "same.md").read_bytes() == b"receiver edit\r\n"
         assert (observer_root / "asset.bin").read_bytes() == bytes([0, 255, 1])
+        (ps_target / "new.md").write_bytes(b"new from receiver\r\n")
+        run([client, "stage-receiver-new", str(ps_receiver)])
+        run([client, "transfer", str(ps_receiver), str(scoped_secret)])
+        run([client, "confirm-receiver", str(ps_receiver)])
+        run([client, "fetch", str(observer_queue), str(scoped_secret)])
+        run([client, "apply-bundle", str(observer_queue), str(observer_data)])
+        assert (observer_root / "new.md").read_bytes() == b"new from receiver\r\n"
+        (ps_target / "new.md").rename(ps_target / "moved.md")
+        moved_mtime = (ps_target / "moved.md").stat().st_mtime_ns
+        run([client, "stage-receiver-renames", str(ps_receiver)])
+        run([client, "transfer", str(ps_receiver), str(scoped_secret)])
+        run([client, "confirm-receiver", str(ps_receiver)])
+        assert (ps_target / "moved.md").stat().st_mtime_ns == moved_mtime
+        run([client, "fetch", str(observer_queue), str(scoped_secret)])
+        run([client, "apply-bundle", str(observer_queue), str(observer_data)])
+        assert not (observer_root / "new.md").exists()
+        assert (observer_root / "moved.md").read_bytes() == b"new from receiver\r\n"
         assert client_token not in (sender / "client.json").read_text()
         credentials = json.loads(cli("token", "list"))
         cli("token", "revoke", credentials[0]["id"])

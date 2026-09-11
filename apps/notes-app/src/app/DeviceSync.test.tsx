@@ -20,7 +20,7 @@ it("reconnects with scheduling disabled and preserves conservative limits",async
   fireEvent.change(screen.getByRole("textbox",{name:/Private sync queue folder/}),{target:{value:"/private/queue"}});
   fireEvent.change(screen.getByRole("textbox",{name:/Credential file/}),{target:{value:"/private/token"}});
   fireEvent.click(screen.getByRole("button",{name:"Reconnect existing queue"}));
-  await waitFor(()=>expect(ipc.deviceConfigure).toHaveBeenCalledWith({state_dir:"/private/queue",token_file:"/private/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false}));
+  await waitFor(()=>expect(ipc.deviceConfigure).toHaveBeenCalledWith({state_dir:"/private/queue",token_file:"/private/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false,capture_new:false,capture_renames:false}));
   expect(ipc.deviceRun).not.toHaveBeenCalled();
 });
 it("requires review and refuses to confirm divergent pairing rows",async()=>{
@@ -34,12 +34,12 @@ it("requires review and refuses to confirm divergent pairing rows",async()=>{
 });
 it("does not apply received files while an editor workspace is open",async()=>{
   useWorkspace.setState({info:{id:"workspace",root:"/notes"} as ipc.WorkspaceInfo});
-  vi.mocked(ipc.deviceStatus).mockResolvedValue({...empty,receive:true,phase:"pending",unapplied:2,connection:{state_dir:"/queue",token_file:"/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false}});
+  vi.mocked(ipc.deviceStatus).mockResolvedValue({...empty,receive:true,phase:"pending",unapplied:2,connection:{state_dir:"/queue",token_file:"/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false,capture_new:false,capture_renames:false}});
   show();const apply=await screen.findByRole("button",{name:"Apply received files"});expect(apply).toBeDisabled();fireEvent.click(apply);expect(ipc.deviceApply).not.toHaveBeenCalled();
 });
 
 it("requires a separate opt-in to capture saved receiver edits",async()=>{
-  vi.mocked(ipc.deviceStatus).mockResolvedValue({...empty,receive:true,connection:{state_dir:"/queue",token_file:"/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false}});
+  vi.mocked(ipc.deviceStatus).mockResolvedValue({...empty,receive:true,connection:{state_dir:"/queue",token_file:"/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false,capture_new:false,capture_renames:false}});
   show();
   const capture=await screen.findByRole("checkbox",{name:/Publish saved edits/});
   expect(capture).not.toBeChecked();
@@ -47,4 +47,15 @@ it("requires a separate opt-in to capture saved receiver edits",async()=>{
   fireEvent.click(screen.getByRole("button",{name:"Save transfer settings"}));
   await waitFor(()=>expect(ipc.deviceConfigure).toHaveBeenCalledWith(expect.objectContaining({capture_saved:true,enabled:false})));
   expect(ipc.deviceRun).not.toHaveBeenCalled();
+});
+
+it("keeps new-note and rename capture independent from saved edits",async()=>{
+  vi.mocked(ipc.deviceStatus).mockResolvedValue({...empty,receive:true,connection:{state_dir:"/queue",token_file:"/token",enabled:false,interval_seconds:300,allow_metered:false,allow_battery:false,capture_saved:false,capture_new:false,capture_renames:false}});
+  show();
+  const newNotes=await screen.findByRole("checkbox",{name:/Publish new local notes/});
+  const renames=screen.getByRole("checkbox",{name:/Publish recognized local renames/});
+  expect(newNotes).not.toBeChecked();expect(renames).not.toBeChecked();
+  fireEvent.click(newNotes);fireEvent.click(renames);
+  fireEvent.click(screen.getByRole("button",{name:"Save transfer settings"}));
+  await waitFor(()=>expect(ipc.deviceConfigure).toHaveBeenCalledWith(expect.objectContaining({capture_saved:false,capture_new:true,capture_renames:true,enabled:false})));
 });

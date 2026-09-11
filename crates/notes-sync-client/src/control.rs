@@ -31,6 +31,10 @@ pub struct SyncConnection {
     pub allow_battery: bool,
     #[serde(default)]
     pub capture_saved: bool,
+    #[serde(default)]
+    pub capture_new: bool,
+    #[serde(default)]
+    pub capture_renames: bool,
 }
 #[derive(Clone, Default, Serialize, Deserialize, TS)]
 #[serde(deny_unknown_fields)]
@@ -337,8 +341,11 @@ impl Controller {
             let store = Store::open(Path::new(&c.state_dir))?;
             if store.source_mode()?.1 == Mode::Upload {
                 store.stage()?;
-            } else if c.capture_saved {
-                store.stage_receiver_edits()?;
+            } else if c.capture_saved || c.capture_new || c.capture_renames {
+                if c.capture_new {
+                    store.bind_empty_receiver(&self.data)?;
+                }
+                store.stage_receiver_changes(c.capture_saved, c.capture_new, c.capture_renames)?;
             }
             let mut remote = Budget::new(connect(&store, &c)?);
             remote.check = Some(Box::new(|| {
@@ -369,7 +376,7 @@ impl Controller {
                 return Err(Error::Conflict);
             }
             if store.source_mode()?.1 == Mode::Receive {
-                if c.capture_saved {
+                if c.capture_saved || c.capture_new || c.capture_renames {
                     store.confirm_receiver_edit()?;
                 }
                 store.acknowledge(&mut remote)?;
@@ -693,14 +700,18 @@ mod tests {
             allow_metered: false,
             allow_battery: false,
             capture_saved: false,
+            capture_new: false,
+            capture_renames: false,
         }
     }
     #[test]
     fn older_connections_do_not_enable_receiver_capture() {
         let mut value = serde_json::to_value(config(Path::new("/private"))).unwrap();
-        value.as_object_mut().unwrap().remove("capture_saved");
+        for key in ["capture_saved", "capture_new", "capture_renames"] {
+            value.as_object_mut().unwrap().remove(key);
+        }
         let older: SyncConnection = serde_json::from_value(value).unwrap();
-        assert!(!older.capture_saved);
+        assert!(!older.capture_saved && !older.capture_new && !older.capture_renames);
     }
     #[test]
     fn conservative_conditions_and_backoff_are_bounded() {
@@ -866,6 +877,25 @@ mod tests {
             controller.snapshot().unwrap().phase,
             DevicePhase::Current
         ));
+        fs::write(target.join("new.md"), b"new local note").unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 3);
+        let mut expanded = controller.config().unwrap();
+        expanded.capture_saved = false;
+        expanded.capture_new = true;
+        controller.configure(expanded).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 4);
+        let created_note = peer.borrow().log[3].revision.note;
+        fs::rename(target.join("new.md"), target.join("renamed.md")).unwrap();
+        let mut expanded = controller.config().unwrap();
+        expanded.capture_new = false;
+        expanded.capture_renames = true;
+        controller.configure(expanded).unwrap();
+        controller.run_with(true, |_, _| Ok(&peer)).unwrap();
+        assert_eq!(peer.borrow().log.len(), 5);
+        assert_eq!(peer.borrow().log[4].revision.note, created_note);
+        assert_eq!(peer.borrow().log[4].revision.path.as_str(), "renamed.md");
         controller
             .run_with(true, |_, _| {
                 controller.pause().unwrap();
