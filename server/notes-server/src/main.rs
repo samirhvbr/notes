@@ -25,7 +25,7 @@ async fn run() -> Result<()> {
         );
     }
     if args.is_empty() || args[0] == "help" {
-        println!("notes-server serve\nnotes-server workspace create NAME\nnotes-server token create LABEL WORKSPACE SCOPE PERMISSIONS OUTPUT [review]\nnotes-server token list\nnotes-server token revoke UUID\nnotes-server sync-prune WORKSPACE\nnotes-server backup ARCHIVE\nnotes-server restore ARCHIVE NEW_DIRECTORY [FINAL_DATA_ROOT]\nSet NOTES_SERVER_DATA to an absolute directory. Permissions: comma-separated read,create,update,move,delete,search. Use '-' for no permissions; scope '.' means the workspace root. Token secrets are written only to a new private OUTPUT file. Stop the server and back up its data before sync-prune.");
+        println!("notes-server serve\nnotes-server workspace create NAME\nnotes-server token create LABEL WORKSPACE SCOPE PERMISSIONS OUTPUT [review]\nnotes-server token list\nnotes-server token revoke UUID\nnotes-server sync-device-list WORKSPACE\nnotes-server sync-retire-device WORKSPACE DEVICE_UUID\nnotes-server sync-prune WORKSPACE\nnotes-server backup ARCHIVE\nnotes-server restore ARCHIVE NEW_DIRECTORY [FINAL_DATA_ROOT]\nSet NOTES_SERVER_DATA to an absolute directory. Permissions: comma-separated read,create,update,move,delete,search. Use '-' for no permissions; scope '.' means the workspace root. Token secrets are written only to a new private OUTPUT file. Stop the server and back up its data before sync maintenance. Revoke the owning credential before retiring a device.");
         return Ok(());
     }
     let data = admin::data_root(&path)?;
@@ -117,6 +117,28 @@ async fn run() -> Result<()> {
             println!("{}", serde_json::to_string_pretty(&rows)?);
         }
         ["token", "revoke", id] => admin::revoke(&data, id.parse()?)?,
+        ["sync-device-list", workspace] => {
+            let devices =
+                sync::devices(&data, workspace).map_err(|_| "sync devices could not be listed")?;
+            println!("{}", serde_json::to_string_pretty(&devices)?);
+        }
+        ["sync-retire-device", workspace, device] => {
+            let mut lock = backup::instance_lock(&data)?;
+            let _guard = lock
+                .try_write()
+                .map_err(|_| "server or backup already running")?;
+            let report = sync::retire_device(&data, workspace, device.parse()?)
+                .map_err(|_| "sync device could not be retired")?;
+            admin::audit(
+                &data,
+                "operator",
+                "local",
+                "sync_device_retire",
+                "ok",
+                &uuid::Uuid::new_v4().to_string(),
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         ["sync-prune", workspace] => {
             let mut lock = backup::instance_lock(&data)?;
             let _guard = lock

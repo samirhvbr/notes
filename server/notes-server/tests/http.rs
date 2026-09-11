@@ -1222,6 +1222,131 @@ fn acknowledged_resolution_pruning_keeps_graph_tombstones_and_cursors() {
     ));
 }
 
+#[test]
+fn device_retirement_requires_revoked_owner_and_preserves_other_receipts() {
+    let f = Fixture::new(&all());
+    let first = admin::authenticate(&admin::load(&f.data).unwrap(), f.token.trim()).unwrap();
+    let workspace = notes_server::sync::page(&f.data, &first, 0, 20)
+        .unwrap()
+        .workspace;
+    let publication = publication(workspace, None, "allowed/test.md", Some(b"retained"));
+    notes_server::sync::publish(&f.data, &first, publication.clone()).unwrap();
+    let first_device = uuid::Uuid::new_v4();
+    notes_server::sync::acknowledge(
+        &f.data,
+        &first,
+        &notes_sync::transfer::ApplicationAcknowledgment {
+            workspace,
+            device: first_device,
+            revision: publication.revision.id,
+        },
+    )
+    .unwrap();
+
+    let second_secret = f._dir.path().join("second-device.secret");
+    admin::create_token(
+        &f.data,
+        "second-device".into(),
+        "home".into(),
+        RelPath::parse("allowed").unwrap(),
+        all().into_iter().collect(),
+        false,
+        &second_secret,
+    )
+    .unwrap();
+    let second_token = fs::read_to_string(second_secret).unwrap();
+    let second = admin::authenticate(&admin::load(&f.data).unwrap(), second_token.trim()).unwrap();
+    let second_device = uuid::Uuid::new_v4();
+    notes_server::sync::acknowledge(
+        &f.data,
+        &second,
+        &notes_sync::transfer::ApplicationAcknowledgment {
+            workspace,
+            device: second_device,
+            revision: publication.revision.id,
+        },
+    )
+    .unwrap();
+    let devices = notes_server::sync::devices(&f.data, "home").unwrap();
+    assert_eq!(devices.len(), 2);
+    assert!(devices.iter().all(|device| !device.credential_revoked));
+    assert!(devices.iter().all(|device| device.receipts == 1));
+    let listed = std::process::Command::new(env!("CARGO_BIN_EXE_notes-server"))
+        .env("NOTES_SERVER_DATA", &f.data)
+        .args(["sync-device-list", "home"])
+        .output()
+        .unwrap();
+    assert!(listed.status.success());
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&listed.stdout)
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    let before = fs::read(f.data.join("sync/home/vault.json")).unwrap();
+    assert!(matches!(
+        notes_server::sync::retire_device(&f.data, "home", first_device),
+        Err(notes_server::sync::Error::Forbidden)
+    ));
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        before
+    );
+
+    admin::revoke(&f.data, f.id).unwrap();
+    assert!(
+        notes_server::sync::devices(&f.data, "home")
+            .unwrap()
+            .iter()
+            .find(|device| device.device == first_device)
+            .unwrap()
+            .credential_revoked
+    );
+    let mut instance = backup::instance_lock(&f.data).unwrap();
+    let guard = instance.write().unwrap();
+    let blocked = std::process::Command::new(env!("CARGO_BIN_EXE_notes-server"))
+        .env("NOTES_SERVER_DATA", &f.data)
+        .args(["sync-retire-device", "home", &first_device.to_string()])
+        .output()
+        .unwrap();
+    assert!(!blocked.status.success());
+    drop(guard);
+    assert_eq!(
+        fs::read(f.data.join("sync/home/vault.json")).unwrap(),
+        before
+    );
+
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_notes-server"))
+        .env("NOTES_SERVER_DATA", &f.data)
+        .args(["sync-retire-device", "home", &first_device.to_string()])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(report["retired_device"], first_device.to_string());
+    assert_eq!(report["removed_receipts"], 1);
+    assert_eq!(report["retained_devices"], 1);
+    assert!(matches!(
+        notes_server::sync::retire_device(&f.data, "home", first_device),
+        Err(notes_server::sync::Error::Missing)
+    ));
+    assert!(matches!(
+        notes_server::sync::retire_device(&f.data, "home", second_device),
+        Err(notes_server::sync::Error::Forbidden)
+    ));
+    assert_eq!(
+        notes_server::sync::prune_resolved(&f.data, "home")
+            .unwrap()
+            .known_devices,
+        1
+    );
+    assert!(fs::read_to_string(f.data.join("audit/events.jsonl"))
+        .unwrap()
+        .contains("sync_device_retire"));
+}
+
 #[tokio::test]
 async fn sync_resolution_rejects_hidden_branches_forgery_and_unrelated_history() {
     let f = Fixture::new(&all());

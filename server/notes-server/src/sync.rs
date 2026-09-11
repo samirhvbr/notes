@@ -260,6 +260,82 @@ pub struct PruneReport {
     pub known_devices: usize,
 }
 
+#[derive(Debug, Serialize)]
+pub struct RetireDeviceReport {
+    pub retired_device: Uuid,
+    pub removed_receipts: usize,
+    pub retained_devices: usize,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeviceStatus {
+    pub device: Uuid,
+    pub credential: Uuid,
+    pub credential_revoked: bool,
+    pub receipts: usize,
+}
+
+pub fn devices(root: &Path, workspace: &str) -> Result<Vec<DeviceStatus>> {
+    let credentials = admin::load(root).map_err(|_| Error::Storage)?;
+    transaction_workspace(root, workspace, |v| {
+        let rows = v
+            .device_owners
+            .iter()
+            .map(|(device, credential)| DeviceStatus {
+                device: *device,
+                credential: *credential,
+                credential_revoked: credentials
+                    .credentials
+                    .iter()
+                    .find(|candidate| candidate.id == *credential)
+                    .is_some_and(|candidate| candidate.revoked),
+                receipts: v
+                    .journal
+                    .acknowledgments
+                    .get(device)
+                    .map_or(0, BTreeMap::len),
+            })
+            .collect();
+        Ok((rows, false))
+    })
+}
+
+/// Permanently remove one device's application receipts after the credential
+/// that owned it has been revoked. The offline operator lock prevents a live
+/// server from racing the retirement or allowing that credential to re-enroll.
+pub fn retire_device(root: &Path, workspace: &str, device: Uuid) -> Result<RetireDeviceReport> {
+    if device.is_nil() {
+        return Err(Error::Invalid);
+    }
+    let credentials = admin::load(root).map_err(|_| Error::Storage)?;
+    transaction_workspace(root, workspace, |v| {
+        let owner = *v.device_owners.get(&device).ok_or(Error::Missing)?;
+        if !credentials
+            .credentials
+            .iter()
+            .any(|credential| credential.id == owner && credential.revoked)
+        {
+            return Err(Error::Forbidden);
+        }
+        let removed_receipts = v
+            .journal
+            .acknowledgments
+            .remove(&device)
+            .ok_or(Error::Storage)?
+            .len();
+        v.device_owners.remove(&device).ok_or(Error::Storage)?;
+        v.validate()?;
+        Ok((
+            RetireDeviceReport {
+                retired_device: device,
+                removed_receipts,
+                retained_devices: v.device_owners.len(),
+            },
+            true,
+        ))
+    })
+}
+
 /// Drop only imported branch payloads whose enclosing resolution has been
 /// acknowledged by every known device. Revision metadata and tombstones stay
 /// in the graph, so ancestry and future compare-and-set checks remain intact.

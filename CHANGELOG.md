@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.20 - retire revoked sync devices explicitly
+
+Add offline operator commands to list sync devices and permanently retire one
+device after its owning credential is revoked. Remove only that device's
+application receipts, retain every revision and other device receipt, and keep
+the operation under the server instance lock with an audit event. All 28 server
+integration tests passed; native Clippy passed for the server and sync client.
+
 ## 0.20.19 - compact acknowledged receiver branches
 
 Compact a receiver's retained divergent branch payloads only after its local
