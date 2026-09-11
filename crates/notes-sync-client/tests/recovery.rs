@@ -810,6 +810,7 @@ fn receiver_resolution_skips_intermediate_writes_and_acknowledges_only_real_rece
     assert!(restarted
         .capture_receiver_conflict(&f.data, f.note)
         .is_err());
+    assert!(restarted.recapture_receiver_conflict(&f.data).is_err());
     assert_eq!(restarted.apply_resolution(&f.data, id).unwrap(), 1);
     assert_eq!(
         fs::metadata(f.target.join("test.md"))
@@ -1057,4 +1058,160 @@ fn receiver_restores_remote_moves_and_deletions_only_at_the_applied_path() {
             assert_eq!(restarted.apply(&f.data).unwrap(), 0);
         }
     }
+}
+
+#[test]
+fn receiver_recapture_preserves_old_bytes_before_choice_and_after_publication() {
+    for published in [false, true] {
+        let mut f = receiver_conflict_fixture();
+        let original = f
+            .receiver
+            .capture_receiver_conflict(&f.data, f.note)
+            .unwrap();
+        let result = f.dir.path().join("result.md");
+        fs::write(&result, b"old choice").unwrap();
+        let mut remote = f.remote;
+        let checkpoint = f.dir.path().join("receiver/application.json");
+        let receipts = fs::read(&checkpoint).unwrap();
+        let state_path = f.dir.path().join("receiver/client.json");
+        if published {
+            let chosen = f.receiver.resolve(original, remote, &result).unwrap();
+            fs::write(f.target.join("test.md"), b"second edit").unwrap();
+            let before = fs::read(&state_path).unwrap();
+            assert!(f.receiver.recapture_receiver_conflict(&f.data).is_err());
+            assert_eq!(fs::read(&state_path).unwrap(), before);
+            f.peer.lose_receipt = true;
+            assert!(matches!(
+                f.receiver.transfer(&mut f.peer),
+                Err(Error::Offline)
+            ));
+            assert!(f.receiver.recapture_receiver_conflict(&f.data).is_err());
+            f.receiver.transfer(&mut f.peer).unwrap();
+            remote = chosen;
+            assert!(f.receiver.apply_resolution(&f.data, chosen).is_err());
+        }
+        fs::write(f.target.join("test.md"), b"second edit").unwrap();
+        let second = f.receiver.recapture_receiver_conflict(&f.data).unwrap();
+        assert_eq!(fs::read(&checkpoint).unwrap(), receipts);
+        assert_eq!(
+            fs::read(f.receiver.export(original).unwrap()).unwrap(),
+            b"local receiver edit"
+        );
+        assert_eq!(
+            fs::read(f.receiver.export(second).unwrap()).unwrap(),
+            b"second edit"
+        );
+        let before = fs::read(&state_path).unwrap();
+        assert!(f.receiver.recapture_receiver_conflict(&f.data).is_err());
+        assert_eq!(fs::read(&state_path).unwrap(), before);
+        assert!(f.receiver.apply(&f.data).is_err());
+        assert!(matches!(
+            f.receiver.transfer(&mut f.peer),
+            Err(Error::Conflict)
+        ));
+        fs::write(f.target.join("test.md"), b"third edit\r\n").unwrap();
+        let restarted = Store::open(&f.dir.path().join("receiver")).unwrap();
+        let third = restarted.recapture_receiver_conflict(&f.data).unwrap();
+        fs::write(&result, b"final choice\r\n").unwrap();
+        let chosen = restarted.resolve(third, remote, &result).unwrap();
+        restarted.transfer(&mut f.peer).unwrap();
+        assert_eq!(
+            fs::read(f.target.join("test.md")).unwrap(),
+            b"third edit\r\n"
+        );
+        assert_eq!(restarted.apply_resolution(&f.data, chosen).unwrap(), 1);
+        assert_eq!(
+            fs::read(f.target.join("test.md")).unwrap(),
+            b"final choice\r\n"
+        );
+        fs::remove_file(
+            f.dir
+                .path()
+                .join("receiver")
+                .join(format!("received-{second}.md")),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(restarted.export(second).unwrap()).unwrap(),
+            b"second edit"
+        );
+        assert_eq!(restarted.acknowledge(&mut f.peer).unwrap(), 1);
+        assert_eq!(f.peer.acknowledged, vec![f.peer.log[0].revision.id, chosen]);
+        assert!(restarted.recapture_receiver_conflict(&f.data).is_err());
+    }
+}
+
+#[test]
+fn receiver_recapture_guards_workspace_identity_and_drafts() {
+    let f = receiver_conflict_fixture();
+    let branch = f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .unwrap();
+    fs::write(f.target.join("test.md"), b"new edit").unwrap();
+    let state_path = f.dir.path().join("receiver/client.json");
+    let before = fs::read(&state_path).unwrap();
+    let mut core = notes_core::WorkspaceService::with_data_dir(&f.data).unwrap();
+    let workspace = core.open_workspace(&f.target).unwrap();
+    assert!(f.receiver.recapture_receiver_conflict(&f.data).is_err());
+    drop(core);
+    let drafts = f
+        .data
+        .join("workspaces")
+        .join(workspace.id.to_string())
+        .join("drafts");
+    fs::create_dir_all(&drafts).unwrap();
+    fs::write(drafts.join("retained"), b"unsaved").unwrap();
+    assert!(f.receiver.recapture_receiver_conflict(&f.data).is_err());
+    assert_eq!(fs::read(drafts.join("retained")).unwrap(), b"unsaved");
+    let wrong_data = f.dir.path().join("wrong-data");
+    fs::create_dir(&wrong_data).unwrap();
+    assert!(f.receiver.recapture_receiver_conflict(&wrong_data).is_err());
+    assert_eq!(fs::read(&state_path).unwrap(), before);
+    assert_eq!(
+        fs::read(f.receiver.export(branch).unwrap()).unwrap(),
+        b"local receiver edit"
+    );
+    assert_eq!(fs::read(f.target.join("test.md")).unwrap(), b"new edit");
+}
+
+#[test]
+fn receiver_recapture_reserves_resolution_capacity_without_discarding_history() {
+    let mut f = receiver_conflict_fixture();
+    let original = f
+        .receiver
+        .capture_receiver_conflict(&f.data, f.note)
+        .unwrap();
+    let mut latest = original;
+    for i in 0..19 {
+        fs::write(f.target.join("test.md"), format!("edit {i}")).unwrap();
+        latest = f.receiver.recapture_receiver_conflict(&f.data).unwrap();
+    }
+    let state_path = f.dir.path().join("receiver/client.json");
+    let before = fs::read(&state_path).unwrap();
+    fs::write(f.target.join("test.md"), b"over capacity").unwrap();
+    assert!(matches!(
+        f.receiver.recapture_receiver_conflict(&f.data),
+        Err(Error::Limit)
+    ));
+    assert_eq!(fs::read(&state_path).unwrap(), before);
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"over capacity"
+    );
+    assert_eq!(
+        fs::read(f.receiver.export(original).unwrap()).unwrap(),
+        b"local receiver edit"
+    );
+    let chosen = f.dir.path().join("result.md");
+    fs::write(&chosen, b"chosen").unwrap();
+    f.receiver.resolve(latest, f.remote, &chosen).unwrap();
+    f.receiver.transfer(&mut f.peer).unwrap();
+    assert_eq!(f.peer.log.last().unwrap().branches.len(), 20);
+    // Publishing releases pending branch capacity without applying stale bytes.
+    f.receiver.recapture_receiver_conflict(&f.data).unwrap();
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"over capacity"
+    );
 }

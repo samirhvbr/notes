@@ -95,7 +95,8 @@ impl State {
                     r.note != c.note
                         || r.path != c.path
                         || r.content.as_ref() != Some(&c.local.base_rev.hash)
-                        || r.parents != [c.applied].into()
+                        || r.parents.len() != 1
+                        || !self.local.is_ancestor(c.applied, c.branch)
                 })
                 || !incoming.revisions.contains_key(&c.applied)
             {
@@ -1063,6 +1064,89 @@ impl Store {
             branch: revision.id,
             path: previous.path.clone(),
             local,
+        });
+        self.save(&state, false)?;
+        Ok(revision.id)
+    }
+
+    /// Preserve a newer saved edit as a child of the previous captured branch.
+    /// Publish a prepared resolution first so its history remains recoverable.
+    pub fn recapture_receiver_conflict(&self, core_data: &Path) -> Result<Uuid> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        if state.mode != Mode::Receive {
+            return Err(Error::Invalid);
+        }
+        let capture = state.capture.clone().ok_or(Error::Invalid)?;
+        let app = self.application(&state)?.ok_or(Error::Invalid)?;
+        let data = fs::canonicalize(core_data).map_err(|_| Error::Invalid)?;
+        if data != app.core_data
+            || data != capture.core_data
+            || app.intent.is_some()
+            || app.resolution_intent.is_some()
+            || app
+                .notes
+                .get(&capture.note)
+                .is_none_or(|n| n.revision != capture.applied)
+        {
+            return Err(Error::Invalid);
+        }
+        if state.pending.len() > 1
+            || state
+                .pending
+                .first()
+                .is_some_and(|p| p.revision.id != capture.branch)
+        {
+            return Err(Error::Conflict);
+        }
+        let incoming = Self::incoming(&state)?;
+        if state.pending.is_empty() && !incoming.revisions.contains_key(&capture.branch) {
+            return Err(Error::Conflict);
+        }
+        let (local, bytes) =
+            notes_core::sync::capture_conflict(&state.source, &data, &capture.path, &capture.local)
+                .map_err(|_| Error::ApplicationBlocked)?;
+        if local.base_rev.hash == capture.local.base_rev.hash {
+            return Err(Error::Conflict);
+        }
+        let revision = Revision::new(
+            capture.note,
+            [capture.branch].into(),
+            state.device,
+            capture.path.clone(),
+            Some(local.base_rev.hash.clone()),
+        );
+        let mut branches = vec![];
+        if let Some(previous) = state.pending.pop() {
+            branches = previous.branches;
+            branches.push(notes_sync::transfer::Branch {
+                revision: previous.revision,
+                content_base64: previous.content_base64,
+            });
+        }
+        let publication = Publication {
+            workspace: state.local.workspace,
+            expected: Some(capture.branch),
+            revision: revision.clone(),
+            content_base64: Some(STANDARD.encode(bytes)),
+            branches,
+        };
+        // Reserve one branch slot for this capture when resolving it later.
+        if publication.branches.len() >= 20 {
+            return Err(Error::Limit);
+        }
+        notes_sync::transfer::payload_size(&publication).map_err(|_| Error::Limit)?;
+        state.local.heads.insert(capture.note, capture.branch);
+        state
+            .local
+            .commit(revision.clone(), Some(capture.branch))
+            .map_err(|_| Error::Conflict)?;
+        state.pending.push(publication);
+        state.capture = Some(ReceiverCapture {
+            branch: revision.id,
+            local,
+            ..capture
         });
         self.save(&state, false)?;
         Ok(revision.id)

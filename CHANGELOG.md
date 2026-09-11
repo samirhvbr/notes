@@ -8,6 +8,12 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.11 - recapture receiver edits without losing retained branches
+
+Extend an unresolved receiver capture with newly saved bytes while preserving
+prior branches and the actual application receipt. Require another explicit
+resolution before publication/application, retaining existing source guards.
+
 ## 0.20.10 - document explicit receiver restoration after remote deletion
 
 Document the explicit resolve-to workflow for remote rename/delete conflicts,
