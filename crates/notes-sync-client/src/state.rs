@@ -38,6 +38,8 @@ struct State {
     cursor: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     capture: Option<ReceiverCapture>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pairing: Option<Pairing>,
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -103,7 +105,9 @@ impl State {
                 return Err(Error::Invalid);
             }
         }
-        if self.cursor != self.received.len() {
+        if self.cursor < self.received.len()
+            || (self.endpoint.scope.is_none() && self.cursor != self.received.len())
+        {
             return Err(Error::Invalid);
         }
         for p in self.pending.iter().chain(&self.received) {
@@ -256,6 +260,7 @@ impl Store {
                 received: vec![],
                 cursor: 0,
                 capture: None,
+                pairing: None,
             },
             true,
         )
@@ -377,8 +382,11 @@ impl Store {
         let page = transport.page(state.cursor)?;
         if page.workspace != state.local.workspace
             || page.revisions.len() > 20
-            || page.next_cursor != state.cursor + page.revisions.len()
-            || (page.has_more && page.revisions.is_empty())
+            || page.next_cursor < state.cursor + page.revisions.len()
+            || page.next_cursor > state.cursor.saturating_add(20)
+            || (state.endpoint.scope.is_none()
+                && page.next_cursor != state.cursor + page.revisions.len())
+            || (page.has_more && page.next_cursor == state.cursor)
         {
             return Err(Error::Protocol);
         }
@@ -619,7 +627,7 @@ struct ApplicationReceipt {
     path: notes_model::RelPath,
     local: notes_core::sync::Applied,
 }
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Application {
     schema: u32,
@@ -636,12 +644,28 @@ struct Application {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     resolution_intent: Option<Uuid>,
 }
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Pairing {
+    application: Application,
+    created: std::collections::BTreeMap<notes_model::NoteId, ApplicationReceipt>,
+}
+#[derive(Serialize)]
+pub struct PairingPreview {
+    pub confirmation: String,
+    pub actions: Vec<notes_sync::PairingAction>,
+}
 impl Store {
     fn application(&self, state: &State) -> Result<Option<Application>> {
         let path = self.dir.join("application.json");
         let meta = match fs::symlink_metadata(&path) {
             Ok(meta) => meta,
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                return match &state.pairing {
+                    Some(p) => Self::validate_application(state, p.application.clone()),
+                    None => Ok(None),
+                };
+            }
             Err(_) => return Err(Error::Storage),
         };
         if !meta.is_file() || meta.len() > MAX_STATE as u64 {
@@ -657,6 +681,9 @@ impl Store {
             return Err(Error::Limit);
         }
         let app: Application = serde_json::from_slice(&bytes).map_err(|_| Error::Invalid)?;
+        Self::validate_application(state, app)
+    }
+    fn validate_application(state: &State, app: Application) -> Result<Option<Application>> {
         if app.schema != 1
             || !app.core_data.is_absolute()
             || app.next > state.received.len()
@@ -819,7 +846,19 @@ impl Store {
                 &state.source,
                 &p.revision.path,
                 &bytes,
-                previous.as_ref().filter(|n| !n.deleted).map(|n| &n.local),
+                previous
+                    .as_ref()
+                    .filter(|n| !n.deleted)
+                    .or_else(|| {
+                        if previous.is_some() {
+                            return None;
+                        }
+                        state
+                            .pairing
+                            .as_ref()
+                            .and_then(|pairing| pairing.created.get(&p.revision.note))
+                    })
+                    .map(|n| &n.local),
                 retry,
                 &mut || {
                     app.intent = Some(p.revision.id);
@@ -1241,5 +1280,203 @@ impl Store {
         app.resolution_intent = None;
         self.save_application(&app)?;
         Ok(1)
+    }
+}
+
+type PairingFiles = Vec<(notes_sync::File, Vec<u8>)>;
+
+impl Store {
+    fn pairing_snapshot(
+        &self,
+        state: &State,
+        data: &Path,
+    ) -> Result<(PairingPreview, PairingFiles)> {
+        if state.mode != Mode::Receive
+            || state.pairing.is_some()
+            || state.capture.is_some()
+            || !state.pending.is_empty()
+            || self.dir.join("application.json").exists()
+        {
+            return Err(Error::Invalid);
+        }
+        let local = notes_core::sync::capture(&state.source, data)
+            .map_err(|_| Error::ApplicationBlocked)?;
+        let incoming = Self::incoming(state)?;
+        let remote: Vec<_> = incoming
+            .heads
+            .keys()
+            .filter_map(|id| {
+                let r = incoming.head(*id)?;
+                Some(notes_sync::File {
+                    note: r.note,
+                    path: r.path.clone(),
+                    content: r.content.clone()?,
+                })
+            })
+            .collect();
+        let actions = notes_sync::pair(
+            notes_sync::PairingMode::Reconcile,
+            &local.iter().map(|(f, _)| f.clone()).collect::<Vec<_>>(),
+            &remote,
+        )
+        .map_err(|_| Error::Conflict)?;
+        let encoded = serde_json::to_vec(&(
+            state.local.workspace,
+            state.cursor,
+            &state.endpoint,
+            &state.source,
+            data,
+            &actions,
+        ))
+        .map_err(|_| Error::Invalid)?;
+        Ok((
+            PairingPreview {
+                confirmation: blake3::hash(&encoded).to_hex().to_string(),
+                actions,
+            },
+            local,
+        ))
+    }
+    pub fn preview_pairing(&self, data: &Path) -> Result<PairingPreview> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let state = self.load()?;
+        notes_core::sync::validate_state_location(&[&state.source], data)
+            .map_err(|_| Error::Invalid)?;
+        fs::create_dir_all(data).map_err(|_| Error::Storage)?;
+        let data = fs::canonicalize(data).map_err(|_| Error::Invalid)?;
+        Ok(self.pairing_snapshot(&state, &data)?.0)
+    }
+    /// Confirm an exact cached preview after verifying that the server has no
+    /// unseen entries. Equal bytes link identities; differing bytes never do.
+    pub fn confirm_pairing(
+        &self,
+        data: &Path,
+        confirmation: &str,
+        transport: &mut impl Transport,
+    ) -> Result<()> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        let data = fs::canonicalize(data).map_err(|_| Error::Invalid)?;
+        let (preview, snapshot) = self.pairing_snapshot(&state, &data)?;
+        if preview.confirmation != confirmation
+            || preview
+                .actions
+                .iter()
+                .any(|a| matches!(a, notes_sync::PairingAction::Conflict { .. }))
+        {
+            return Err(Error::Conflict);
+        }
+        let page = transport.page(state.cursor)?;
+        if page.workspace != state.local.workspace
+            || page.next_cursor != state.cursor
+            || page.has_more
+            || !page.revisions.is_empty()
+        {
+            return Err(Error::Conflict);
+        }
+        let incoming = Self::incoming(&state)?;
+        let mut observed = std::collections::BTreeMap::new();
+        for (f, bytes) in &snapshot {
+            let expected = notes_core::sync::Applied {
+                note_id: f.note,
+                base_rev: notes_model::BaseRev {
+                    hash: f.content.clone(),
+                    size: bytes.len() as u64,
+                    mtime_ns: 0,
+                },
+            };
+            let (actual, raw) =
+                notes_core::sync::capture_conflict(&state.source, &data, &f.path, &expected)
+                    .map_err(|_| Error::ApplicationBlocked)?;
+            if raw != *bytes {
+                return Err(Error::Conflict);
+            }
+            observed.insert(f.note, actual);
+        }
+        let mut app = Application {
+            schema: 1,
+            core_data: data,
+            next: state.received.len(),
+            notes: Default::default(),
+            intent: None,
+            acknowledged: 0,
+            superseded: Default::default(),
+            deferred: Default::default(),
+            resolution_intent: None,
+        };
+        let mut created = std::collections::BTreeMap::new();
+        state.local = incoming.clone();
+        for action in preview.actions {
+            match action {
+                notes_sync::PairingAction::Link { local, remote } => {
+                    let head = incoming.head(remote.note).ok_or(Error::Invalid)?;
+                    app.notes.insert(
+                        remote.note,
+                        ApplicationReceipt {
+                            deleted: false,
+                            revision: head.id,
+                            path: remote.path,
+                            local: observed[&local.note].clone(),
+                        },
+                    );
+                }
+                notes_sync::PairingAction::Upload { local } => {
+                    let bytes = snapshot
+                        .iter()
+                        .find(|(f, _)| f.note == local.note)
+                        .ok_or(Error::Invalid)?
+                        .1
+                        .clone();
+                    let revision = Revision::new(
+                        local.note,
+                        Default::default(),
+                        state.device,
+                        local.path.clone(),
+                        Some(local.content),
+                    );
+                    state
+                        .local
+                        .commit(revision.clone(), None)
+                        .map_err(|_| Error::Conflict)?;
+                    created.insert(
+                        local.note,
+                        ApplicationReceipt {
+                            deleted: false,
+                            revision: revision.id,
+                            path: local.path,
+                            local: observed[&local.note].clone(),
+                        },
+                    );
+                    state.pending.push(Publication {
+                        workspace: state.local.workspace,
+                        expected: None,
+                        revision,
+                        content_base64: Some(STANDARD.encode(bytes)),
+                        branches: vec![],
+                    });
+                }
+                notes_sync::PairingAction::Download { .. } => {}
+                notes_sync::PairingAction::Conflict { .. } => return Err(Error::Conflict),
+            }
+        }
+        for (index, p) in state.received.iter().enumerate() {
+            match app.notes.get(&p.revision.note) {
+                Some(receipt) if receipt.revision != p.revision.id => {
+                    app.superseded.insert(index);
+                }
+                Some(_) => {}
+                None => {
+                    app.deferred.insert(index);
+                }
+            }
+        }
+        Self::validate_application(&state, app.clone())?;
+        state.pairing = Some(Pairing {
+            application: app,
+            created,
+        });
+        self.save(&state, false)
     }
 }

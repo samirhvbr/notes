@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.as_slice() == ["--help"] {
-        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Whole-workspace credentials only.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
+        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client init-subfolder STATE ROOT ORIGIN WORKSPACE SCOPE TOKEN_FILE [--allow-private]\nnotes-sync-client pair-preview STATE APP_DATA_DIRECTORY\nnotes-sync-client pair-confirm STATE APP_DATA_DIRECTORY TOKEN_FILE CONFIRMATION\nnotes-sync-client stage|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Subfolder pairing requires a matching credential scope.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
         return Ok(());
     }
     let ca = std::env::var_os("NOTES_SYNC_CA_FILE").map(PathBuf::from);
@@ -25,6 +25,7 @@ fn run() -> Result<()> {
             if args.len() == 6 || (args.len() == 7 && args[6] == "--allow-private") =>
         {
             let endpoint = Endpoint {
+                scope: None,
                 origin: args[3].clone(),
                 name: args[4].clone(),
                 allow_private: args.len() == 7,
@@ -40,6 +41,31 @@ fn run() -> Result<()> {
                 },
                 &mut remote,
             )?;
+        }
+        "init-subfolder"
+            if args.len() == 7 || (args.len() == 8 && args[7] == "--allow-private") =>
+        {
+            let endpoint = Endpoint {
+                origin: args[3].clone(),
+                name: args[4].clone(),
+                allow_private: args.len() == 8,
+                scope: Some(notes_model::RelPath::parse(&args[5]).map_err(|_| Error::Invalid)?),
+            };
+            let mut remote = Remote::connect(&endpoint, Path::new(&args[6]), ca.as_deref())?;
+            store.initialize(Path::new(&args[2]), endpoint, Mode::Receive, &mut remote)?;
+        }
+        "pair-preview" if args.len() == 3 => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&store.preview_pairing(Path::new(&args[2]))?)
+                    .map_err(|_| Error::Invalid)?
+            );
+            return Ok(());
+        }
+        "pair-confirm" if args.len() == 5 => {
+            let mut remote =
+                Remote::connect(&store.endpoint()?, Path::new(&args[3]), ca.as_deref())?;
+            store.confirm_pairing(Path::new(&args[2]), &args[4], &mut remote)?;
         }
         "stage" if args.len() == 2 => {
             let missing = store.stage()?;

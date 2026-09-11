@@ -8,6 +8,14 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.12 - confirm scoped pairing against observed folder contents
+
+Pin the selected credential namespace and translate all publication paths while
+preserving filtered server cursor positions. Preview reconciliation against local
+identities and bytes, then confirm its digest after checking for unseen remote
+entries. Equal files link, local-only files stage uploads, and remote-only files
+wait for application. Divergent bytes refuse confirmation without source changes.
+
 ## 0.20.12 - apply receiver move and deletion resolutions recoverably
 
 Apply explicit receiver path/tombstone choices under the captured source guard,

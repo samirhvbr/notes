@@ -92,6 +92,7 @@ impl Transport for Peer {
 }
 fn endpoint() -> Endpoint {
     Endpoint {
+        scope: None,
         origin: "https://notes.example/".into(),
         name: "home".into(),
         allow_private: false,
@@ -1271,4 +1272,97 @@ fn receiver_move_delete_resolution_recovers_and_preserves_source_on_collision() 
             b"local receiver edit"
         );
     }
+}
+
+#[test]
+fn pairing_confirms_equal_identities_and_stages_local_only_files_without_overwrite() {
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"shared").unwrap();
+    fs::write(root.join("remote.md"), b"remote only").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let target = dir.path().join("paired");
+    fs::create_dir(&target).unwrap();
+    fs::write(target.join("test.md"), b"shared").unwrap();
+    fs::write(target.join("local.md"), b"local only").unwrap();
+    let data = dir.path().join("pair-data");
+    let receiver = Store::open(&dir.path().join("pair-state")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    let preview = receiver.preview_pairing(&data).unwrap();
+    assert_eq!(preview.actions.len(), 3);
+    let before = fs::read(dir.path().join("pair-state/client.json")).unwrap();
+    fs::write(target.join("test.md"), b"conflicting edit").unwrap();
+    assert!(receiver
+        .confirm_pairing(&data, &preview.confirmation, &mut peer)
+        .is_err());
+    assert_eq!(
+        fs::read(dir.path().join("pair-state/client.json")).unwrap(),
+        before
+    );
+    fs::write(target.join("test.md"), b"shared").unwrap();
+    let preview = receiver.preview_pairing(&data).unwrap();
+    receiver
+        .confirm_pairing(&data, &preview.confirmation, &mut peer)
+        .unwrap();
+    assert_eq!(receiver.status().unwrap().applied_revisions, 1);
+    assert!(!target.join("remote.md").exists());
+    assert_eq!(fs::read(target.join("local.md")).unwrap(), b"local only");
+    receiver.transfer(&mut peer).unwrap();
+    assert_eq!(receiver.apply(&data).unwrap(), 2);
+    assert_eq!(fs::read(target.join("remote.md")).unwrap(), b"remote only");
+    assert_eq!(fs::read(target.join("local.md")).unwrap(), b"local only");
+    assert_eq!(receiver.acknowledge(&mut peer).unwrap(), 3);
+    assert!(receiver.preview_pairing(&data).is_err());
+}
+
+#[test]
+fn pairing_refuses_divergent_bytes_and_unseen_remote_updates() {
+    let f = receiver_conflict_fixture();
+    let receiver = Store::open(&f.dir.path().join("new-pair")).unwrap();
+    let mut peer = f.peer;
+    receiver
+        .initialize(&f.target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    let preview = receiver.preview_pairing(&f.data).unwrap();
+    assert!(preview
+        .actions
+        .iter()
+        .any(|a| matches!(a, notes_sync::PairingAction::Conflict { .. })));
+    assert!(receiver
+        .confirm_pairing(&f.data, &preview.confirmation, &mut peer)
+        .is_err());
+    fs::write(f.target.join("test.md"), b"remote update").unwrap();
+    let preview = receiver.preview_pairing(&f.data).unwrap();
+    let mut other = peer.log.last().unwrap().clone();
+    other.expected = Some(other.revision.id);
+    other.revision.parents = [other.revision.id].into();
+    other.revision.id = Uuid::new_v4();
+    peer.publish(&other).unwrap();
+    assert!(receiver
+        .confirm_pairing(&f.data, &preview.confirmation, &mut peer)
+        .is_err());
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"remote update"
+    );
+    receiver.fetch(&mut peer).unwrap();
+    fs::rename(f.target.join("test.md"), f.target.join("kept-local.md")).unwrap();
+    let preview = receiver.preview_pairing(&f.data).unwrap();
+    receiver
+        .confirm_pairing(&f.data, &preview.confirmation, &mut peer)
+        .unwrap();
+    receiver.transfer(&mut peer).unwrap();
+    receiver.apply(&f.data).unwrap();
+    assert_eq!(
+        fs::read(f.target.join("kept-local.md")).unwrap(),
+        b"remote update"
+    );
+    assert_eq!(
+        fs::read(f.target.join("test.md")).unwrap(),
+        b"remote update"
+    );
 }

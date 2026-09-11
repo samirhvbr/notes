@@ -22,6 +22,8 @@ pub struct Endpoint {
     pub origin: String,
     pub name: String,
     pub allow_private: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<notes_model::RelPath>,
 }
 impl Endpoint {
     pub fn validate(&self) -> Result<Url> {
@@ -32,6 +34,10 @@ impl Endpoint {
             || url.fragment().is_some()
             || url.path() != "/"
             || url.host_str().is_none()
+            || self
+                .scope
+                .as_ref()
+                .is_some_and(|p| p.is_root() || p.as_str().split('/').any(|n| n.starts_with('.')))
             || self.name.is_empty()
             || self.name.len() > 64
             || !self
@@ -109,6 +115,7 @@ pub struct Remote {
     client: Client,
     base: Url,
     bearer: String,
+    scope: Option<notes_model::RelPath>,
 }
 impl Remote {
     pub fn connect(endpoint: &Endpoint, token_file: &Path, ca_file: Option<&Path>) -> Result<Self> {
@@ -176,8 +183,8 @@ impl Remote {
             builder = builder.tls_certs_merge([cert]);
         }
         let client = builder.build().map_err(|_| Error::Invalid)?;
-        // This first client binds whole workspaces. A changed/narrowed token must
-        // not advance a cursor through a partially filtered history.
+        // Pin the selected scope exactly; changing credentials must not silently
+        // broaden or narrow the client namespace.
         let workspaces: serde_json::Value = decode(
             client
                 .get(url.join("v1/workspaces").map_err(|_| Error::Invalid)?)
@@ -188,7 +195,7 @@ impl Remote {
         let rows = workspaces["workspaces"].as_array().ok_or(Error::Protocol)?;
         if rows.len() != 1
             || rows[0]["name"] != endpoint.name
-            || rows[0]["scope"] != ""
+            || rows[0]["scope"] != endpoint.scope.as_ref().map(|p| p.as_str()).unwrap_or("")
             || rows[0]["review"] != false
         {
             return Err(Error::Denied);
@@ -200,7 +207,28 @@ impl Remote {
             client,
             base,
             bearer,
+            scope: endpoint.scope.clone(),
         })
+    }
+}
+impl Remote {
+    fn localize(&self, r: &mut Revision) -> Result<()> {
+        if let Some(scope) = &self.scope {
+            let path = r
+                .path
+                .as_str()
+                .strip_prefix(&format!("{scope}/"))
+                .ok_or(Error::Denied)?;
+            r.path = notes_model::RelPath::parse(path).map_err(|_| Error::Protocol)?;
+        }
+        Ok(())
+    }
+    fn globalize(&self, r: &mut Revision) -> Result<()> {
+        if let Some(scope) = &self.scope {
+            r.path = notes_model::RelPath::parse(&format!("{scope}/{}", r.path))
+                .map_err(|_| Error::Invalid)?;
+        }
+        Ok(())
     }
 }
 fn decode<T: serde::de::DeserializeOwned>(response: Response) -> Result<T> {
@@ -254,30 +282,44 @@ impl Transport for Remote {
     fn page(&mut self, cursor: usize) -> Result<Page> {
         let mut url = self.base.clone();
         url.set_query(Some(&format!("cursor={cursor}&limit=20")));
-        decode(
+        let mut page: Page = decode(
             self.client
                 .get(url)
                 .bearer_auth(&self.bearer)
                 .send()
                 .map_err(|_| Error::Offline)?,
-        )
+        )?;
+        for revision in &mut page.revisions {
+            self.localize(revision)?;
+        }
+        Ok(page)
     }
     fn fetch(&mut self, id: Uuid) -> Result<Publication> {
         let url = Url::parse(&format!("{}/{id}", self.base)).map_err(|_| Error::Invalid)?;
-        decode(
+        let mut p: Publication = decode(
             self.client
                 .get(url)
                 .bearer_auth(&self.bearer)
                 .send()
                 .map_err(|_| Error::Offline)?,
-        )
+        )?;
+        self.localize(&mut p.revision)?;
+        for branch in &mut p.branches {
+            self.localize(&mut branch.revision)?;
+        }
+        Ok(p)
     }
     fn publish(&mut self, p: &Publication) -> Result<()> {
+        let mut wire = p.clone();
+        self.globalize(&mut wire.revision)?;
+        for branch in &mut wire.branches {
+            self.globalize(&mut branch.revision)?;
+        }
         let receipt: Receipt = decode(
             self.client
                 .post(self.base.clone())
                 .bearer_auth(&self.bearer)
-                .json(p)
+                .json(&wire)
                 .send()
                 .map_err(|_| Error::Offline)?,
         )?;
@@ -311,6 +353,7 @@ mod tests {
             "http://localhost/",
         ] {
             assert!(Endpoint {
+                scope: None,
                 origin: origin.into(),
                 name: "home".into(),
                 allow_private: true
@@ -360,6 +403,7 @@ mod http_tests {
             }
             let result = Remote::connect(
                 &Endpoint {
+                    scope: None,
                     origin: format!("http://{address}"),
                     name: "home".into(),
                     allow_private: true,
