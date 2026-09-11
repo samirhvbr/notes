@@ -147,6 +147,12 @@ pub struct Status {
     pub superseded_revisions: usize,
     pub deferred_revisions: usize,
 }
+#[derive(Debug, Serialize)]
+pub struct ClientPruneReport {
+    pub pruned_resolutions: usize,
+    pub pruned_payload_bytes: usize,
+    pub retained_revisions: usize,
+}
 pub struct Store {
     dir: PathBuf,
 }
@@ -576,6 +582,44 @@ impl Store {
             }
         }
         Ok(end - cursor)
+    }
+
+    /// Compact branch payloads only after local application acknowledgments and
+    /// after the server returns the exact metadata-only form. This never sends
+    /// traffic that mutates the server and never touches source files.
+    pub fn prune_client(&self, transport: &mut impl Transport) -> Result<ClientPruneReport> {
+        let mut lock = self.lock()?;
+        let _guard = lock.try_write().map_err(|_| Error::Busy)?;
+        let mut state = self.load()?;
+        let app = self.application(&state)?.ok_or(Error::Invalid)?;
+        let mut pruned_resolutions = 0usize;
+        let mut pruned_payload_bytes = 0usize;
+        for index in 0..app.acknowledged {
+            let publication = &state.received[index];
+            if publication.branches.is_empty() {
+                continue;
+            }
+            let mut compacted = publication.clone();
+            let bytes = notes_sync::transfer::prune_resolved_payloads(&mut compacted)
+                .map_err(|_| Error::Invalid)?;
+            if transport.fetch(compacted.revision.id)? != compacted {
+                continue;
+            }
+            state.received[index] = compacted;
+            pruned_payload_bytes += bytes;
+            pruned_resolutions += 1;
+            if pruned_resolutions == 20 {
+                break;
+            }
+        }
+        if pruned_resolutions > 0 {
+            self.save(&state, false)?;
+        }
+        Ok(ClientPruneReport {
+            pruned_resolutions,
+            pruned_payload_bytes,
+            retained_revisions: state.local.revisions.len(),
+        })
     }
 
     /// Recover a restored queue against an exact retained server prefix. Only

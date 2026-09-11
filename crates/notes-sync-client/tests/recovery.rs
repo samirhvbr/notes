@@ -624,6 +624,102 @@ fn explicit_resolution_retains_branches_across_remote_races_and_lost_receipts() 
 }
 
 #[test]
+fn client_prunes_only_server_confirmed_applied_branches_and_keeps_future_sync() {
+    use base64::{engine::general_purpose::STANDARD, Engine};
+    use notes_sync::Revision;
+    let (dir, root, sender, mut peer) = fixture();
+    fs::write(root.join("test.md"), b"base").unwrap();
+    sender.stage().unwrap();
+    sender.transfer(&mut peer).unwrap();
+    let base = peer.log[0].clone();
+    fs::write(root.join("test.md"), b"local branch bytes").unwrap();
+    sender.stage().unwrap();
+    let remote = Publication {
+        attachments: vec![],
+        workspace: base.workspace,
+        expected: Some(base.revision.id),
+        revision: Revision::new(
+            base.revision.note,
+            [base.revision.id].into(),
+            Uuid::new_v4(),
+            base.revision.path.clone(),
+            Some(notes_model::ContentHash::from_bytes(
+                *blake3::hash(b"remote").as_bytes(),
+            )),
+        ),
+        content_base64: Some(STANDARD.encode(b"remote")),
+        branches: vec![],
+        history: vec![],
+    };
+    peer.publish(&remote).unwrap();
+    assert!(sender.transfer(&mut peer).is_err());
+    sender.fetch(&mut peer).unwrap();
+    let notes_sync::Action::Conflict { local, remote, .. } = sender.conflicts().unwrap()[0] else {
+        panic!("missing divergence")
+    };
+    let result = dir.path().join("chosen.md");
+    fs::write(&result, b"chosen").unwrap();
+    let merge = sender.resolve(local, remote, &result).unwrap();
+    sender.transfer(&mut peer).unwrap();
+
+    let target = dir.path().join("receiver-notes");
+    fs::create_dir(&target).unwrap();
+    let receiver = Store::open(&dir.path().join("receiver")).unwrap();
+    receiver
+        .initialize(&target, endpoint(), Mode::Receive, &mut peer)
+        .unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    let data = dir.path().join("receiver-data");
+    receiver.apply(&data).unwrap();
+    assert_eq!(
+        receiver.prune_client(&mut peer).unwrap().pruned_resolutions,
+        0
+    );
+    receiver.acknowledge(&mut peer).unwrap();
+    assert_eq!(
+        receiver.prune_client(&mut peer).unwrap().pruned_resolutions,
+        0
+    );
+    let envelope = peer
+        .log
+        .iter_mut()
+        .find(|publication| publication.revision.id == merge)
+        .unwrap();
+    let branch = envelope.branches[0].revision.id;
+    envelope
+        .history
+        .extend(envelope.branches.drain(..).map(|branch| branch.revision));
+    let report = receiver.prune_client(&mut peer).unwrap();
+    assert_eq!(report.pruned_resolutions, 1);
+    assert!(report.pruned_payload_bytes > 0);
+    assert!(receiver.export(branch).is_err());
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"chosen");
+    assert!(receiver.conflicts().unwrap().is_empty());
+
+    let next = Publication {
+        attachments: vec![],
+        workspace: base.workspace,
+        expected: Some(merge),
+        revision: Revision::new(
+            base.revision.note,
+            [merge].into(),
+            Uuid::new_v4(),
+            base.revision.path,
+            Some(notes_model::ContentHash::from_bytes(
+                *blake3::hash(b"after prune").as_bytes(),
+            )),
+        ),
+        content_base64: Some(STANDARD.encode(b"after prune")),
+        branches: vec![],
+        history: vec![],
+    };
+    peer.publish(&next).unwrap();
+    receiver.fetch(&mut peer).unwrap();
+    receiver.apply(&data).unwrap();
+    assert_eq!(fs::read(target.join("test.md")).unwrap(), b"after prune");
+}
+
+#[test]
 fn explicit_paths_and_tombstones_resolve_rename_delete_conflicts_without_source_mutations() {
     for remote_deleted in [false, true] {
         for choose_delete in [false, true] {

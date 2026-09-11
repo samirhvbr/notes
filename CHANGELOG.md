@@ -8,6 +8,17 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.19 - compact acknowledged receiver branches
+
+Compact a receiver's retained divergent branch payloads only after its local
+application receipts were acknowledged and the server returns the exact
+metadata-only envelope. Preserve causal revisions, source files, application
+state and subsequent synchronization. Keep unresolved or server-unconfirmed
+bytes exportable and process at most 20 resolutions per explicit invocation.
+All 56 client integration tests and 17 library tests passed, with continued
+application after compaction. Two existing receiver guard tests refused once
+during broader runs and passed in the complete client run and isolated reruns.
+
 ## 0.20.19 - prune resolved server payloads
 
 Add an offline operator prune for divergent branch payloads whose resolution or

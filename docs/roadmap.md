@@ -175,7 +175,10 @@ Version 0.20.17 adds independent new-note and recognized-rename capture.
 Version 0.20.18 adds audited restored-client cache/outbox recovery and two-device
 move/delete receipt-loss tests. Restored application identities and scoped
 backup reconciliation remain open.
-Retention and device acceptance remain pending.
+Version 0.20.19 adds offline server pruning and matching receiver compaction for
+unanimously acknowledged divergent branch payloads. Linear history, current
+resolution payloads, cursor baselines and device retirement remain open.
+Device acceptance remains pending.
 
 ## 0.7 — AI
 

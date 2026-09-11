@@ -13,7 +13,7 @@ fn main() {
 fn run() -> Result<()> {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.as_slice() == ["--help"] {
-        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client init-subfolder STATE ROOT ORIGIN WORKSPACE SCOPE TOKEN_FILE [--allow-private]\nnotes-sync-client pair-preview STATE APP_DATA_DIRECTORY\nnotes-sync-client pair-confirm STATE APP_DATA_DIRECTORY TOKEN_FILE CONFIRMATION\nnotes-sync-client stage-delete STATE NOTE_UUID EXPECTED_HEAD_UUID\nnotes-sync-client apply-bundle STATE APP_DATA_DIRECTORY\nnotes-sync-client stage|stage-receiver|stage-receiver-new|stage-receiver-renames|confirm-receiver|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge|recover-server|recover-client STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export-attachment STATE REVISION_UUID ATTACHMENT_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Subfolder pairing requires a matching credential scope.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nRecovery requires paused publishers and an unscoped retained queue; repeat until zero publications are replayed or recovered. Client recovery preserves local branches and application receipts.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
+        println!("notes-sync-client init-upload|init-receive STATE ROOT ORIGIN WORKSPACE TOKEN_FILE [--allow-private]\nnotes-sync-client init-subfolder STATE ROOT ORIGIN WORKSPACE SCOPE TOKEN_FILE [--allow-private]\nnotes-sync-client pair-preview STATE APP_DATA_DIRECTORY\nnotes-sync-client pair-confirm STATE APP_DATA_DIRECTORY TOKEN_FILE CONFIRMATION\nnotes-sync-client stage-delete STATE NOTE_UUID EXPECTED_HEAD_UUID\nnotes-sync-client apply-bundle STATE APP_DATA_DIRECTORY\nnotes-sync-client stage|stage-receiver|stage-receiver-new|stage-receiver-renames|confirm-receiver|status|received|conflicts STATE\nnotes-sync-client transfer|fetch|acknowledge|recover-server|recover-client|prune-client STATE TOKEN_FILE\nnotes-sync-client resolve STATE LOCAL_UUID REMOTE_UUID RESULT_FILE\nnotes-sync-client resolve-to STATE LOCAL_UUID REMOTE_UUID NOTE_PATH RESULT_FILE\nnotes-sync-client resolve-delete STATE LOCAL_UUID REMOTE_UUID NOTE_PATH\nnotes-sync-client export-attachment STATE REVISION_UUID ATTACHMENT_PATH\nnotes-sync-client export STATE REVISION_UUID\nnotes-sync-client capture-conflict STATE APP_DATA_DIRECTORY NOTE_UUID\nnotes-sync-client recapture-conflict STATE APP_DATA_DIRECTORY\nnotes-sync-client apply-resolution STATE APP_DATA_DIRECTORY RESOLUTION_UUID\nnotes-sync-client apply STATE APP_DATA_DIRECTORY\nSTATE and TOKEN_FILE must be absolute; STATE stays outside ROOT.\nTransfer only stores revisions. Explicit apply writes creations/updates while the workspace is closed and draft-free.\nUpload starts with an empty server inbox. Subfolder pairing requires a matching credential scope.\nHTTPS is required; --allow-private also permits HTTP at a literal loopback address.\nRecovery requires paused publishers and an unscoped retained queue; repeat until zero publications are replayed or recovered. Client recovery preserves local branches and application receipts. Pruning is explicit and follows an offline server prune.\nOptional NOTES_SYNC_CA_FILE adds an operator-selected PEM trust anchor.");
         return Ok(());
     }
     let ca = std::env::var_os("NOTES_SYNC_CA_FILE").map(PathBuf::from);
@@ -181,6 +181,15 @@ fn run() -> Result<()> {
             println!(
                 "{}",
                 serde_json::json!({"recovered_publications": count, "source_written": false})
+            );
+        }
+        "prune-client" if args.len() == 3 => {
+            let mut remote =
+                Remote::connect(&store.endpoint()?, Path::new(&args[2]), ca.as_deref())?;
+            println!(
+                "{}",
+                serde_json::to_string(&store.prune_client(&mut remote)?)
+                    .map_err(|_| Error::Invalid)?
             );
         }
         "acknowledge" if args.len() == 3 => {

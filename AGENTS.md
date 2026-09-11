@@ -96,7 +96,8 @@ one-line version of both:
   closed. Version 0.20.17 adds independent new-note and recognized-rename capture.
   Version 0.20.18 adds audited restored-client cache/outbox recovery and
   two-device move/delete receipt-loss tests.
-  Retention, mobile lifecycle and
+  Version 0.20.19 adds unanimous resolved-branch payload pruning on the server
+  and matching receiver compaction. Broader retention, mobile lifecycle and
   broader device acceptance remain open. Owner verification on installed
   releases remains tracked in the acceptance documents and the queue.
   The whole gate is `tools/check.sh`; see [docs/roadmap.md](docs/roadmap.md).

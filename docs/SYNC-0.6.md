@@ -277,8 +277,10 @@ is limited to 32 MiB total and 8 MiB per file. Private temporary files, OS locks
 file sync and atomic replacement protect checkpoints. Future/corrupt state is
 refused unchanged. A state directory backup while the client is stopped includes
 queued bytes and core identities; do not discard it to resolve a conflict.
-There is no pruning or state migration yet. Received history is not a backup
-policy. Transfer sends no device application acknowledgment; the explicit
+There is no automatic or general history pruning or state migration. The
+explicit resolved-branch payload compaction added in 0.20.19 is documented
+below. Received history is not a backup policy. Transfer sends no device
+application acknowledgment; the explicit
 `acknowledge` command below does.
 
 Validation includes fault-injected lost receipts, restart, repeated offline
@@ -374,7 +376,7 @@ binds a device to that credential ID; another credential cannot claim that
 device. Token replacement with a new credential ID requires future explicit
 rebinding support; preserve state instead of changing the device UUID by hand.
 There is no remote proof of disk contents: receipts are authenticated client
-assertions and do not authorize deletion, pruning or automatic recovery.
+assertions and do not by themselves invoke deletion, pruning or automatic recovery.
 
 Exact retries are idempotent. A lost response or local checkpoint failure leaves
 the same receipt pending; retry sends it again without touching source notes.
@@ -856,7 +858,7 @@ notes-sync-client export-attachment /private/receiver REVISION_UUID attachments/
 
 The command creates a private non-overwriting `.bin` export and prints its path.
 Unreferenced attachments are never automatically deleted. Background scheduling,
-editor bundle controls, retention/pruning and device acceptance remain open.
+editor bundle controls, broader retention and device acceptance remain open.
 
 ## Desktop background transfer and controls (0.20.14)
 
@@ -951,8 +953,8 @@ can already have stored valid publications before a later request fails; inspect
 and retry the same queue. The audit is not a server-wide transaction, so keep
 other publishers paused until recovery completes. Unreceived publications lost
 from both the server backup and all device queues cannot be reconstructed.
-Retention/pruning, older-client reconciliation and automatic rollback recovery
-remain open.
+Broader retention/pruning, older-client reconciliation and automatic rollback
+recovery remain open.
 
 Validation covers bounded replay, restart after a lost storage response, a lost
 application response, tombstones, binary attachments, divergent/corrupt history,
@@ -1104,8 +1106,8 @@ An interrupted audit can be repeated after restart. Recovery is cache/outbox
 reconciliation, not a repair of lost file identities or stale application receipts.
 If application data was rolled back while source files advanced, ordinary guarded
 application can still refuse; preserve those files and resolve that mismatch
-separately. No timestamp chooses a winner. Retention/pruning and scoped backup
-reconciliation remain unimplemented.
+separately. No timestamp chooses a winner. Broader retention/pruning and scoped
+backup reconciliation remain unimplemented.
 
 ### Interrupted two-device effects (0.20.18)
 
@@ -1122,3 +1124,59 @@ restores an older uploader queue and recovers its published history without
 changing either source folder. These are deterministic persisted-state crash
 boundaries, not an operating-system kill at an instruction. Physical mobile
 suspension/resumption and installed-release owner acceptance remain open.
+
+### Device-confirmed resolved-branch pruning (0.20.19)
+
+The first retention slice removes exact bytes only from divergent branches that
+have already been consumed by a published resolution. It retains the branch
+revision metadata inside that resolution, including paths, hashes, parents and
+tombstones, so causal ancestry, current heads and integer page cursors do not
+change. The chosen resolution bytes and all ordinary linear publications remain
+available. This is deliberate partial retention, not general history deletion.
+
+Stop the server, take an offline backup, and run:
+
+```sh
+notes-server sync-prune WORKSPACE
+```
+
+The local operator command refuses while the server or a backup holds the
+instance lock. A resolution becomes eligible only when every device known to the
+workspace has acknowledged that resolution or a causal descendant for the same
+note. A device with no qualifying receipt blocks it, including a revoked device;
+revocation does not erase historical safety evidence. With no known devices,
+nothing is pruned. The JSON report states resolutions and decoded payload bytes
+pruned, revision metadata retained and known-device count. Repeating the command
+is idempotent. The operation is unavailable over HTTP and grants no credential
+new authority.
+
+The server persists the compacted vault atomically and validates the entire graph
+before replacement. Backup/restore retains the compacted form. A publisher that
+lost the original storage response may retry its authorized pre-prune envelope;
+the server recognizes its exact compacted form without restoring the bytes or
+rewinding the head. A client cannot publish metadata-only history itself. Older
+clients reject a fetched compacted envelope because the additive `history` field
+is unknown; use 0.20.19 or later after server pruning.
+
+After the server prune, each applied receive queue can explicitly compact its
+matching local copy:
+
+```sh
+notes-sync-client prune-client /absolute/queue /absolute/credential.secret
+```
+
+The queue checks its durable local acknowledgment cursor, constructs the exact
+metadata-only form, and fetches the server envelope before saving anything. A
+mismatch, unresolved branch or locally unacknowledged resolution stays unchanged
+and exportable. Each invocation compacts at most 20 resolutions and reports
+decoded bytes removed. It makes read requests only, does not alter application
+receipts, and never reads or writes source files. Later revisions still fetch and
+apply through the retained graph. Run it for every retained receive queue after
+the server operation; uploader queues keep their original recovery payloads.
+
+Tests cover multiple devices at different causal positions, a tombstone after a
+resolution, an original-envelope retry after pruning, stopped-server enforcement,
+vault backup/restore, client/server mismatch, branch export removal and continued
+receive application. Linear publication content, current resolution bytes,
+device retirement, whole-log cursor compaction and automatic scheduling remain
+queued.

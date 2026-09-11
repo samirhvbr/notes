@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at 0.20.18
+> **Status:** `ACTIVE` · Last reviewed 11/09/2026, repository at 0.20.19
 
 Work in progress: drafts, plans under discussion, notes on things still being
 built, briefings for picking the work back up later.
@@ -46,7 +46,7 @@ here would be a second source of truth.
 | **Milestone 0.3 — knowledge and local agents** | Implemented in `0.16.0`; owner installed-release walk and following-release repeat remain in [ACCEPTANCE-0.3.md](../docs/ACCEPTANCE-0.3.md) | Samir |
 | **Milestone 0.4 — mobile** | Foundation from [PR #2](https://github.com/samirhvbr/notes/pull/2) integrated in `0.17.0`; mobile entry points, generated projects, UI, folder adapters and device acceptance remain in [ACCEPTANCE-0.4.md](../docs/ACCEPTANCE-0.4.md) | Mobile agent / Samir |
 | **Milestone 0.5 — self-hosting** | Implemented in `0.18.0`; installed-release owner walk and following-release repeat remain in [ACCEPTANCE-0.5.md](../docs/ACCEPTANCE-0.5.md). Sync and remote MCP remain milestones 0.6/0.7 | Samir |
-| [Milestone 0.6 — sync](0.6-sync.md) | Domain, server inbox, device transfer and guarded closed-workspace creations/updates plus explicit device acknowledgments implemented through `0.20.3`; editor application of prepared receive queues in `0.20.6`. Explicit same-path uploader resolution with retained branches in `0.20.7`; explicit rename/delete resolution choices in `0.20.8`; saved same-path receiver capture/resolution in `0.20.9`, with explicit restoration after remote moves/deletions in `0.20.10` and explicit recapture in `0.20.11`; explicit receiver move/delete effects and confirmed subfolder/reconciliation pairing in `0.20.12`. Explicit deletion capture, ordered rename cycles and referenced attachments implemented in `0.20.13`; desktop scheduling and pairing/history/conflict controls implemented in `0.20.14`; explicit older-server recovery and two-device rollback regressions in `0.20.15`; saved same-path receiver publications and default-off scheduled capture in `0.20.16`; independently enabled new-note and recognized-rename capture in `0.20.17`; audited restored-client cache/outbox recovery and interrupted two-device move/delete tests in `0.20.18`; retention, mobile lifecycle and owner acceptance remain open | Implementation / Samir |
+| [Milestone 0.6 — sync](0.6-sync.md) | Domain, server inbox, device transfer and guarded closed-workspace creations/updates plus explicit device acknowledgments implemented through `0.20.3`; editor application of prepared receive queues in `0.20.6`. Explicit same-path uploader resolution with retained branches in `0.20.7`; explicit rename/delete resolution choices in `0.20.8`; saved same-path receiver capture/resolution in `0.20.9`, with explicit restoration after remote moves/deletions in `0.20.10` and explicit recapture in `0.20.11`; explicit receiver move/delete effects and confirmed subfolder/reconciliation pairing in `0.20.12`. Explicit deletion capture, ordered rename cycles and referenced attachments implemented in `0.20.13`; desktop scheduling and pairing/history/conflict controls implemented in `0.20.14`; explicit older-server recovery and two-device rollback regressions in `0.20.15`; saved same-path receiver publications and default-off scheduled capture in `0.20.16`; independently enabled new-note and recognized-rename capture in `0.20.17`; audited restored-client cache/outbox recovery and interrupted two-device move/delete tests in `0.20.18`; unanimous resolved-branch payload pruning on server and receiver in `0.20.19`; broader retention, mobile lifecycle and owner acceptance remain open | Implementation / Samir |
 | **Milestone 0.7 — remote MCP** | Next after sync: existing MCP tools over server authentication and scopes | Implementation |
 | **Milestone 0.0 — the spike** | **Open.** The application builds, is tested and lints clean; what it establishes and what it does not is [`../docs/SPIKE-0.0.md`](../docs/SPIKE-0.0.md). It stays here until the §2 checklist is marked on Arch/Wayland/NVIDIA, an iPhone and an Android device — none of which exist on the machine that wrote it | Samir |
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) — my §20 proposal | **Superseded** by [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md), Samir's v2.0-aligned document. Kept, not deleted: it is where the questions were asked. Three of its §5 questions are answered there; the bundle identifier is answered only for the spike | — |
@@ -54,7 +54,7 @@ here would be a second source of truth.
 
 ## Current implementation order
 
-1. Finish sync 0.6: retention/pruning, restored application-data/scoped-queue reconciliation, broader device tests and owner acceptance. The detailed ordered queue is in
+1. Finish sync 0.6: linear-history retention, device retirement, restored application-data/scoped-queue reconciliation, broader device tests and owner acceptance. The detailed ordered queue is in
    [0.6-sync.md](0.6-sync.md).
 2. Remote MCP 0.7: expose the existing tools through server authentication and
    workspace/subfolder scopes once sync is ready.

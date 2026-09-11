@@ -307,6 +307,9 @@ impl Transport for Remote {
         for branch in &mut p.branches {
             self.localize(&mut branch.revision)?;
         }
+        for revision in &mut p.history {
+            self.localize(revision)?;
+        }
         if let Some(scope) = &self.scope {
             for asset in p
                 .attachments
@@ -330,6 +333,9 @@ impl Transport for Remote {
         self.globalize(&mut wire.revision)?;
         for branch in &mut wire.branches {
             self.globalize(&mut branch.revision)?;
+        }
+        for revision in &mut wire.history {
+            self.globalize(revision)?;
         }
         if let Some(scope) = &self.scope {
             for asset in wire
