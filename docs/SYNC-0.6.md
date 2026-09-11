@@ -485,8 +485,8 @@ acceptance; those checks remain open.
 
 ## Explicit divergent resolution (0.20.7)
 
-An upload queue can now resolve divergent, live revisions of the same note at
-the same path. `fetch` receives one page without publishing, so a rejected
+Version 0.20.7 introduced resolution of divergent, live revisions of the same
+note at the same path. Version 0.20.8 adds the explicit choices described below. `fetch` receives one page without publishing, so a rejected
 outbox cannot block inspection of the peer. `conflicts` compares the saved local
 head with the received history; it does not capture dirty or unsaved buffers.
 
@@ -534,7 +534,48 @@ client state has been persisted atomically.
 Linear publication JSON is unchanged. Upgrade server and clients before sending
 resolutions: older readers reject the nonempty `branches` field rather than
 silently dropping history. Keep a backup of operational state before downgrading.
-The CLI does not yet resolve rename/delete conflicts or local edits in a receive
-folder; conflict UI and broader pairing remain queued. HTTP and client tests
+Local edits in receive folders, conflict UI and broader pairing remain queued.
+Explicit rename/delete choices are described below. HTTP and client tests
 cover stale races, lost receipts, restart, branch scope/hash rejection and source
 application; TCP/HTTPS smoke exercises the actual CLI commands end to end.
+
+## Rename and deletion choices (0.20.8)
+
+After `fetch` and `conflicts`, the uploader can choose an explicit final path
+and bytes, or choose a tombstone, for divergent revisions of the same note:
+
+```sh
+notes-sync-client resolve-to /private/sender LOCAL_UUID REMOTE_UUID notes/final.md /private/chosen.md
+notes-sync-client resolve-delete /private/sender LOCAL_UUID REMOTE_UUID notes/final.md
+notes-sync-client transfer /private/sender /private/token.secret
+```
+
+`resolve-to` covers rename/edit, rename/rename and delete/edit by choosing both
+the final workspace-relative Markdown path and the exact result file bytes.
+An empty result file is a live empty note, not a deletion. `resolve-delete`
+explicitly chooses a tombstone with no content. Both commands require the two
+observed heads and retain the original divergent history. The old `resolve`
+command still refuses renamed or deleted heads because it has no explicit path
+or deletion choice. Missing files never implicitly request deletion.
+
+The client checks paths, graph identity, known path collisions and current local
+and received heads before staging. The server still checks the current remote
+head and all branch permissions atomically: resurrection needs Create, path
+changes need Move, and tombstones need Delete. Update permission remains needed
+for imported live edits. A failure retains the queue; unknown receipts retry the
+same revision. No new wire format is introduced beyond the 0.20.7 envelope.
+
+These commands only stage history. They do not rename/delete source files or
+apply received filesystem operations. Before `stage` again, bring the saved
+source into agreement with the chosen result: an existing file is captured as a
+new edit or resurrection, and a missing file remains reported rather than
+implicitly deleted. Receiving clients still stop before applying a rename or
+tombstone and retain their content/checkpoint. Safe filesystem rename/deletion
+application and local receiver conflicts remain queued.
+
+Regression tests cover live/deleted remote heads with both live/tombstone
+choices, colliding and hidden destinations, legacy refusal, lost receipts,
+restart and unchanged source bytes. HTTP tests prove Create/Move/Delete cannot
+be bypassed through a resolution. The TCP/HTTPS smoke runs both new CLI commands
+and verifies receiving application still refuses unsupported filesystem changes.
+The expanded smoke respects the existing per-credential request window.

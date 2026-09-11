@@ -1096,3 +1096,7 @@ Server and client replay the same history rules from `notes-sync::transfer`.
 Only the enclosing resolution advances a head; branch bytes remain retrievable
 inside its immutable publication. The uploader's explicit resolve command stages
 chosen bytes and both observed parents without touching source files (ADR-051).
+
+In 0.20.8 the client exposes explicit result-path and tombstone choices through
+`resolve-to` and `resolve-delete` (ADR-052). They reuse the same publication
+contract and do not add filesystem move/delete operations to core application.

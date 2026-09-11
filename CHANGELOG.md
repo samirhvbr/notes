@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 0.20.8 - document explicit path and tombstone resolutions
+
+Document resolve-to and resolve-delete, their source-file boundary and the
+remaining receiver work. Record permission, collision, lost-receipt and source
+preservation regressions plus real CLI smoke coverage. The full local gate
+passed, including native/Windows clippy, workspace tests, TCP smoke and frontend
+checks. The expanded smoke respects the production credential rate window;
+client busy errors now also describe server backpressure accurately.
+
 ## 0.20.8 - resolve renamed and deleted upload branches explicitly
 
 Allow an explicit result path and either chosen file bytes or a tombstone when

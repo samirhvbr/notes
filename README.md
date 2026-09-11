@@ -161,3 +161,7 @@ Version 0.20.7 adds explicit same-path conflict resolution to upload queues:
 `fetch`, `conflicts`, `export`, then `resolve` with both observed revision UUIDs
 and a chosen result file. Both histories survive; publication still refuses a
 stale remote head. See [the resolution workflow](docs/SYNC-0.6.md#explicit-divergent-resolution-0207).
+
+Version 0.20.8 extends uploader conflict resolution with `resolve-to` (explicit
+path and bytes) and `resolve-delete` (explicit tombstone). Source files remain
+unchanged; see [rename and deletion choices](docs/SYNC-0.6.md#rename-and-deletion-choices-0208).

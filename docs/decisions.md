@@ -1650,6 +1650,28 @@ revision guards and applies only accepted heads, not imported branch values.
 
 **Consequences.** Linear wire JSON stays unchanged; old readers reject envelopes
 with branches. Both sides must be upgraded. Branches share existing byte/revision
-quotas and have a 20-revision per-envelope limit. Whole-workspace upload queues
-support same-path live-note resolutions; rename/delete and receive-folder local
-conflicts, pairing and editor conflict controls remain open.
+quotas and have a 20-revision per-envelope limit. Version 0.20.7 supports same-path live-note resolutions in whole-workspace
+upload queues; ADR-052 extends the result choices. Receive-folder local conflicts,
+pairing and editor conflict controls remain open.
+
+
+## ADR-052 — A rename or deletion resolution requires an explicit result choice
+
+**Status:** ACTIVE · Implemented in 0.20.8; extends ADR-051's client workflow.
+
+**Context.** A file-only resolution cannot express which path survives a rename,
+or distinguish an intentionally empty note from deletion. Inferring either
+choice would discard user intent.
+
+**Decision.** Keep the existing same-path live-note `resolve` contract. Add
+`resolve-to` with a workspace-relative result path and a result file, and
+`resolve-delete` with a path and no content. Both consume exact divergent heads
+of one note and use the same bounded two-parent publication and retained branch
+bytes. They stage history only; they do not change source files. Server checks
+still require Create for resurrection, Move for changed paths and Delete for
+tombstones, including the permissions of imported branches.
+
+**Consequences.** Upload conflicts involving renames and tombstones have explicit
+resolution commands. Missing files and empty bytes never infer deletion. Source
+rename/deletion application, local receiver conflict capture and editor controls
+remain queued. Existing source guards and wire/schema versions are unchanged.
