@@ -290,5 +290,16 @@
   "device.reason.saved_receiver_changes": "Saved local changes differ from the received version. Enable saved-edit capture for synchronized notes at the same path, or use explicit conflict resolution.",
   "device.captureSaved": "Publish saved edits to synchronized notes (same path, workspace closed)",
   "device.captureNew": "Publish new local notes (workspace closed)",
-  "device.captureRenames": "Publish recognized local renames (workspace closed)"
+  "device.captureRenames": "Publish recognized local renames (workspace closed)",
+  "update.check": "Check for updates",
+  "update.checking": "Checking for updates…",
+  "update.current": "You are up to date.",
+  "update.unsupported": "Update this installation through its package manager or download a new installer.",
+  "update.error": "The update could not be completed. Check your connection and try again.",
+  "update.title": "Tura Notes update",
+  "update.confirm": "Close your workspace before installing. The app will download the update, install it and restart.",
+  "update.install": "Install and restart",
+  "update.later": "Later",
+  "update.closeWorkspace": "Close your workspace through the normal save flow, then try again.",
+  "update.installing": "Downloading and installing… Please keep the app open."
 }

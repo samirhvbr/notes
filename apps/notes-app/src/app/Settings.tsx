@@ -1,3 +1,4 @@
+import { UpdateButton } from "./Updater";
 import { useModalSurface } from "./modal";
 import { useEffect, useState } from "react";
 import { t } from "../i18n";
@@ -154,6 +155,7 @@ export function SettingsPanel({
           </>
         )}
 
+        <UpdateButton />
         {error && <p className="bad">{error}</p>}
 
         <div className="actions">

@@ -1,3 +1,4 @@
+import { UpdateButton } from "./Updater";
 import { Dialog } from "./DialogHost";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { useEffect, useState } from "react";
@@ -44,6 +45,7 @@ function WelcomeContent() {
     <div className="welcome">
       <img src="/tura-icon.svg" width="88" height="88" alt="" />
       <h1>{t("welcome.title")}</h1>
+      <UpdateButton />
       {error && <p role="alert">{t(`error.${error.code}`)}</p>}
       <p className="muted">{t("welcome.subtitle")}</p>
       <div className="actions">

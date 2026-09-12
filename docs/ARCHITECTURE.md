@@ -788,8 +788,10 @@ frame-src 'none'; object-src 'none'; form-action 'none'
 
 `'unsafe-inline'` for styles is a CodeMirror requirement; scripts stay strict.
 
-One window, one workspace, no tray, no updater in the MVP (an updater needs
-network and gets its own ADR when it comes).
+One window, one workspace, no tray. Since 1.1.0, desktop updates use native
+HTTPS and pinned signatures, with explicit installation after closing the
+workspace (ADR-074; [updater contract](updater.md)). The webview receives
+version/notes/status only; it cannot choose an update URL or verification key.
 
 ---
 

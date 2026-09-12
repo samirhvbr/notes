@@ -83,6 +83,11 @@ On Linux, run `./deploy.sh` (or `./build-local.sh`) to build `.deb` and
 `.AppImage` installers. Use `--bundles deb` to select one format and `--publish`
 to upload through the configured download service. On macOS the same entry point
 uses the existing signing and notarization pipeline.
+Signed local releases also provide automatic update checks and an **Install and
+restart** action. Close the notes folder before installing. Install 1.1.0 manually
+to enter this update channel; Arch packages continue through pacman.
+Release builders need Tura's separate updater signing key; `--no-sign` produces
+local test packages. See [desktop updates and publication](docs/updater.md).
 See [Linux prerequisites and build options](docs/runbook.md#local-linux-installers-103).
 
 ## Building it yourself

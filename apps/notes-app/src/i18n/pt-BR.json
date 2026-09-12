@@ -290,5 +290,16 @@
   "device.reason.saved_receiver_changes": "Alterações locais salvas diferem da versão recebida. Ative a captura de edições para notas sincronizadas no mesmo caminho ou use a resolução explícita de conflitos.",
   "device.captureSaved": "Publicar edições salvas de notas sincronizadas (mesmo caminho, workspace fechado)",
   "device.captureNew": "Publicar novas notas locais (workspace fechado)",
-  "device.captureRenames": "Publicar renames locais reconhecidos (workspace fechado)"
+  "device.captureRenames": "Publicar renames locais reconhecidos (workspace fechado)",
+  "update.check": "Verificar atualizações",
+  "update.checking": "Verificando atualizações…",
+  "update.current": "Você está na versão mais recente.",
+  "update.unsupported": "Atualize esta instalação pelo gerenciador de pacotes ou baixe um novo instalador.",
+  "update.error": "Não foi possível concluir a atualização. Verifique a conexão e tente novamente.",
+  "update.title": "Atualização do Tura Notes",
+  "update.confirm": "Feche sua pasta de trabalho antes de instalar. O app vai baixar a atualização, instalar e reiniciar.",
+  "update.install": "Instalar e reiniciar",
+  "update.later": "Mais tarde",
+  "update.closeWorkspace": "Feche sua pasta de trabalho pelo fluxo normal de salvamento e tente novamente.",
+  "update.installing": "Baixando e instalando… Mantenha o aplicativo aberto."
 }

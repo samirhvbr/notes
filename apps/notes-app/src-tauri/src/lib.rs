@@ -4,6 +4,7 @@
 mod asset;
 mod commands;
 pub mod linux;
+mod updater;
 
 use std::sync::Mutex;
 
@@ -43,6 +44,16 @@ pub fn run() {
             }
             _ => {}
         })
+        .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri::Manager;
+                app.handle()
+                    .plugin(tauri_plugin_updater::Builder::new().build())?;
+                app.manage(updater::Pending::default());
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_shell::init())
@@ -62,6 +73,8 @@ pub fn run() {
         .register_uri_scheme_protocol("notes-asset", asset::serve)
         .invoke_handler(tauri::generate_handler![
             commands::env_report,
+            updater::update_check,
+            updater::update_install,
             commands::sync_control_status,
             commands::sync_control_configure,
             commands::sync_control_conditions,

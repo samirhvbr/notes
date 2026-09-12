@@ -901,3 +901,11 @@ code { font-family: var(--font-mono); }
 .device-actions { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .device-history { list-style: none; padding: 0; }
 .device-history li { padding: 8px 0; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+
+.update-banner { position: fixed; z-index: 2000; top: 1rem; right: 1rem; max-width: min(30rem, calc(100vw - 2rem)); padding: 1rem; background: var(--bg); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 4px 24px var(--shadow); }
+.update-banner p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.update-manual { margin-block: .5rem; }
+.update-banner .actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.update-banner button, .update-manual button { color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 6px 10px; font: inherit; cursor: pointer; }
+.update-banner button:focus-visible, .update-manual button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.update-manual button:disabled { opacity: .55; cursor: default; }

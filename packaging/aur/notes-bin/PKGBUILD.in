@@ -21,6 +21,8 @@ source=("@SOURCE@")
 sha256sums=('@SHA256@')
 
 package() {
+  install -dm755 "$pkgdir/usr/share/tura-notes"
+  printf '%s\n' pacman > "$pkgdir/usr/share/tura-notes/package-manager"
   cd "$srcdir/notes-$pkgver-x86_64-linux"
   install -Dm755 bin/notes "$pkgdir/usr/bin/notes"
   # Whatever entry the bundler produced, under the name it produced it under.

@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.1.0 - add guarded desktop update installation
+
+Check for desktop updates after startup and every six hours, with manual checks,
+version dismissal and explicit installation/restart after the workspace closes.
+Hold the input barrier during installation and verify workspace state natively;
+failures remain retryable. Arch packages stay managed by pacman. Frontend tests,
+application Clippy and native builds passed; installed upgrade acceptance and
+existing unrelated full-gate failures remain documented in the queue.
+
 ## 1.1.0 - publish reusable signed updater payloads
 
 Pin a dedicated Tura signing key and publish separate HTTPS feeds for macOS,
