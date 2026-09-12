@@ -1,6 +1,6 @@
 # `.continue/` — the queue
 
-> **Status:** `ACTIVE` · Last reviewed 12/09/2026, repository at `1.0.3`.
+> **Status:** `ACTIVE` · Last reviewed 12/09/2026, repository at `1.0.5`.
 
 This folder contains only work that has not been completed. Implemented
 contracts, measurements and delivery history live in [`../docs/`](../docs/) and

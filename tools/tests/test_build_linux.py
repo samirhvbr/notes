@@ -1,5 +1,6 @@
 """Exercise packaging orchestration with fake tools, without publishing."""
 import os
+import hashlib
 from pathlib import Path
 import shutil
 import subprocess
@@ -14,7 +15,7 @@ class LinuxBuild(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
-        for name in ['build-local.sh', 'deploy.sh', 'tools/build-linux.sh', 'tools/stamp-version.sh']:
+        for name in ['build-local.sh', 'deploy.sh', 'tools/build-linux.sh', 'tools/stamp-version.sh', 'tools/linux-build-cache.py']:
             dest = self.root / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, dest)
@@ -30,7 +31,9 @@ class LinuxBuild(unittest.TestCase):
             self.fake(tool, 'exit 0')
         self.fake('uname', 'echo Linux')
         self.fake('rustc', 'echo "host: aarch64-unknown-linux-gnu"')
+        self.env['TEST_NPM_LOG'] = str(self.root / 'npm-calls.log')
         self.fake('npm', '''
+echo "$*" >> "$TEST_NPM_LOG"
 [ "${FAIL_BUILD:-0}" = 0 ] || exit 42
 [ "$1" != ci ] || exit 0
 [ "${EMPTY_BUILD:-0}" = 0 ] || exit 0
@@ -70,6 +73,61 @@ done
         self.assertNotEqual(self.run_build('--bundles', 'deb').returncode, 0)
         self.assertFalse(p.exists())
         self.assertEqual(self.config.read_text(), self.original)
+
+    def test_publish_retry_reuses_build_without_toolchain_steps(self):
+        self.fake('scp', 'exit 19')
+        self.fake('ssh', 'exit 0')
+        first = self.run_build('--publish')
+        self.assertEqual(first.returncode, 19, first.stderr)
+        self.env['FAIL_BUILD'] = '1'
+        self.fake('node', 'exit 99')
+        self.fake('pkg-config', 'exit 99')
+        second = self.run_build('--publish')
+        self.assertEqual(second.returncode, 19, second.stderr)
+        self.assertIn('skipping npm ci and compilation', second.stdout)
+        package = next(self.root.glob('target/**/*.deb'))
+        self.env['UPLOAD_HASH'] = hashlib.sha256(package.read_bytes()).hexdigest()
+        self.fake('scp', 'exit 0')
+        self.fake('ssh', 'case "$*" in *sha256sum*) echo "$UPLOAD_HASH";; esac')
+        third = self.run_build('--publish')
+        self.assertEqual(third.returncode, 0, third.stderr)
+        self.assertIn('Published:', third.stdout)
+
+    def test_only_missing_format_is_built(self):
+        self.assertEqual(self.run_build('--bundles', 'deb').returncode, 0)
+        calls = Path(self.env['TEST_NPM_LOG'])
+        calls.write_text('')
+        result = self.run_build()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Reusing deb', result.stdout)
+        self.assertIn('run tauri build -- --bundles appimage', calls.read_text())
+        self.assertNotIn('--bundles deb', calls.read_text())
+
+    def test_changes_force_a_rebuild(self):
+        for change in ['source', 'deleted_source', 'corrupt', 'missing', 'version', 'force']:
+            with self.subTest(change=change):
+                source = self.root / 'apps/notes-app/src/example.ts'
+                source.parent.mkdir(exist_ok=True)
+                source.write_text('original')
+                self.env['FAIL_BUILD'] = '0'
+                self.assertEqual(self.run_build('--force').returncode, 0)
+                package = next(self.root.glob('target/**/*.deb'))
+                args = []
+                if change == 'source':
+                    source.write_text('changed')
+                elif change == 'deleted_source':
+                    source.unlink()
+                elif change == 'corrupt':
+                    package.write_text('corrupt')
+                elif change == 'missing':
+                    package.unlink()
+                elif change == 'version':
+                    (self.root / 'version.md').write_text('1.0.99')
+                else:
+                    args = ['--force']
+                self.env['FAIL_BUILD'] = '1'
+                self.assertEqual(self.run_build(*args).returncode, 42)
+                (self.root / 'version.md').write_text('1.0.3')
 
     def test_invalid_options_fail_before_build(self):
         for args in [('--bundles', 'dmg'), ('--bundles',), ('--bundles', 'deb,'),

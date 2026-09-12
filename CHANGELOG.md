@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.5 - reuse completed Linux builds when retrying publication
+
+Record completed bundles before any upload and reuse them when version, native
+host, source content and artifact checksums still match. A failed SCP or ingest
+can now be retried with --publish without npm ci or compilation. Only missing or
+invalid requested formats are rebuilt; --force explicitly rebuilds. Tests cover
+failed uploads followed by a successful publish without build tools, source
+changes and deletions, missing/corrupt artifacts and version changes.
+
 ## 1.0.4 - publish desktop installers through the private host
 
 Use b3sys@100.64.100.242 as the default SCP/SSH destination on Linux and macOS.

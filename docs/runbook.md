@@ -260,8 +260,8 @@ requirements. This is a native build, not a Linux cross-compile from macOS.
 
 The script pulls with `--ff-only` and stops on a failed pull; use
 `--skip-git-pull` deliberately for offline/local changes. `--skip-npm-ci` reuses
-installed dependencies. Linux always rebuilds packages, so `--force` is accepted
-for compatibility. `--no-sign` marks a local test build and blocks publication.
+installed dependencies. Linux reuses completed packages when version, architecture, source contents
+and SHA-256 checksums match. `--force` explicitly rebuilds. `--no-sign` marks a local test build and blocks publication.
 The tracked Tauri version placeholder is restored on exit and interruption.
 
 The default SCP/SSH destination is `b3sys@100.64.100.242`, on the private
@@ -297,3 +297,35 @@ A subsequent `cargo test --workspace` reached `notes-core/tests/deep.rs` and fai
 `starting_the_watcher_returns_immediately_and_walks_behind` and
 `an_index_that_is_still_building_is_not_restarted_by_a_change`. Later Rust tests
 were not reached. These failures remain tracked in `.continue/README.md`.
+
+### Retrying a Linux publication (1.0.5)
+
+After a successful build, repeat the same command if publication fails:
+
+```bash
+./deploy.sh --publish
+```
+
+The script verifies the completed bundles and skips npm installation, toolchain
+preflight and compilation when they are still valid. It then retries the upload
+and ingestion. Keep the same `--bundles` selection when retrying; adding a format
+builds that format while reusing valid existing ones. `--skip-git-pull` can be
+used deliberately to retry the current checkout without fetching a newer release.
+
+A `.build.json` is written beside each format's packages before publication.
+It records the version, native Rust host, source fingerprint, build mode and
+artifact hashes. Source changes (including deletions), missing or corrupt files,
+a version change or `--force` require a rebuild. Documentation and upload-host
+changes alone do not invalidate the source fingerprint. Existing packages from
+older scripts without a manifest need one build to establish that record.
+
+Validation: Linux reuse tests include a failed SCP, another failed retry and a
+successful retry, with Node and npm configured to fail if invoked after the
+first build. A real Debian 12 ARM64 run built the 1.0.5 deb and a second invocation
+verified and reused it without npm installation or compilation. Tests also cover
+adding a missing format while retaining the completed one. No real upload was
+performed during validation.
+The 11 orchestration tests pass on macOS and Linux. The full gate was rerun;
+frontend and network smoke checks pass, while the existing sync-client Clippy
+warning and watcher startup timing test still fail. This change does not mark
+those queue items complete.

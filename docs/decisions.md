@@ -2023,7 +2023,7 @@ on one of them. The generated tarball layout documented in
 
 ## ADR-072 — Local Linux packaging shares the desktop build entry point
 
-**Status:** ACCEPTED · 12/09/2026
+**Status:** ACCEPTED · 12/09/2026 · Build reuse amended by ADR-073.
 
 **Decision.** Extend ADR-070 with a Linux dispatch in `build-local.sh` and a
 `deploy.sh` compatibility entry point. The existing macOS pipeline remains
@@ -2040,3 +2040,17 @@ before building, preventing stale outputs from being reported or published.
 cache. Publication is opt-in and verifies uploaded bytes before invoking the
 existing `files:add` ingestion. No updater signing, Arch package assembly or
 cross-compilation is introduced by this script. Existing CI handles Arch packages.
+
+## ADR-073 — Persist completed Linux builds before publication
+
+**Status:** ACCEPTED · 12/09/2026
+
+**Decision.** Replace ADR-072's unconditional Linux rebuild with per-format
+completed-build manifests. Verify version, host, source content and artifact
+hashes before compiling. Persist the manifests before SCP or ingestion so failed
+publication cannot invalidate a successful build. `--force` overrides reuse.
+
+**Reason.** The owner's ShvIA reference workflow supports retrying publication
+without rebuilding the same version. Build completion and upload completion are
+separate states. Comparing source contents also detects deletion and edits with
+preserved timestamps. Missing or unverifiable manifests require a fresh build.
