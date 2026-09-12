@@ -2054,3 +2054,26 @@ publication cannot invalidate a successful build. `--force` overrides reuse.
 without rebuilding the same version. Build completion and upload completion are
 separate states. Comparing source contents also detects deletion and edits with
 preserved timestamps. Missing or unverifiable manifests require a fresh build.
+
+## ADR-074 — Signed desktop updates with explicit installation
+
+**Status:** ACCEPTED · 12/09/2026
+
+**Decision.** Reverse the MVP's no-updater boundary and ADR-072's exclusion of
+updater signing. Add the Tauri updater in the native desktop shell. Check after
+20 seconds and every six hours; expose manual checks in Welcome and Settings.
+Offer installation and restart explicitly, after the normal workspace-close
+flow and the input/IPC barrier. Automatic network failures remain silent.
+
+**Reason.** The owner requested ShvIA Desktop's update workflow. Updater trust is
+independent of Apple signing: Tura has its own pinned public key and a private
+key outside the repository. No generic updater capability is granted to the
+webview. Update signatures are verified before installation.
+
+**Consequences.** Local signed builds produce durable payload/signature records;
+repeated publication reuses them without compiling or needing the private key.
+Separate HTTPS feeds identify platform, architecture and installer type. Publish
+payloads with verified hashes before atomically replacing each feed. Arch uses
+pacman; mobile and unpublished Windows installers are outside this delivery.
+The first updater-capable release must be installed manually. Installed upgrade
+acceptance remains distinct from compilation, signing and transport tests.

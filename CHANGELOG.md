@@ -8,6 +8,15 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.1.0 - publish reusable signed updater payloads
+
+Pin a dedicated Tura signing key and publish separate HTTPS feeds for macOS,
+AppImage, deb and rpm. Persist signed payloads before publication so retries
+reuse completed builds. Extend ADR-072 with authenticated update distribution.
+Native macOS and Linux ARM64 packages, pinned signatures, tamper rejection and
+build reuse were verified. Live publication awaits the correct application
+path on the private host.
+
 ## 1.0.5 - reuse completed Linux builds when retrying publication
 
 Record completed bundles before any upload and reuse them when version, native

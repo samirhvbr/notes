@@ -71,6 +71,7 @@ en=json.load(open("apps/notes-app/src/i18n/en.json"))
 pt=json.load(open("apps/notes-app/src/i18n/pt-BR.json"))
 sys.exit(0 if set(en)==set(pt) else 1)'
 step "Linux packaging orchestration" python3 tools/tests/test_build_linux.py
+step "updater publication" python3 tools/tests/test_updater_release.py
 step "development version" node --test tools/tauri.test.mjs
 step "frontend tests"       bash -c 'cd apps/notes-app && npm test -- --run >/dev/null'
 step "frontend"             bash -c 'cd apps/notes-app && npm run build >/dev/null'

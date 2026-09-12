@@ -106,6 +106,7 @@ if [ "${#pending[@]}" -gt 0 ]; then
     find "$directory" -maxdepth 1 -type f \( -name '*.deb' -o -name '*.AppImage' -o -name '*.rpm' -o -name '*.sha256' \) -delete
   done
   if [ "$skip_npm" -eq 0 ]; then (cd apps/notes-app && npm ci); fi
+  if [ "$no_sign" -eq 0 ]; then python3 tools/updater-release.py preflight; fi
   tools/stamp-version.sh >/dev/null
   export APPIMAGE_EXTRACT_AND_RUN=1
   pending_bundles="$(IFS=,; echo "${pending[*]}")"
@@ -123,6 +124,11 @@ if [ "${#pending[@]}" -gt 0 ]; then
       (cd "$(dirname "$artifact")" && sha256sum "$(basename "$artifact")" > "$(basename "$artifact").sha256")
     done < <(find "$directory" -maxdepth 1 -type f -name "*.$extension" -print0)
     [ "${#built[@]}" -gt 0 ] || { echo "Build produced no $target package" >&2; exit 1; }
+    if [ "$no_sign" -eq 0 ]; then
+      for artifact in "${built[@]}"; do
+        python3 tools/updater-release.py prepare --artifact "$artifact" --version "$version" --platform "linux-${host_triple%%-*}-$target"
+      done
+    fi
     python3 tools/linux-build-cache.py record "$directory" "$version" "$host_triple" "$source_hash" "$no_sign" "${built[@]}"
     artifacts+=("${built[@]}")
   done
@@ -142,6 +148,7 @@ for artifact in "${artifacts[@]}"; do
     [ "$actual" = "$expected" ] || { echo 'Upload checksum mismatch; not ingested.' >&2; exit 1; }
     ssh "$host" "cd $(quote "$app") && sudo -u www-data php artisan files:add $(quote "$remote_file") --project=$(quote "$slug") --version=$(quote "$version") --label=$(quote "Tura Notes $version — Linux ($(uname -m))")"
     ssh "$host" "rm -f -- $(quote "$remote_file") $(quote "$remote_file.sha256")"
+    python3 tools/updater-release.py publish --artifact "$artifact" --version "$version" --host "$host" --stage "$stage" --app "$app" --base "$base"
   fi
 done
 if [ "$publish" -eq 1 ]; then echo "Published: $base/p/$slug"; fi

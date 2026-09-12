@@ -238,6 +238,10 @@ identical entry points; publication requires `--publish`.
 ./deploy.sh --publish               # build and ingest into the download service
 ```
 
+Signed builds also need the [Tura updater key](updater.md#release-builder-setup).
+Use `--no-sign` for local unsigned testing. `--publish` updates both the download
+service and the platform updater feed.
+
 Install Node 22.22.2+, 24.15+ or 26+, Rust through rustup, and Python 3. On Debian/Ubuntu:
 
 ```bash

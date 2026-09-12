@@ -54,7 +54,10 @@ def main():
     identity = dict(version=version, host=host, source=source, mode=mode)
     if command == 'record':
         artifacts = [Path(p) for p in sys.argv[7:]]
-        data = dict(identity, artifacts=[dict(name=p.name, sha256=digest(p)) for p in artifacts])
+        data = dict(identity, artifacts=[dict(name=p.name, sha256=digest(p), auxiliary={
+            suffix: digest(Path(str(p) + suffix)) for suffix in ['.sig', '.updater.json']
+            if Path(str(p) + suffix).is_file()
+        }) for p in artifacts])
         temporary = manifest.with_suffix('.tmp')
         temporary.write_text(json.dumps(data, indent=2) + '\n')
         temporary.replace(manifest)
@@ -77,6 +80,9 @@ def main():
             sidecar = Path(str(path) + '.sha256')
             if sidecar.read_text().split()[0] != entry['sha256']:
                 raise ValueError(f'missing or invalid checksum sidecar: {name}')
+            for suffix, expected in entry.get('auxiliary', {}).items():
+                if suffix not in ['.sig', '.updater.json'] or digest(Path(str(path) + suffix)) != expected:
+                    raise ValueError('updater sidecar changed')
             paths.append(path)
         for path in paths:
             sys.stdout.buffer.write(str(path).encode() + b'\0')

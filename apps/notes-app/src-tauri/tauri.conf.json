@@ -43,5 +43,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDExRTA1RjJGNDhBRjJCRDQKUldUVUs2OUlMMS9nRVJRbTkwNGRXZ05FUWQxUXJRVnk2YWRMZXFKSnFhTU9zdTV6VlFVWnNqbzIK",
+      "endpoints": [
+        "https://samirhv.com.br/updates/tura-notes/{{target}}-{{arch}}-{{bundle_type}}.json"
+      ]
+    }
   }
 }

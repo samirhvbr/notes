@@ -19,6 +19,8 @@ class LinuxBuild(unittest.TestCase):
             dest = self.root / name
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(ROOT / name, dest)
+        # Signing/transport are tested separately; this suite exercises build reuse.
+        (self.root / 'tools/updater-release.py').write_text('import sys\n')
         self.config = self.root / 'apps/notes-app/src-tauri/tauri.conf.json'
         self.config.parent.mkdir(parents=True)
         self.original = '{"version": "0.0.0"}\n'

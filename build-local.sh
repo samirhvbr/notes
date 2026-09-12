@@ -414,16 +414,18 @@ can_reuse_build() {
              -type f -newer "$dmg" -print -quit 2>/dev/null || true)"
   [ -n "$newer" ] && { REUSE_REASON="a source file is newer than the build: $newer"; return 1; }
 
+  if [ "$NO_SIGN" -eq 0 ]; then
+    python3 tools/updater-release.py verify --artifact "$ROOT/target/release/bundle/macos/Tura Notes.app.tar.gz" --version "$version" >/dev/null 2>&1 || {
+      REUSE_REASON="updater payload is absent or unverifiable"; return 1;
+    }
+  fi
   REUSE_DMG="$dmg"
   return 0
 }
 
 # ── Post-build proof that Gatekeeper will accept it ──────────────────────────
-# `--bundles dmg` makes Tauri DELETE the `.app` after folding it into the image
-# ("Cleaning …/Tura Notes.app"), so there is usually no standalone `.app` left to
-# inspect. The `.app` inside the DMG was already notarised and stapled before
-# that cleanup; what can still be missing is a ticket on the DMG itself, which is
-# what a user actually downloads — so that block runs unconditionally.
+# Keep both app and dmg bundles: the app becomes the updater archive, while
+# the DMG needs its own notarization ticket for first-time installation.
 verify_macos_signature() {
   local dmg="$1" app
   if [ "$SIGN_ENABLED" -ne 1 ]; then
@@ -586,7 +588,8 @@ else
 
   step "[3/3] tauri build (compile, bundle, sign, notarise, staple)"
   detach_stale_build_images
-  (cd apps/notes-app && npm run tauri build -- --bundles dmg)
+  if [ "$NO_SIGN" -eq 0 ]; then python3 tools/updater-release.py preflight; fi
+  (cd apps/notes-app && npm run tauri build -- --bundles app,dmg)
 
   artifact_dir="target/release/bundle/dmg"
   dmg="$(find "$artifact_dir" -maxdepth 1 -type f -name "*_${version}_*.dmg" -print -quit)"
@@ -597,6 +600,12 @@ else
 
   step "[verify] codesign / Gatekeeper / notarisation ticket"
   verify_macos_signature "$dmg"
+  if [ "$NO_SIGN" -eq 0 ]; then
+    payload="$ROOT/target/release/bundle/macos/Tura Notes.app.tar.gz"
+    tar -czf "$payload" -C "$ROOT/target/release/bundle/macos" 'Tura Notes.app'
+    case "$(uname -m)" in arm64) updater_arch=aarch64;; *) updater_arch="$(uname -m)";; esac
+    python3 tools/updater-release.py prepare --artifact "$payload" --version "$version" --platform "darwin-$updater_arch-app"
+  fi
 
   # ── The sidecar is written LAST, and that ordering is the whole point ───────
   # `xcrun stapler staple` REWRITES the image to embed the notarisation ticket,
@@ -610,6 +619,7 @@ fi
 if [ "$PUBLISH" -eq 1 ]; then
   step "[publish] upload to $PUBLIC_BASE"
   publish_release "$dmg" "$version"
+  python3 tools/updater-release.py publish --artifact "$ROOT/target/release/bundle/macos/Tura Notes.app.tar.gz" --version "$version" --host "$PUBLISH_HOST" --stage "$PUBLISH_STAGE" --app "$PUBLISH_APP" --base "$PUBLIC_BASE"
 fi
 
 step "done"
