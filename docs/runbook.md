@@ -46,7 +46,7 @@ What ships today, and what does not:
 
 | | |
 |---|---|
-| Linux | `.deb`, AppImage, a tarball, and the AUR `notes-bin` package — all built in CI and attached to the Release |
+| Linux | `.deb`, AppImage, a tarball, and the AUR `notes-bin` package — all built in CI and attached to the Release. Local deb/AppImage/rpm builds and optional download-service publication are also available; see [local Linux installers](#local-linux-installers-103) |
 | macOS | **published, from this repository's own `build-local.sh` rather than from CI**, and served by [samirhv.com.br](https://samirhv.com.br/p/tura-notes) rather than attached to the Release. The certificate that signs it lives in a keychain, not in a repository secret, so the machine that holds it is the machine that packages (ADR-070). The `build.yml` job stays behind `if: false` |
 | Windows | **not published.** The job is written in `build.yml` behind `if: false` and carries the list of what is missing; it is an OV certificate rather than code (ADR-024) |
 
@@ -224,3 +224,71 @@ The launcher does not edit `tauri.conf.json` or stamp build commands: packaging
 still follows ADR-035 and `tools/stamp-version.sh`. A development version in
 About is not evidence of a signed or published package. Run the launcher tests
 with `node --test tools/tauri.test.mjs`; they also run in `tools/check.sh`.
+
+## Local Linux installers (1.0.3)
+
+Run on Linux, from the repository root. `deploy.sh` and `build-local.sh` are
+identical entry points; publication requires `--publish`.
+
+```bash
+./deploy.sh --help
+./deploy.sh                         # .deb + .AppImage
+./deploy.sh --bundles deb           # Debian package only
+./deploy.sh --bundles deb,appimage,rpm
+./deploy.sh --publish               # build and ingest into the download service
+```
+
+Install Node 22.22.2+, 24.15+ or 26+, Rust through rustup, and Python 3. On Debian/Ubuntu:
+
+```bash
+sudo apt-get install build-essential pkg-config libwebkit2gtk-4.1-dev libssl-dev \
+  libayatana-appindicator3-dev librsvg2-dev patchelf file xdg-utils python3
+```
+
+On Arch:
+
+```bash
+sudo pacman -S --needed base-devel pkgconf webkit2gtk-4.1 openssl \
+  libayatana-appindicator librsvg patchelf file xdg-utils python
+```
+
+Artifacts and SHA-256 sidecars are under
+`target/local-linux/<rust-host>/release/bundle/`. This path intentionally differs
+from the macOS output and the CI tarball workflow. Build on the oldest Linux
+release you intend to support; packages inherit the build host's system-library
+requirements. This is a native build, not a Linux cross-compile from macOS.
+
+The script pulls with `--ff-only` and stops on a failed pull; use
+`--skip-git-pull` deliberately for offline/local changes. `--skip-npm-ci` reuses
+installed dependencies. Linux always rebuilds packages, so `--force` is accepted
+for compatibility. `--no-sign` marks a local test build and blocks publication.
+The tracked Tauri version placeholder is restored on exit and interruption.
+
+Publishing uses the same `TURA_PUBLISH_HOST`, `TURA_PUBLISH_STAGE`,
+`TURA_PUBLISH_APP`, `TURA_PUBLISH_SLUG` and `TURA_PUBLIC_BASE` settings as the
+macOS pipeline, plus `--dest` and `--base-url` overrides. Set these in the shell
+on Linux; Apple credential files are not loaded. Staging paths must be absolute
+and contain no spaces or shell characters. A failed checksum prevents ingestion.
+See ADR-072 for the platform boundary and CI's continued Arch packaging role.
+
+### Linux build verification (1.0.3)
+
+The Linux packaging regression suite has eight passing cases, executed on macOS
+and in a Debian 12 ARM64 container. It covers Linux dispatch through `deploy.sh`,
+configuration restoration after failure, stale artifacts, argument validation,
+failed pulls, help without dependencies, missing libraries and checksum rejection.
+A real Debian 12 ARM64 build with Node 24.15.0 and Rust 1.98.1 produced deb,
+AppImage and rpm installers; the Debian
+metadata reports package `tura-notes`, version `1.0.3`, architecture `arm64`, and
+all three SHA-256 sidecars validate. This does not verify graphical launch or x86_64.
+Publication is tested with fake transport commands; no upload was performed.
+
+The full repository gate was run. Frontend tests/build, network smoke, byte
+preservation and script checks pass. The overall gate remains red: Clippy flags
+the existing needless borrow in `notes-sync-client/src/control.rs:896`.
+An old Tauri build cache also referenced the pre-rename `notes` directory;
+`cargo clean -p tauri` repaired that cache and `cargo check -p notes-app` passed.
+A subsequent `cargo test --workspace` reached `notes-core/tests/deep.rs` and failed
+`starting_the_watcher_returns_immediately_and_walks_behind` and
+`an_index_that_is_still_building_is_not_restarted_by_a_change`. Later Rust tests
+were not reached. These failures remain tracked in `.continue/README.md`.

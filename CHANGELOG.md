@@ -8,6 +8,20 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.3 - support local Linux installer builds
+
+Route Linux builds through a native packaging pipeline instead of rejecting the
+platform. Build deb and AppImage packages by default, allow explicit rpm
+selection, check dependencies before compilation, restore the version placeholder
+on errors and select only fresh artifacts from an architecture-specific output
+directory. Add deploy.sh as an alias with explicit publication, verified upload
+checksums and the existing download-service ingestion contract. Preserve the
+macOS signing pipeline. Regression tests cover dispatch, cleanup, missing output,
+invalid options, missing libraries and failed upload verification. Debian 12
+ARM64 builds produced deb, AppImage and rpm packages with verified checksums.
+The full gate still reports the existing sync-client Clippy and deep-index test
+failures, documented in the runbook and queue.
+
 ## 1.0.2 - ask pacman which desktop entry the package installed
 
 1.0.1 fixed the PKGBUILD and the Arch job got further: the package builds and

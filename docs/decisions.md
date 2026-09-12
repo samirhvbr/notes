@@ -2020,3 +2020,23 @@ now come from the bundler. Renaming the product again changes that ID on both
 platforms at once, which is visible and consistent rather than a build failure
 on one of them. The generated tarball layout documented in
 `packaging/linux/tarball.sh` no longer names the entry, because it cannot.
+
+## ADR-072 — Local Linux packaging shares the desktop build entry point
+
+**Status:** ACCEPTED · 12/09/2026
+
+**Decision.** Extend ADR-070 with a Linux dispatch in `build-local.sh` and a
+`deploy.sh` compatibility entry point. The existing macOS pipeline remains
+responsible for Apple signing and notarization. Linux uses `tools/build-linux.sh`
+to build deb/AppImage by default and optional rpm, with a separate compilation
+cache per native Rust host. Linux CI packaging remains available.
+
+**Reason.** The previous unconditional Darwin check prevented local Linux builds.
+Native Linux builds need distribution development libraries, not Xcode or Apple
+credentials. Each run clears package files only in its dedicated output folders
+before building, preventing stale outputs from being reported or published.
+
+**Consequences.** Linux always rebuilds packages while reusing Cargo's compilation
+cache. Publication is opt-in and verifies uploaded bytes before invoking the
+existing `files:add` ingestion. No updater signing, Arch package assembly or
+cross-compilation is introduced by this script. Existing CI handles Arch packages.

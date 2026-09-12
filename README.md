@@ -77,6 +77,14 @@ Arch, from the release tarball via the `notes-bin` `PKGBUILD` in
 The `.deb` depends on `libwebkit2gtk-4.1-0` and `libgtk-3-0`; the AppImage
 carries its own copy and is correspondingly larger.
 
+## Local desktop installers
+
+On Linux, run `./deploy.sh` (or `./build-local.sh`) to build `.deb` and
+`.AppImage` installers. Use `--bundles deb` to select one format and `--publish`
+to upload through the configured download service. On macOS the same entry point
+uses the existing signing and notarization pipeline.
+See [Linux prerequisites and build options](docs/runbook.md#local-linux-installers-103).
+
 ## Building it yourself
 
 ```bash

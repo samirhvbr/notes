@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-local.sh — the macOS release pipeline for Tura Notes, run locally.
+# build-local.sh — the macOS and Linux release pipeline for Tura Notes, run locally.
 #
 # THIS SCRIPT IS THE macOS PIPELINE, AND THAT IS DELIBERATE. `build.yml` builds
 # Linux in CI and carries macOS behind `if: false` (ADR-024): the missing piece
@@ -8,6 +8,9 @@
 # that has it is the machine that packages, signs, notarises and publishes —
 # the same arrangement `shvia-desktop/build-local.sh` already uses across the
 # fleet, and the reason this file reads like that one (ADR-070).
+#
+# Linux: .deb + .AppImage by default; --bundles deb,appimage,rpm selects targets.
+# Run on Linux with --help for prerequisites and platform-specific options.
 #
 # USAGE (from the repository root):
 #   ./build-local.sh                  # build, sign, notarise, staple
@@ -87,6 +90,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
+
+# Dispatch before macOS option parsing, keychain access or platform checks.
+if [ "$(uname -s)" = Linux ]; then
+  exec bash "$ROOT/tools/build-linux.sh" "$@"
+fi
 
 # ── Clock: total wall time, and time per step ────────────────────────────────
 # The "built in Xs" printed by Vite and cargo covers one internal stage. What is
@@ -169,7 +177,7 @@ while [ $# -gt 0 ]; do
 done
 
 if [ "$(uname -s)" != "Darwin" ]; then
-  echo "build-local.sh: this is the macOS pipeline; Linux packages are built by build.yml." >&2
+  echo "build-local.sh: supported build hosts are macOS and Linux." >&2
   exit 1
 fi
 
