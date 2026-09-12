@@ -264,6 +264,11 @@ installed dependencies. Linux always rebuilds packages, so `--force` is accepted
 for compatibility. `--no-sign` marks a local test build and blocks publication.
 The tracked Tauri version placeholder is restored on exit and interruption.
 
+The default SCP/SSH destination is `b3sys@100.64.100.242`, on the private
+network. `https://samirhv.com.br` is the public download URL, not the upload
+host. An explicit `--dest` or `TURA_PUBLISH_HOST` overrides this default; update
+any saved override that still points to the public host.
+
 Publishing uses the same `TURA_PUBLISH_HOST`, `TURA_PUBLISH_STAGE`,
 `TURA_PUBLISH_APP`, `TURA_PUBLISH_SLUG` and `TURA_PUBLIC_BASE` settings as the
 macOS pipeline, plus `--dest` and `--base-url` overrides. Set these in the shell

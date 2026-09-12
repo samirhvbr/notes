@@ -155,7 +155,7 @@ PUBLISH=0
 # private network and the base is the address the downloads page already uses.
 # The scp password is never a variable and never a file — scp asks for it, or
 # `ssh-copy-id <host>` once makes it stop asking.
-PUBLISH_HOST="${TURA_PUBLISH_HOST:-b3sys@samirhv.com.br}"
+PUBLISH_HOST="${TURA_PUBLISH_HOST:-b3sys@100.64.100.242}"
 PUBLISH_STAGE="${TURA_PUBLISH_STAGE:-/tmp}"
 PUBLISH_APP="${TURA_PUBLISH_APP:-/srv/www/samirhv.com.br/samirhv}"
 PUBLISH_SLUG="${TURA_PUBLISH_SLUG:-tura-notes}"

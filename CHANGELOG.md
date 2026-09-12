@@ -8,6 +8,12 @@ whoever does the work and whoever commits it.
 Bodies are narrative: what changed, why, and what was measured. This file is
 never rewritten.
 
+## 1.0.4 - publish desktop installers through the private host
+
+Use b3sys@100.64.100.242 as the default SCP/SSH destination on Linux and macOS.
+The public domain remains the download-page URL. Explicit destination overrides
+remain available; the runbook explains how to update old saved overrides.
+
 ## 1.0.3 - support local Linux installer builds
 
 Route Linux builds through a native packaging pipeline instead of rejecting the
